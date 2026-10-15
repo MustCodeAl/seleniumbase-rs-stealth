@@ -69,7 +69,7 @@ with `-- --ignored --test-threads=1`.
 ## Related
 
 - [seleniumbase-rs](https://github.com/MustCodeAl/seleniumbase-rs): the core crate, its CDP engine
-  and the stealth tutorial (`docs/tutorials/stealth_scraping.md`).
+  and the stealth tutorial, now in this repository: [docs/tutorial.md](docs/tutorial.md).
 - [SeleniumBase](https://github.com/seleniumbase/SeleniumBase): the Python original.
 
 ## License
