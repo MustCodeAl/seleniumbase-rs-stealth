@@ -207,10 +207,12 @@ fn persist(path: &Path, bytes: &[u8]) -> io::Result<()> {
     atomic_write(path, bytes)
 }
 
-/// Replaces the file at `path` with `bytes` so that a reader, or a crash, sees the old content or
-/// the new, never a mixture. The bytes go to a sibling temporary file (created new, readable by
-/// the owner only on Unix), which is synced and renamed over `path`; then the directory is synced
-/// so the rename survives a power cut. A temporary file left by a failure is removed.
+/// Replaces the file at `path` with `bytes`, so that a reader or a crash never sees a mixture.
+///
+/// The bytes go to a sibling temporary file (created new, readable by the owner only on Unix),
+/// which is synced and renamed over `path`; then the directory is synced so the rename survives
+/// a power cut. A temporary file left by a failure is removed. The capture tool of the
+/// impersonate crate writes the measured files with it too.
 ///
 /// A failed directory sync is only logged: the data is in place by then, and not every file
 /// system lets a directory be synced.
@@ -218,7 +220,7 @@ fn persist(path: &Path, bytes: &[u8]) -> io::Result<()> {
 /// # Errors
 ///
 /// Returns the first I/O error of creating, writing, syncing or renaming the file.
-pub(crate) fn atomic_write(path: &Path, bytes: &[u8]) -> io::Result<()> {
+pub fn atomic_write(path: &Path, bytes: &[u8]) -> io::Result<()> {
     let name = path
         .file_name()
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "the path has no file name"))?;
