@@ -1,0 +1,32 @@
+[workspace]
+resolver = "3"
+members = ["crates/wire", "crates/scrape", "crates/impersonate"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.99"
+license = "MIT"
+repository = "https://github.com/MustCodeAl/seleniumbase-rs-stealth"
+
+[workspace.dependencies]
+seleniumbase-rs = { path = "../seleniumbase-rs" }
+seleniumbase-rs-wire = { path = "crates/wire" }
+seleniumbase-rs-scrape = { path = "crates/scrape" }
+seleniumbase-rs-impersonate = { path = "crates/impersonate" }
+
+[workspace.lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+allow_attributes_without_reason = "warn"
+clone_on_ref_ptr = "warn"
+map_err_ignore = "warn"
+semicolon_outside_block = "warn"
+unused_result_ok = "warn"
+too_long_first_doc_paragraph = "warn"
+
+[workspace.lints.rust]
+missing_debug_implementations = "warn"
+redundant_imports = "warn"
+redundant_lifetimes = "warn"
+trivial_numeric_casts = "warn"
+unused_lifetimes = "warn"
