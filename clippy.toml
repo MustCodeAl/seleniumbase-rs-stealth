@@ -1,0 +1,9 @@
+# Words that look like identifiers to `clippy::doc_markdown` but are names. The list of
+# seleniumbase-rs, plus the TLS library the impersonate crate builds.
+doc-valid-idents = [
+    "DevTools", "WebSocket", "SeleniumBase", "WebDriver", "XPath", "JavaScript",
+    "TypeScript", "WebRTC", "WebGL", "OpenTelemetry", "ChromeDriver", "SQLite",
+    "GitHub", "macOS", "iOS", "mDNS", "TOTP", "CDP", "IANA", "PDF", "URL", "HTML",
+    "BoringSSL",
+    "..",
+]
