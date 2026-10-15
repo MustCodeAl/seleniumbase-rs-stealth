@@ -1,6 +1,6 @@
 //! Reads a browser's `ClientHello` and HTTP/2 frames off a local socket, for the measurement tools.
 //!
-//! The measured tables under `src/wire/measured` are never typed by hand. These modules produce them:
+//! The measured tables under `crates/wire/src/measured` are never typed by hand. These modules produce them:
 //!
 //! - [`stream`]: a loopback listener ([`Capture`]) and the readers for the first bytes a client sends,
 //!   whether that is a TLS `ClientHello`, an HTTP/1 request or an HTTP/2 connection preface.

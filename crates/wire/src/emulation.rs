@@ -1,7 +1,7 @@
 //! The measured browser tables (TLS, HTTP/2, headers, client hints), embedded from JSON and looked up by browser and OS.
 //!
 //! Every wire value this crate imitates was measured from a real browser by a capture tool
-//! (`capture_tls`, `capture_hints`, `capture_h2`) and stored as JSON under `src/wire/measured`.
+//! (`capture_tls`, `capture_hints`, `capture_h2`) and stored as JSON under `src/measured`.
 //! Nothing here is typed by hand. The files are embedded with `include_str!`, parsed once, and
 //! looked up by [`BrowserKind`] and [`OsType`].
 //!
@@ -46,7 +46,7 @@ use seleniumbase_rs::stealth::fingerprint::{ClientHints, OsType};
 
 /// The measured files this crate ships: the file name and its text.
 ///
-/// Add a file to `src/wire/measured` and to this list together. The test
+/// Add a file to `src/measured` and to this list together. The test
 /// `tests/wire_emulation.rs` fails when a file there is missing from here.
 const SOURCES: [(&str, &str); 1] = [(
     "chrome-155-macos.json",

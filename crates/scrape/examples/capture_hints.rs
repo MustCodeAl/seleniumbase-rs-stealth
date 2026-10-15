@@ -1,5 +1,5 @@
 //! Measures the client hints, `User-Agent` and `Accept-Language` of the local Chrome and writes them
-//! into `src/wire/measured`.
+//! into `crates/wire/src/measured`.
 //!
 //! A loopback page asks the browser for its high-entropy hints and reports what
 //! `navigator.userAgentData` says, and the server records the `Sec-CH-UA` request headers of the

@@ -1,4 +1,4 @@
-//! Measures the TLS `ClientHello` of the local Chrome and writes it into `src/wire/measured`.
+//! Measures the TLS `ClientHello` of the local Chrome and writes it into `crates/wire/src/measured`.
 //!
 //! The browser connects to a loopback listener that records each hello and hangs up, so nothing
 //! is typed by hand: the profile, the JA3, JA4 and peetprint strings and the raw bytes all come
