@@ -330,6 +330,7 @@ fn md5_block(state: &mut [u32; 4], block: &[u8; MD5_BLOCK]) {
 const HEX_DIGITS: &[u8; 16] = b"0123456789abcdef";
 
 /// Lowercase hex encoding of `bytes`.
+#[must_use]
 pub fn hex_lower(bytes: &[u8]) -> String {
     let mut out = String::with_capacity(bytes.len() * 2);
     for &byte in bytes {

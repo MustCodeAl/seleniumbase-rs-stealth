@@ -5,9 +5,9 @@ use super::{
     source_names, try_measured, Emulation, EmulationError, KnownGap, SpecError,
     MAX_MEASURED_JSON_BYTES, SOURCES,
 };
-use seleniumbase_rs::stealth::fingerprint::OsType;
 use crate::tls_spec::KnownGap as TlsKnownGap;
 use crate::BrowserKind;
+use seleniumbase_rs::stealth::fingerprint::OsType;
 
 /// The one browser that exists today, with the guard that makes a new variant fail to compile
 /// here until it is classified.
