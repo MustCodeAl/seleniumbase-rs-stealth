@@ -11,6 +11,11 @@
 //! - `rotation`: the order of a rotation in the browser (the old Chrome is closed first) and a
 //!   rotation whose new Chrome cannot start.
 
+#![allow(
+    clippy::large_futures,
+    reason = "the tests await whole browser sessions; the size of a test future does not matter"
+)]
+
 #[path = "stealth_session/browser.rs"]
 mod browser;
 #[path = "stealth_session/flows.rs"]

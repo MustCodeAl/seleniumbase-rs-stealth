@@ -55,14 +55,16 @@ async fn run() -> Result<(), Box<dyn Error>> {
     stealth_support::measured_chrome()?;
     let shop = Shop::start().await?;
     let sink = CollectingEventSink::new();
-    let mut session = StealthSession::builder()
-        .launch_options(LaunchOptions::builder().headless(true))
-        .http_options(shop.http_options()?)
-        .mitm_options(shop.mitm_options()?)
-        .with_event_sink(Arc::new(sink.clone()))
-        .solve_timeout(SOLVE_WITHIN)
-        .build()
-        .await?;
+    let mut session = Box::pin(
+        StealthSession::builder()
+            .launch_options(LaunchOptions::builder().headless(true))
+            .http_options(shop.http_options()?)
+            .mitm_options(shop.mitm_options()?)
+            .with_event_sink(Arc::new(sink.clone()))
+            .solve_timeout(SOLVE_WITHIN)
+            .build(),
+    )
+    .await?;
     println!("the session starts in {:?} mode", session.mode());
 
     let fetched = session.fetch(&shop.url("/")).await;

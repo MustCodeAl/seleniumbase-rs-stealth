@@ -29,16 +29,17 @@ Depend on them by git:
 
 ```toml
 [dependencies]
-seleniumbase-rs = { git = "https://github.com/MustCodeAl/seleniumbase-rs", branch = "main" }
+seleniumbase-rs = { git = "https://github.com/MustCodeAl/seleniumbase-rs" }
 seleniumbase-rs-scrape = { git = "https://github.com/MustCodeAl/seleniumbase-rs-stealth" }
 # Only if you need browser-identical TLS (builds BoringSSL):
 seleniumbase-rs-impersonate = { git = "https://github.com/MustCodeAl/seleniumbase-rs-stealth" }
 ```
 
-Cargo finds each package inside the repository by its name. The crates take `seleniumbase-rs`
-from its `main` branch on GitHub, so list it with the same source as above when your code uses
-its types (`sb_cdp::Browser`, `Fingerprint`, ...), or the two would be different crates to Cargo.
-Pin a commit with `rev = "..."` for repeatable builds.
+Cargo finds each package inside the repository by its name. These crates take `seleniumbase-rs`
+by its plain git URL, so write it exactly as above (no `branch`, `tag` or `rev`) when your code
+uses its types (`sb_cdp::Browser`, `Fingerprint`, ...): the same source spelling makes Cargo
+resolve both to one commit, recorded in your `Cargo.lock`. A different spelling, such as a
+`tag`, would make them two different crates to Cargo and their types would not match.
 
 These crates need some core items to be public (in `seleniumbase_rs::sb_cdp` and
 `seleniumbase_rs::stealth::randomize`). Until that change is on the `main` branch of

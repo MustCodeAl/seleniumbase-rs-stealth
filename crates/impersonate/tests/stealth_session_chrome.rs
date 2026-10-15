@@ -16,6 +16,11 @@
 //! cargo test -p seleniumbase-rs-impersonate --test stealth_session_chrome -- --ignored --test-threads=1
 //! ```
 
+#![allow(
+    clippy::large_futures,
+    reason = "the tests await whole browser sessions; the size of a test future does not matter"
+)]
+
 #[path = "support/measured_host.rs"]
 mod measured_host;
 #[path = "stealth_session/site.rs"]
