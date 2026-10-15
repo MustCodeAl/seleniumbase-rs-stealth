@@ -10,7 +10,9 @@ license = "MIT"
 repository = "https://github.com/MustCodeAl/seleniumbase-rs-stealth"
 
 [workspace.dependencies]
-seleniumbase-rs = { path = "../seleniumbase-rs" }
+# The core crate comes from GitHub for whoever depends on these crates by git. Inside this
+# workspace the patch at the end replaces it with a checkout next to this one.
+seleniumbase-rs = { git = "https://github.com/MustCodeAl/seleniumbase-rs", branch = "main" }
 seleniumbase-rs-wire = { path = "crates/wire" }
 seleniumbase-rs-scrape = { path = "crates/scrape" }
 seleniumbase-rs-impersonate = { path = "crates/impersonate" }
@@ -30,3 +32,9 @@ redundant_imports = "warn"
 redundant_lifetimes = "warn"
 trivial_numeric_casts = "warn"
 unused_lifetimes = "warn"
+
+# Builds of this workspace use the seleniumbase-rs checkout beside it (`../seleniumbase-rs`).
+# A patch only applies to the workspace that declares it, so a crate that depends on these by git
+# gets seleniumbase-rs from GitHub. Remove this section to build against GitHub here too.
+[patch."https://github.com/MustCodeAl/seleniumbase-rs"]
+seleniumbase-rs = { path = "../seleniumbase-rs" }
