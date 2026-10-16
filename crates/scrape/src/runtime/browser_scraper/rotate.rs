@@ -10,7 +10,7 @@ use crate::runtime::cdp::{self, EgressLocale};
 use seleniumbase_rs::sb_cdp::Browser;
 use seleniumbase_rs::stealth::fingerprint::Fingerprint;
 use seleniumbase_rs::stealth::humanize::Rng;
-use seleniumbase_rs_wire::BrowserKind;
+use seleniumbase_rs_codec::BrowserKind;
 
 impl BrowserScraper {
     /// Leaves through another egress of the pool.

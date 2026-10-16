@@ -23,7 +23,7 @@ use crate::challenge::detect::{clearance_cookie, Vendor};
 use crate::egress::route::EgressKey;
 use crate::jar::store::{site_of, CookieJar};
 use seleniumbase_rs::stealth::fingerprint::{Fingerprint, OsType};
-use seleniumbase_rs_wire::BrowserKind;
+use seleniumbase_rs_codec::BrowserKind;
 
 #[cfg(test)]
 pub(crate) mod fixtures;
@@ -49,14 +49,14 @@ pub struct EmulationRef {
 }
 
 /// Serde for [`BrowserKind`], which has none of its own. A kind this file does not know cannot be
-/// written: `BrowserKind` lives in the wire crate and is `#[non_exhaustive]`, so a kind added there
+/// written: `BrowserKind` lives in the codec crate and is `#[non_exhaustive]`, so a kind added there
 /// later is refused with an error until it is given a spelling here.
 mod browser_kind {
     use serde::de::Error as _;
     use serde::ser::Error as _;
     use serde::{Deserialize, Deserializer, Serializer};
 
-    use seleniumbase_rs_wire::BrowserKind;
+    use seleniumbase_rs_codec::BrowserKind;
 
     /// The spelling of [`BrowserKind::Chrome`].
     const CHROME: &str = "chrome";

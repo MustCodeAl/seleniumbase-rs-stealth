@@ -11,7 +11,7 @@ workspace = true
 
 [dependencies]
 seleniumbase-rs.workspace = true
-seleniumbase-rs-wire.workspace = true
+seleniumbase-rs-codec.workspace = true
 async-trait = "0.1"
 chrono = "0.4"
 futures-util = { version = "0.3", default-features = false, features = ["std", "sink"] }
@@ -28,7 +28,7 @@ url = "2.5"
 
 [dev-dependencies]
 seleniumbase-rs = { workspace = true, features = ["test-util"] }
-seleniumbase-rs-wire = { workspace = true, features = ["test-fixtures"] }
+seleniumbase-rs-codec = { workspace = true, features = ["test-fixtures"] }
 # Parses the pure modules in `tests/scrape_domain_purity.rs`.
 syn = { version = "3", features = ["full", "visit"] }
 tokio = { version = "1.53", features = ["test-util"] }

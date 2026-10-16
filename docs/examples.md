@@ -13,7 +13,7 @@ the `NotMeasured` error anywhere else; it never borrows the values of another sy
 |---|---|---|
 | `cookie_jar` | The RFC 6265 cookie jar: storing `Set-Cookie` headers, the ones it refuses and why, and the `Cookie` header it would send. | Nothing: no browser, no network, any system. |
 | `browser_scraper` | A `BrowserScraper` against a loopback page behind a script challenge: detection, solving and the reload. | A Chrome on this machine (run headless). Any system. |
-| `capture_tls` | Measures the TLS `ClientHello` of the local Chrome and writes it to `crates/wire/src/measured`, with the raw bytes in `crates/wire/tests/fixtures/measured`. | The local Chrome. Writes into the repository; `--help` lists the options (`--out`, `--fixtures`, ...). |
+| `capture_tls` | Measures the TLS `ClientHello` of the local Chrome and writes it to `crates/codec/src/measured`, with the raw bytes in `crates/codec/tests/fixtures/measured`. | The local Chrome. Writes into the repository; `--help` lists the options (`--out`, `--fixtures`, ...). |
 | `capture_hints` | Measures the client hints, `User-Agent` and `Accept-Language` of the local Chrome into the same file. `--snippet` prints a console script for a browser the tool cannot drive. | The local Chrome. Writes into the repository. |
 
 ```sh
@@ -23,7 +23,7 @@ cargo run -p seleniumbase-rs-scrape --example capture_tls -- --help
 cargo run -p seleniumbase-rs-scrape --example capture_hints -- --snippet
 ```
 
-## seleniumbase-rs-impersonate
+## seleniumbase-rs-mimic
 
 These build BoringSSL through `btls`, so they need `cmake` and a C/C++ toolchain, and about 1 GB
 of target directory on the first build.
@@ -36,10 +36,10 @@ of target directory on the first build.
 | `capture_h2` | Measures the HTTP/2 connection start and the request headers of the local Chrome and adds them to its measured file. Run `capture_tls` and `capture_hints` first. | The local Chrome (headed). Writes into the repository. |
 
 ```sh
-cargo run -p seleniumbase-rs-impersonate --example custom_profile
-cargo run -p seleniumbase-rs-impersonate --example http_session
-cargo run -p seleniumbase-rs-impersonate --example stealth_session
-cargo run -p seleniumbase-rs-impersonate --example capture_h2 -- --help
+cargo run -p seleniumbase-rs-mimic --example custom_profile
+cargo run -p seleniumbase-rs-mimic --example http_session
+cargo run -p seleniumbase-rs-mimic --example stealth_session
+cargo run -p seleniumbase-rs-mimic --example capture_h2 -- --help
 ```
 
 Only one Chrome-driving program should run on the machine at a time.
@@ -47,9 +47,9 @@ Only one Chrome-driving program should run on the machine at a time.
 ## Re-measuring when Chrome updates
 
 Run `capture_tls`, then `capture_hints`, then `capture_h2` against the new Chrome. They rewrite
-`crates/wire/src/measured/<browser>-<major>-<os>.json` and the raw fixtures next to the wire
-tests; `cargo test -p seleniumbase-rs-wire --test wire_emulation` and
-`cargo test -p seleniumbase-rs-impersonate --test impersonate_capture_h2` then check the files
+`crates/codec/src/measured/<browser>-<major>-<os>.json` and the raw fixtures next to the wire
+tests; `cargo test -p seleniumbase-rs-codec --test wire_emulation` and
+`cargo test -p seleniumbase-rs-mimic --test impersonate_capture_h2` then check the files
 against each other. The full procedure is in `docs/tutorials/stealth_scraping.md` of
 [seleniumbase-rs](https://github.com/MustCodeAl/seleniumbase-rs).
 
@@ -59,5 +59,5 @@ They are the `*_chrome.rs` files and are `#[ignore]`d. Run them one binary at a 
 
 ```sh
 cargo test -p seleniumbase-rs-scrape --test scrape_browser_chrome -- --ignored --test-threads=1
-cargo test -p seleniumbase-rs-impersonate --test stealth_session_chrome -- --ignored --test-threads=1
+cargo test -p seleniumbase-rs-mimic --test stealth_session_chrome -- --ignored --test-threads=1
 ```

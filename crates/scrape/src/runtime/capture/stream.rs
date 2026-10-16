@@ -13,8 +13,8 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::task::JoinSet;
 
 use super::CaptureError;
-use seleniumbase_rs_wire::client_hello::{ClientHello, MAX_CLIENT_HELLO};
-use seleniumbase_rs_wire::h2_frames::{
+use seleniumbase_rs_codec::client_hello::{ClientHello, MAX_CLIENT_HELLO};
+use seleniumbase_rs_codec::h2_frames::{
     encode_frame, frame_type, read_preface, H2Preface, MAX_PREFACE_BYTES,
 };
 

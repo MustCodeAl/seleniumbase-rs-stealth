@@ -7,12 +7,12 @@ use super::chrome::{ChromeOptions, DEFAULT_PAGE_PROBES};
 use super::CaptureError;
 
 /// Where the measured files go, relative to the folder of the crate that runs the tool. The
-/// tools run from the scrape and impersonate crates, which sit beside the wire crate that embeds
+/// tools run from the scrape and mimic crates, which sit beside the codec crate that embeds
 /// the files.
-pub const DEFAULT_OUT_DIR: &str = "../wire/src/measured";
+pub const DEFAULT_OUT_DIR: &str = "../codec/src/measured";
 /// Where the raw byte fixtures go, relative to the folder of the crate that runs the tool: the
-/// tests of the wire crate, next to the measured files.
-pub const DEFAULT_FIXTURES_DIR: &str = "../wire/tests/fixtures/measured";
+/// tests of the codec crate, next to the measured files.
+pub const DEFAULT_FIXTURES_DIR: &str = "../codec/tests/fixtures/measured";
 /// The most TLS probe connections `--probes` accepts.
 pub const MAX_PROBES: u64 = 64;
 /// The longest `--timeout` accepted, in seconds.
@@ -21,8 +21,8 @@ pub const MAX_TIMEOUT_SECS: u64 = 600;
 /// What every capture tool prints for `--help`.
 pub const USAGE: &str = "\
 Options:
-  --out DIR        where the measured JSON goes (default: crates/wire/src/measured)
-  --fixtures DIR   where the raw byte fixtures go (default: crates/wire/tests/fixtures/measured)
+  --out DIR        where the measured JSON goes (default: crates/codec/src/measured)
+  --fixtures DIR   where the raw byte fixtures go (default: crates/codec/tests/fixtures/measured)
   --chrome PATH    the browser binary (default: the system Chrome)
   --lang TAG       the browser's --lang, which sets Accept-Language (default: en-US)
   --probes N       how many ordinary HTTPS connections the TLS probe makes (default: 4)
@@ -122,10 +122,10 @@ mod tests {
     fn the_defaults_point_into_the_wire_crate() {
         let args = parse(&[]).expect("no arguments is fine");
 
-        assert_eq!(args.out_dir, Path::new("/repo/../wire/src/measured"));
+        assert_eq!(args.out_dir, Path::new("/repo/../codec/src/measured"));
         assert_eq!(
             args.fixtures_dir,
-            Path::new("/repo/../wire/tests/fixtures/measured")
+            Path::new("/repo/../codec/tests/fixtures/measured")
         );
         assert!(!args.snippet && !args.help && !args.chrome.headless);
     }

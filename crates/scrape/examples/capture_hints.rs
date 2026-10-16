@@ -1,5 +1,5 @@
 //! Measures the client hints, `User-Agent` and `Accept-Language` of the local Chrome and writes them
-//! into `crates/wire/src/measured`.
+//! into `crates/codec/src/measured`.
 //!
 //! A loopback page asks the browser for its high-entropy hints and reports what
 //! `navigator.userAgentData` says, and the server records the `Sec-CH-UA` request headers of the
@@ -16,12 +16,12 @@
 use std::path::Path;
 use std::process::ExitCode;
 
+use seleniumbase_rs_codec::BrowserKind;
 use seleniumbase_rs_scrape::runtime::capture::args::{ToolArgs, USAGE};
 use seleniumbase_rs_scrape::runtime::capture::hints::console_snippet;
 use seleniumbase_rs_scrape::runtime::capture::{
     measure_hints, CaptureError, EntryId, MeasuredFile,
 };
-use seleniumbase_rs_wire::BrowserKind;
 
 /// The name and version this tool writes into the provenance of the file.
 const TOOL: &str = concat!("capture_hints ", env!("CARGO_PKG_VERSION"));

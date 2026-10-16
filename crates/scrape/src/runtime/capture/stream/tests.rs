@@ -3,10 +3,10 @@
 use tokio::io::{duplex, DuplexStream};
 
 use super::*;
-use seleniumbase_rs_wire::akamai::Pseudo;
-use seleniumbase_rs_wire::client_hello::fixtures::HelloBuilder;
-use seleniumbase_rs_wire::client_hello::ClientHelloError;
-use seleniumbase_rs_wire::h2_frames::CLIENT_PREFACE;
+use seleniumbase_rs_codec::akamai::Pseudo;
+use seleniumbase_rs_codec::client_hello::fixtures::HelloBuilder;
+use seleniumbase_rs_codec::client_hello::ClientHelloError;
+use seleniumbase_rs_codec::h2_frames::CLIENT_PREFACE;
 
 const WITHIN: Duration = Duration::from_secs(2);
 

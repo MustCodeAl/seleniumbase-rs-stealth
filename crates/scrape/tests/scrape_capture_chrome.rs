@@ -8,12 +8,12 @@
 //! ```
 
 use seleniumbase_rs::stealth::fingerprint::{ClientHints, OsType};
+use seleniumbase_rs_codec::client_hello::ClientHello;
+use seleniumbase_rs_codec::tls_spec::TlsSpec;
+use seleniumbase_rs_codec::BrowserKind;
 use seleniumbase_rs_scrape::runtime::capture::{
     measure_hints, measure_tls, BrowserVersion, ChromeOptions, EntryId, MeasuredFile,
 };
-use seleniumbase_rs_wire::client_hello::ClientHello;
-use seleniumbase_rs_wire::tls_spec::TlsSpec;
-use seleniumbase_rs_wire::BrowserKind;
 
 fn options() -> ChromeOptions {
     ChromeOptions {

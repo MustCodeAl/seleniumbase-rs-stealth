@@ -1,6 +1,6 @@
 //! Reads a browser's `ClientHello` and HTTP/2 frames off a local socket, for the measurement tools.
 //!
-//! The measured tables under `crates/wire/src/measured` are never typed by hand. These modules produce them:
+//! The measured tables under `crates/codec/src/measured` are never typed by hand. These modules produce them:
 //!
 //! - [`stream`]: a loopback listener ([`Capture`]) and the readers for the first bytes a client sends,
 //!   whether that is a TLS `ClientHello`, an HTTP/1 request or an HTTP/2 connection preface.
@@ -13,7 +13,7 @@
 //!
 //! A loopback listener cannot complete a TLS handshake without a certificate, so the TLS capture records
 //! the `ClientHello` and drops the connection. The HTTP/2 capture that needs a certificate belongs to the
-//! impersonate crate (`seleniumbase-rs-impersonate`).
+//! mimic crate (`seleniumbase-rs-mimic`).
 
 pub mod args;
 pub mod chrome;
@@ -26,9 +26,9 @@ use std::io;
 use thiserror::Error;
 
 use seleniumbase_rs::SeleniumBaseError;
-use seleniumbase_rs_wire::client_hello::ClientHelloError;
-use seleniumbase_rs_wire::h2_frames::H2CaptureError;
-use seleniumbase_rs_wire::tls_spec::SpecError;
+use seleniumbase_rs_codec::client_hello::ClientHelloError;
+use seleniumbase_rs_codec::h2_frames::H2CaptureError;
+use seleniumbase_rs_codec::tls_spec::SpecError;
 
 pub use chrome::{measure_hints, measure_tls, ChromeOptions};
 pub use hints::{HintsMeasurement, HintsServer};

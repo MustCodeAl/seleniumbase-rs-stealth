@@ -5,7 +5,7 @@ use serde_json::json;
 
 use super::*;
 use seleniumbase_rs::stealth::fingerprint::{BrandVersion, ClientHints};
-use seleniumbase_rs_wire::client_hello::fixtures::{
+use seleniumbase_rs_codec::client_hello::fixtures::{
     length16, strings8, u16s, HelloBuilder, CHROME_CIPHERS, CHROME_SIGALGS, JA4_EXAMPLE_EXTENSIONS,
 };
 

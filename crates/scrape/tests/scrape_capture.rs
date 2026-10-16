@@ -4,15 +4,15 @@
 use std::time::Duration;
 
 use seleniumbase_rs::stealth::fingerprint::{ClientHints, OsType};
+use seleniumbase_rs_codec::client_hello::ClientHello;
+use seleniumbase_rs_codec::h2_frames::{encode_frame, frame_type, CLIENT_PREFACE};
+use seleniumbase_rs_codec::ja3::Ja3;
+use seleniumbase_rs_codec::ja4::Ja4;
+use seleniumbase_rs_codec::tls_spec::{KnownGap, TlsSpec};
 use seleniumbase_rs_scrape::runtime::capture::hints::cross_check;
 use seleniumbase_rs_scrape::runtime::capture::record::to_hex;
 use seleniumbase_rs_scrape::runtime::capture::stream::{h2c_reply, http1_response};
 use seleniumbase_rs_scrape::runtime::capture::{Capture, CaptureError, TlsMeasurement};
-use seleniumbase_rs_wire::client_hello::ClientHello;
-use seleniumbase_rs_wire::h2_frames::{encode_frame, frame_type, CLIENT_PREFACE};
-use seleniumbase_rs_wire::ja3::Ja3;
-use seleniumbase_rs_wire::ja4::Ja4;
-use seleniumbase_rs_wire::tls_spec::{KnownGap, TlsSpec};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 
@@ -269,20 +269,20 @@ async fn a_connection_that_sends_nothing_times_out_without_a_hello() {
 }
 
 // The committed Chrome measurement. These tests read the files the capture tools wrote and check
-// them against each other; none of them starts a browser. The files live in the wire crate.
+// them against each other; none of them starts a browser. The files live in the codec crate.
 
 /// The measured file of the Chrome the tools were last run against.
-const MEASURED: &str = include_str!("../../wire/src/measured/chrome-155-macos.json");
+const MEASURED: &str = include_str!("../../codec/src/measured/chrome-155-macos.json");
 /// The hellos of the ordinary HTTPS connections, as the listener read them.
 const PAGE_HELLOS: [&[u8]; 4] = [
-    include_bytes!("../../wire/tests/fixtures/measured/chrome-155-macos.client_hello.1.bin"),
-    include_bytes!("../../wire/tests/fixtures/measured/chrome-155-macos.client_hello.2.bin"),
-    include_bytes!("../../wire/tests/fixtures/measured/chrome-155-macos.client_hello.3.bin"),
-    include_bytes!("../../wire/tests/fixtures/measured/chrome-155-macos.client_hello.4.bin"),
+    include_bytes!("../../codec/tests/fixtures/measured/chrome-155-macos.client_hello.1.bin"),
+    include_bytes!("../../codec/tests/fixtures/measured/chrome-155-macos.client_hello.2.bin"),
+    include_bytes!("../../codec/tests/fixtures/measured/chrome-155-macos.client_hello.3.bin"),
+    include_bytes!("../../codec/tests/fixtures/measured/chrome-155-macos.client_hello.4.bin"),
 ];
 /// The hello of the WebSocket connection.
 const WEBSOCKET_HELLO: &[u8] =
-    include_bytes!("../../wire/tests/fixtures/measured/chrome-155-macos.websocket_hello.bin");
+    include_bytes!("../../codec/tests/fixtures/measured/chrome-155-macos.websocket_hello.bin");
 
 fn measured() -> serde_json::Value {
     serde_json::from_str(MEASURED).expect("the measured file is JSON")

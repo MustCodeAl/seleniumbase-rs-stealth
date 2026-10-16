@@ -3,10 +3,10 @@
 use std::net::{Ipv4Addr, SocketAddr};
 
 use super::*;
-use seleniumbase_rs_wire::client_hello::fixtures::{
+use seleniumbase_rs_codec::client_hello::fixtures::{
     server_name_body, HelloBuilder, CHROME_CIPHERS, JA4_EXAMPLE_EXTENSIONS,
 };
-use seleniumbase_rs_wire::client_hello::{ext_id, ClientHello};
+use seleniumbase_rs_codec::client_hello::{ext_id, ClientHello};
 
 fn captured(host: &str) -> CapturedHello {
     let raw = HelloBuilder::new(&CHROME_CIPHERS, &JA4_EXAMPLE_EXTENSIONS)

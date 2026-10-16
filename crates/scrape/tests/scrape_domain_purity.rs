@@ -286,7 +286,7 @@ fn rust_files(dir: &Path) -> Vec<PathBuf> {
 /// crate is pure, so its sources are checked from here too. The runtime that does I/O lives in
 /// `src/runtime` of this crate and is not listed.
 const PURE_DIRS: &[&str] = &[
-    "../wire/src",
+    "../codec/src",
     "src/challenge",
     "src/egress",
     "src/jar",

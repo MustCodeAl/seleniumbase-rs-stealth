@@ -212,7 +212,7 @@ fn persist(path: &Path, bytes: &[u8]) -> io::Result<()> {
 /// The bytes go to a sibling temporary file (created new, readable by the owner only on Unix),
 /// which is synced and renamed over `path`; then the directory is synced so the rename survives
 /// a power cut. A temporary file left by a failure is removed. The capture tool of the
-/// impersonate crate writes the measured files with it too.
+/// mimic crate writes the measured files with it too.
 ///
 /// A failed directory sync is only logged: the data is in place by then, and not every file
 /// system lets a directory be synced.

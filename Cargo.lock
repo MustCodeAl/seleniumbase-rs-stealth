@@ -2187,7 +2187,18 @@ dependencies = [
 ]
 
 [[package]]
-name = "seleniumbase-rs-impersonate"
+name = "seleniumbase-rs-codec"
+version = "0.1.0"
+dependencies = [
+ "ring",
+ "seleniumbase-rs",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "seleniumbase-rs-mimic"
 version = "0.1.0"
 dependencies = [
  "async-trait",
@@ -2204,8 +2215,8 @@ dependencies = [
  "hyper-util",
  "ring",
  "seleniumbase-rs",
+ "seleniumbase-rs-codec",
  "seleniumbase-rs-scrape",
- "seleniumbase-rs-wire",
  "serde",
  "serde_json",
  "tempfile",
@@ -2228,7 +2239,7 @@ dependencies = [
  "http",
  "psl",
  "seleniumbase-rs",
- "seleniumbase-rs-wire",
+ "seleniumbase-rs-codec",
  "serde",
  "serde_json",
  "syn 3.0.9",
@@ -2238,17 +2249,6 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "url",
-]
-
-[[package]]
-name = "seleniumbase-rs-wire"
-version = "0.1.0"
-dependencies = [
- "ring",
- "seleniumbase-rs",
- "serde",
- "serde_json",
- "thiserror 2.0.21",
 ]
 
 [[package]]

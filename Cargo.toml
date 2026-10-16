@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/wire", "crates/scrape", "crates/impersonate"]
+members = ["crates/codec", "crates/scrape", "crates/mimic"]
 
 [workspace.package]
 version = "0.1.0"
@@ -14,9 +14,9 @@ repository = "https://github.com/MustCodeAl/seleniumbase-rs-stealth"
 # Cargo resolves theirs and ours to one commit and types such as sb_cdp::Browser
 # match. For a local checkout, patch this source in .cargo/config.toml (not committed).
 seleniumbase-rs = { git = "https://github.com/MustCodeAl/seleniumbase-rs" }
-seleniumbase-rs-wire = { path = "crates/wire" }
+seleniumbase-rs-codec = { path = "crates/codec" }
 seleniumbase-rs-scrape = { path = "crates/scrape" }
-seleniumbase-rs-impersonate = { path = "crates/impersonate" }
+seleniumbase-rs-mimic = { path = "crates/mimic" }
 
 [workspace.lints.clippy]
 pedantic = { level = "warn", priority = -1 }

@@ -1,4 +1,4 @@
-//! Measures the TLS `ClientHello` of the local Chrome and writes it into `crates/wire/src/measured`.
+//! Measures the TLS `ClientHello` of the local Chrome and writes it into `crates/codec/src/measured`.
 //!
 //! The browser connects to a loopback listener that records each hello and hangs up, so nothing
 //! is typed by hand: the profile, the JA3, JA4 and peetprint strings and the raw bytes all come
@@ -12,10 +12,10 @@
 use std::path::Path;
 use std::process::ExitCode;
 
+use seleniumbase_rs_codec::BrowserKind;
 use seleniumbase_rs_scrape::runtime::capture::args::{ToolArgs, USAGE};
 use seleniumbase_rs_scrape::runtime::capture::record::write_fixtures;
 use seleniumbase_rs_scrape::runtime::capture::{measure_tls, CaptureError, EntryId, MeasuredFile};
-use seleniumbase_rs_wire::BrowserKind;
 
 /// The name and version this tool writes into the provenance of the file.
 const TOOL: &str = concat!("capture_tls ", env!("CARGO_PKG_VERSION"));

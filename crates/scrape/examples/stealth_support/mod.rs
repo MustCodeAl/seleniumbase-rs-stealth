@@ -3,7 +3,7 @@
 //! an entry in `Cargo.toml`.
 //!
 //! Every example declares it with `mod stealth_support;` and uses the part it needs. The shop
-//! that plays a protected site needs the TLS server of the impersonate crate, so it lives in that
+//! that plays a protected site needs the TLS server of the mimic crate, so it lives in that
 //! crate's examples.
 
 use std::time::{SystemTime, UNIX_EPOCH};
