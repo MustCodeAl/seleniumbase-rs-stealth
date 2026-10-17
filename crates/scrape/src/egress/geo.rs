@@ -139,8 +139,9 @@ pub(crate) fn placed_in(
     // A position answers a request without a prompt; a denial must stay one.
     if !fingerprint.geolocation().is_off() {
         let place = position(locale, &mut Rng::new(fingerprint.seed()));
-        builder = builder
-            .geolocation(Geolocation::new(place.latitude, place.longitude).accuracy(place.accuracy));
+        builder = builder.geolocation(
+            Geolocation::new(place.latitude, place.longitude).accuracy(place.accuracy),
+        );
     }
     builder.build()
 }
@@ -341,7 +342,11 @@ mod tests {
         assert_eq!(fingerprint.languages(), fingerprint.accept_languages());
         let place = fingerprint.geolocation().value().expect("set");
         assert!((place.latitude - 52.52).abs() <= 0.05, "{}", place.latitude);
-        assert!((place.longitude - 13.405).abs() <= 0.05, "{}", place.longitude);
+        assert!(
+            (place.longitude - 13.405).abs() <= 0.05,
+            "{}",
+            place.longitude
+        );
         assert!(place.accuracy.is_some());
         assert!(fingerprint.validate().is_coherent());
     }

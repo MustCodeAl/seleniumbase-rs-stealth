@@ -49,7 +49,10 @@ fn a_new_identity_is_empty_and_current() {
 #[test]
 fn new_clears_the_proxy_because_it_may_hold_a_password() {
     let proxied = with_proxy(&fingerprint(), PASSWORD);
-    assert!(proxied.proxy().is_value(), "the proxy is there to be cleared");
+    assert!(
+        proxied.proxy().is_value(),
+        "the proxy is there to be cleared"
+    );
     let made = StealthIdentity::new(proxied, emulation(), None, NOW).expect("coherent");
     assert!(made.fingerprint.proxy().is_natural());
     assert!(!json_of(&made).contains(PASSWORD));
