@@ -269,15 +269,15 @@ impl ImpersonationProfile {
     /// other than the measured one: the TLS of Chrome 155 under a Chrome 153 user agent is a
     /// contradiction a detector can see.
     pub fn from_fingerprint(fingerprint: &Fingerprint) -> Result<Self, ImpersonateError> {
-        if fingerprint.browser_type != BrowserType::Chromium {
+        if fingerprint.browser_type() != BrowserType::Chromium {
             return Err(ImpersonateError::Fingerprint(
                 "only Chromium identities have a measured TLS and HTTP/2",
             ));
         }
-        let entry = emulation::get(BrowserKind::Chrome, fingerprint.os_type)?;
+        let entry = emulation::get(BrowserKind::Chrome, fingerprint.os_type())?;
         let user_agent = fingerprint
-            .user_agent
-            .as_deref()
+            .user_agent()
+            .as_str()
             .ok_or(ImpersonateError::Fingerprint("it has no user agent"))?;
         let claimed = user_agent_major(user_agent).ok_or(ImpersonateError::Fingerprint(
             "its user agent names no Chrome version",
@@ -290,12 +290,12 @@ impl ImpersonationProfile {
         }
         let mut profile = Self::from_measured(entry)?;
         let language = fingerprint
-            .accept_languages
-            .as_deref()
-            .or(fingerprint.languages.as_deref());
+            .accept_languages()
+            .as_str()
+            .or(fingerprint.languages().as_str());
         let hints = fingerprint
-            .client_hints
-            .as_ref()
+            .client_hints()
+            .value()
             .or(entry.client_hints.as_ref());
         let language = language.or(profile.identity.accept_language.as_deref());
         profile.identity = identity_for(user_agent, language, hints);

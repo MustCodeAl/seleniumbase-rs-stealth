@@ -288,7 +288,7 @@ impl StealthSessionBuilder {
         let leg = open_leg(&wiring, &mut mitm, mode, &identity, current.as_ref()).await?;
         Ok(StealthSession {
             persona: super::Persona {
-                seed: identity.fingerprint.seed.unwrap_or(start.seed),
+                seed: identity.fingerprint.seed(),
                 major: identity.emulation.major,
                 os: identity.emulation.os,
             },
@@ -399,14 +399,14 @@ async fn start_identity(
         fingerprint.clone()
     } else {
         let major = measured_major(host_os())?;
-        persona_fingerprint(host_os(), start.seed, major, None)
+        persona_fingerprint(host_os(), start.seed, major, None)?
     };
     if let Some(egress) = current {
-        EgressLocale::resolve(&*wiring.geo, egress)
+        fingerprint = EgressLocale::resolve(&*wiring.geo, egress)
             .await?
-            .apply_to(&mut fingerprint);
+            .apply_to(&fingerprint)?;
     }
-    let os = fingerprint.os_type;
+    let os = fingerprint.os_type();
     let emulation = EmulationRef {
         kind: BrowserKind::Chrome,
         major: measured_major(os)?,

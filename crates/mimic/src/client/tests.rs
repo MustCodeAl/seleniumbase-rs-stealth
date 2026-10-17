@@ -4,7 +4,7 @@
 use super::identity::{quote, sec_ch_ua, user_agent_major};
 use super::{impersonation_client, ImpersonateError, ImpersonationProfile, WireProtocol};
 use crate::convert::ConvertError;
-use seleniumbase_rs::stealth::fingerprint::{BrandVersion, Fingerprint, OsType};
+use seleniumbase_rs::stealth::fingerprint::{BrandVersion, Fingerprint, OsType, Spoof};
 use seleniumbase_rs_codec::client_hello::ext_id;
 use seleniumbase_rs_codec::emulation::{self, Emulation, EmulationError, KnownGap};
 use seleniumbase_rs_codec::h2_spec::SpecError as H2SpecError;
@@ -105,15 +105,23 @@ fn a_measured_profile_names_its_browser_and_system() {
 
 #[test]
 fn a_fingerprint_without_a_user_agent_or_a_chrome_version_is_refused() {
-    let mut fingerprint = Fingerprint::randomized_with_major(OsType::Macos, 3, 155);
-    fingerprint.user_agent = None;
+    let fingerprint = Fingerprint::randomized_with_major(OsType::Macos, 3, 155);
+    let without = fingerprint
+        .to_builder()
+        .user_agent(Spoof::Natural)
+        .build()
+        .expect("builds");
     assert!(matches!(
-        ImpersonationProfile::from_fingerprint(&fingerprint),
+        ImpersonationProfile::from_fingerprint(&without),
         Err(ImpersonateError::Fingerprint(_))
     ));
-    fingerprint.user_agent = Some("Mozilla/5.0 (X11) Gecko/20100101 Firefox/130.0".to_owned());
+    let firefox = fingerprint
+        .to_builder()
+        .user_agent("Mozilla/5.0 (X11) Gecko/20100101 Firefox/130.0")
+        .build()
+        .expect("builds");
     assert!(matches!(
-        ImpersonationProfile::from_fingerprint(&fingerprint),
+        ImpersonationProfile::from_fingerprint(&firefox),
         Err(ImpersonateError::Fingerprint(_))
     ));
 }
@@ -261,11 +269,17 @@ fn a_random_profile_rides_the_measured_chrome_and_claims_its_version() {
 
 #[test]
 fn a_fingerprint_that_claims_another_chrome_is_refused() {
-    let mut fingerprint = Fingerprint::randomized_with_major(OsType::Macos, 3, 155);
-    fingerprint.user_agent = fingerprint
-        .user_agent
-        .as_deref()
-        .map(|agent| agent.replace("Chrome/155", "Chrome/153"));
+    let fingerprint = Fingerprint::randomized_with_major(OsType::Macos, 3, 155);
+    let agent = fingerprint
+        .user_agent()
+        .as_str()
+        .map(|agent| agent.replace("Chrome/155", "Chrome/153"))
+        .expect("a randomized fingerprint has a user agent");
+    let fingerprint = fingerprint
+        .to_builder()
+        .user_agent(agent)
+        .build()
+        .expect("builds");
     assert_eq!(
         ImpersonationProfile::from_fingerprint(&fingerprint),
         Err(ImpersonateError::VersionMismatch {
@@ -284,8 +298,11 @@ fn a_fingerprint_of_an_unmeasured_system_or_another_browser_is_refused() {
             EmulationError::NotMeasured { .. }
         ))
     ));
-    let mut firefox = Fingerprint::randomized_with_major(OsType::Macos, 3, 155);
-    firefox.browser_type = seleniumbase_rs::stealth::fingerprint::BrowserType::Firefox;
+    let firefox = Fingerprint::randomized_with_major(OsType::Macos, 3, 155)
+        .to_builder()
+        .browser_type(seleniumbase_rs::stealth::fingerprint::BrowserType::Firefox)
+        .build()
+        .expect("builds");
     assert!(matches!(
         ImpersonationProfile::from_fingerprint(&firefox),
         Err(ImpersonateError::Fingerprint(_))
@@ -298,13 +315,13 @@ fn a_fingerprint_gives_its_identity_to_the_headers() {
     let profile = ImpersonationProfile::from_fingerprint(&fingerprint).expect("builds");
     assert_eq!(
         Some(profile.user_agent()),
-        fingerprint.user_agent.as_deref()
+        fingerprint.user_agent().as_str()
     );
     assert_eq!(
         profile.accept_language(),
-        fingerprint.accept_languages.as_deref()
+        fingerprint.accept_languages().as_str()
     );
-    let hints = fingerprint.client_hints.as_ref().expect("Chrome hints");
+    let hints = fingerprint.client_hints().value().expect("Chrome hints");
     assert_eq!(profile.identity().sec_ch_ua, Some(sec_ch_ua(&hints.brands)));
 }
 

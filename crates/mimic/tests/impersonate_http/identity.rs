@@ -165,7 +165,15 @@ fn the_installed_chrome_must_be_the_measured_one() {
 #[test]
 fn an_identity_that_carries_a_proxy_in_its_fingerprint_is_refused() {
     let mut tainted = identity();
-    tainted.fingerprint.proxy = Some(seleniumbase_rs::ProxyConfig::default());
+    tainted.fingerprint = tainted
+        .fingerprint
+        .to_builder()
+        .proxy(seleniumbase_rs::ProxyConfig {
+            host: "proxy.example".to_owned(),
+            ..seleniumbase_rs::ProxyConfig::default()
+        })
+        .build()
+        .expect("a fingerprint with a proxy builds");
 
     let error =
         HttpSession::from_identity(&tainted, None, HttpOptions::new()).expect_err("refused");
@@ -197,7 +205,7 @@ fn the_session_speaks_with_the_identitys_user_agent_and_languages() {
 
     assert_eq!(
         Some(session.profile().user_agent()),
-        base.fingerprint.user_agent.as_deref()
+        base.fingerprint.user_agent().as_str()
     );
     assert_eq!(session.profile().major(), measured_major());
 }

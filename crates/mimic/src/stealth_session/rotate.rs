@@ -19,12 +19,12 @@ pub(super) fn persona_fingerprint(
     seed: u64,
     major: u32,
     placed: Option<&EgressLocale>,
-) -> Fingerprint {
-    let mut fingerprint = Fingerprint::randomized_with_major(os, seed, major);
-    if let Some(placed) = placed {
-        placed.apply_to(&mut fingerprint);
+) -> Result<Fingerprint, ScrapeError> {
+    let fingerprint = Fingerprint::randomized_with_major(os, seed, major);
+    match placed {
+        Some(placed) => placed.apply_to(&fingerprint),
+        None => Ok(fingerprint),
     }
-    fingerprint
 }
 
 /// Checks that `identity` can be presented through `egress`: that it is valid, that it belongs to
@@ -70,7 +70,7 @@ impl StealthSession {
             to_seed,
             self.persona.major,
             placed.as_ref(),
-        );
+        )?;
         let identity = StealthIdentity::new(
             fingerprint,
             self.emulation(),
@@ -105,8 +105,7 @@ impl StealthSession {
     pub async fn rotate_egress(&mut self) -> Result<(), StealthError> {
         let next = self.next_egress()?;
         let placed = EgressLocale::resolve(&*self.wiring.geo, &next).await?;
-        let mut fingerprint = self.identity.fingerprint.clone();
-        placed.apply_to(&mut fingerprint);
+        let fingerprint = placed.apply_to(&self.identity.fingerprint)?;
         let identity = StealthIdentity::new(
             fingerprint,
             self.emulation(),
@@ -175,7 +174,7 @@ impl StealthSession {
         check_identity(identity, self.egress_key())?;
         let mode = self.mode();
         self.enter(mode, identity.clone()).await?;
-        self.persona.seed = identity.fingerprint.seed.unwrap_or(self.persona.seed);
+        self.persona.seed = identity.fingerprint.seed();
         self.persona.major = identity.emulation.major;
         self.persona.os = identity.emulation.os;
         Ok(())
@@ -275,7 +274,8 @@ mod tests {
     fn a_persona_claims_the_measured_chrome_and_backs_a_profile() {
         let major = measured();
         for seed in 0..32 {
-            let fingerprint = persona_fingerprint(OsType::Macos, seed, major, None);
+            let fingerprint =
+                persona_fingerprint(OsType::Macos, seed, major, None).expect("a persona");
             let profile = ImpersonationProfile::from_fingerprint(&fingerprint).expect("a profile");
             assert_eq!(profile.major(), major, "seed {seed}");
         }
@@ -284,7 +284,7 @@ mod tests {
     #[test]
     fn a_persona_is_a_function_of_its_seed() {
         let major = measured();
-        let draw = |seed| persona_fingerprint(OsType::Macos, seed, major, None);
+        let draw = |seed| persona_fingerprint(OsType::Macos, seed, major, None).expect("a persona");
         assert_eq!(draw(5), draw(5));
         assert_ne!(draw(5), draw(6));
     }
@@ -298,10 +298,11 @@ mod tests {
             timezone: "Europe/Berlin".to_owned(),
         };
 
-        let fingerprint = persona_fingerprint(OsType::Macos, 1, measured(), Some(&placed));
+        let fingerprint = persona_fingerprint(OsType::Macos, 1, measured(), Some(&placed))
+            .expect("a persona in the locale");
 
-        assert_eq!(fingerprint.locale.as_deref(), Some(locale.tag));
-        assert_eq!(fingerprint.timezone.as_deref(), Some("Europe/Berlin"));
+        assert_eq!(fingerprint.locale().as_str(), Some(locale.tag));
+        assert_eq!(fingerprint.timezone().as_str(), Some("Europe/Berlin"));
         assert!(ImpersonationProfile::from_fingerprint(&fingerprint).is_ok());
     }
 
@@ -352,8 +353,15 @@ mod tests {
     #[test]
     fn an_identity_that_carries_a_proxy_is_refused() {
         let mut identity = identity_claiming(measured(), measured());
-        identity.fingerprint.proxy =
-            Some(seleniumbase_rs::stealth::fingerprint::ProxyConfig::default());
+        identity.fingerprint = identity
+            .fingerprint
+            .to_builder()
+            .proxy(seleniumbase_rs::stealth::fingerprint::ProxyConfig {
+                host: "proxy.example".to_owned(),
+                ..Default::default()
+            })
+            .build()
+            .expect("a fingerprint with a proxy builds");
         assert!(check_identity(&identity, None).is_err());
     }
 }

@@ -251,7 +251,7 @@ async fn rotating_the_egress_over_http_moves_the_identity_and_the_language() {
     let world = World::new().await;
     let mut session = with_two_proxies(&world).await;
     let from = session.egress().cloned().expect("the first egress");
-    let language = session.identity().fingerprint.locale.clone();
+    let language = session.identity().fingerprint.locale().clone();
 
     session.rotate_egress().await.expect("rotates");
 
@@ -259,8 +259,8 @@ async fn rotating_the_egress_over_http_moves_the_identity_and_the_language() {
     assert_ne!(from, to);
     assert_eq!(session.identity().egress, Some(to.clone()));
     assert_ne!(
-        session.identity().fingerprint.locale,
-        language,
+        session.identity().fingerprint.locale(),
+        &language,
         "the country's language"
     );
     assert!(session.identity().cookies.is_empty());

@@ -272,7 +272,12 @@ async fn a_new_profile_is_what_the_page_sees_and_the_proxy_stays() {
         site.seen().len() > seen_before,
         "the new Chrome went through the proxy"
     );
-    let agent = session.identity().fingerprint.user_agent.clone();
+    let agent = session
+        .identity()
+        .fingerprint
+        .user_agent()
+        .as_str()
+        .map(str::to_owned);
     assert_eq!(
         site.seen().last().and_then(|seen| seen.user_agent.clone()),
         agent
@@ -300,9 +305,14 @@ async fn page_view(session: &StealthSession, site: &ChallengeSite) -> View {
 /// What the identity says the page should report.
 fn expected_view(session: &StealthSession) -> View {
     let fingerprint = &session.identity().fingerprint;
+    let screen = fingerprint.screen().value();
     (
-        fingerprint.hardware_concurrency.map(u64::from),
-        fingerprint.screen_width.map(u64::from),
-        fingerprint.screen_height.map(u64::from),
+        fingerprint
+            .hardware_concurrency()
+            .value()
+            .copied()
+            .map(u64::from),
+        screen.map(|size| u64::from(size.width)),
+        screen.map(|size| u64::from(size.height)),
     )
 }
