@@ -450,6 +450,25 @@ fn a_fingerprint_that_no_longer_fits_its_os_is_refused() {
 }
 
 #[test]
+fn a_fingerprint_in_the_flat_layout_of_an_older_core_is_refused_without_echoing_it() {
+    let (_dir, path, _identity) = saved();
+    edit(&path, |value| {
+        value["fingerprint"] = serde_json::json!({
+            "user_agent": "SECRET-OLD-AGENT", "screen_width": 1920, "screen_height": 1080,
+            "flags": { "screen_masking": "custom" }
+        });
+    });
+    let error = load_blocking(&path).expect_err("the old layout is refused");
+    assert!(
+        matches!(error, IdentityFileError::Corrupt { .. }),
+        "{error:?}"
+    );
+    for text in [error.to_string(), format!("{error:?}")] {
+        assert!(!text.contains("SECRET-OLD-AGENT"), "{text}");
+    }
+}
+
+#[test]
 fn a_proxy_smuggled_into_a_file_is_refused_without_echoing_its_password() {
     let (_dir, path, _identity) = saved();
     edit(&path, |value| {
