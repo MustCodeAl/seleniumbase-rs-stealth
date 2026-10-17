@@ -16,13 +16,14 @@
 use std::collections::BTreeMap;
 use std::fmt;
 
+use serde::ser::Error as _;
 use serde::{Deserialize, Serialize, Serializer};
 use serde_json::error::Category;
 
 use crate::challenge::detect::{clearance_cookie, Vendor};
 use crate::egress::route::EgressKey;
 use crate::jar::store::{site_of, CookieJar};
-use seleniumbase_rs::stealth::fingerprint::{Fingerprint, OsType};
+use seleniumbase_rs::stealth::fingerprint::{Fingerprint, FingerprintError, OsType, Spoof};
 use seleniumbase_rs_codec::BrowserKind;
 
 #[cfg(test)]
@@ -170,16 +171,24 @@ pub(crate) fn json_failure(error: &serde_json::Error) -> &'static str {
     }
 }
 
+/// `fingerprint` without its proxy, which may hold a password. A fingerprint that has none is
+/// returned as it is.
+fn without_proxy(fingerprint: Fingerprint) -> Result<Fingerprint, FingerprintError> {
+    if fingerprint.proxy().is_natural() {
+        return Ok(fingerprint);
+    }
+    fingerprint.to_builder().proxy(Spoof::Natural).build()
+}
+
 /// Serializes `fingerprint` without its proxy, which may hold a password.
 fn serialize_without_proxy<S: Serializer>(
     fingerprint: &Fingerprint,
     out: S,
 ) -> Result<S::Ok, S::Error> {
-    if fingerprint.proxy.is_none() {
+    if fingerprint.proxy().is_natural() {
         return fingerprint.serialize(out);
     }
-    let mut clean = fingerprint.clone();
-    clean.proxy = None;
+    let clean = without_proxy(fingerprint.clone()).map_err(S::Error::custom)?;
     clean.serialize(out)
 }
 
@@ -237,17 +246,21 @@ impl StealthIdentity {
     ///
     /// # Errors
     ///
-    /// Returns [`IdentityError::Incoherent`] when [`Fingerprint::validate`] reports an error, or
-    /// when the fingerprint cannot be saved and read back as JSON (a battery time of infinity
-    /// becomes `null`, for one).
+    /// Returns [`IdentityError::Incoherent`] when [`Fingerprint::validate`] reports an error,
+    /// when the fingerprint cannot be saved and read back as JSON (a device memory of infinity
+    /// becomes `null`, for one), or when it cannot be built again without its proxy.
     pub fn new(
-        mut fingerprint: Fingerprint,
+        fingerprint: Fingerprint,
         emulation: EmulationRef,
         egress: Option<EgressKey>,
         now: u64,
     ) -> Result<Self, IdentityError> {
         check_coherent(&fingerprint)?;
-        fingerprint.proxy = None;
+        let fingerprint = without_proxy(fingerprint).map_err(|error| {
+            IdentityError::Incoherent(vec![format!(
+                "the fingerprint cannot be built without its proxy: {error}"
+            )])
+        })?;
         check_saveable(&fingerprint)?;
         Ok(Self {
             schema: IDENTITY_SCHEMA,
@@ -273,7 +286,7 @@ impl StealthIdentity {
             return Err(IdentityError::Schema(self.schema));
         }
         let mut problems = self.fingerprint.validate().errors;
-        if self.fingerprint.proxy.is_some() {
+        if self.fingerprint.proxy().is_set() {
             problems.push("the fingerprint carries a proxy, which may hold a password".to_owned());
         }
         if problems.is_empty() {

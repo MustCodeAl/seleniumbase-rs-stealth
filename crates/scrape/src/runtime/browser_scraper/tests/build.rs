@@ -61,7 +61,7 @@ async fn building_reads_the_installed_chrome_and_starts_a_profile_that_claims_it
         .expect("the profile sets the agent");
     assert!(agent.contains("Chrome/155."), "{agent}");
     assert_eq!(
-        scraper.fingerprint().user_agent.as_deref(),
+        scraper.fingerprint().user_agent().as_str(),
         Some(agent.as_str())
     );
     assert_eq!(scraper.seed(), SEED);
@@ -159,9 +159,9 @@ async fn the_first_egress_sets_the_locale_and_the_browser_works_behind_its_proxy
         .await
         .expect("the scraper builds");
 
-    assert_eq!(scraper.fingerprint().locale.as_deref(), Some("de-DE"));
+    assert_eq!(scraper.fingerprint().locale().as_str(), Some("de-DE"));
     assert_eq!(
-        scraper.fingerprint().timezone.as_deref(),
+        scraper.fingerprint().timezone().as_str(),
         Some("Europe/Berlin")
     );
     let kept = rig.launcher.last();
@@ -331,7 +331,7 @@ async fn the_ports_the_caller_supplies_are_the_ones_used() {
         "the first tab came from the switch"
     );
     assert_eq!(
-        scraper.fingerprint().timezone.as_deref(),
+        scraper.fingerprint().timezone().as_str(),
         Some("Europe/Vienna")
     );
     let error = scraper

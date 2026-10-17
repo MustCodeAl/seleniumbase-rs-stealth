@@ -20,7 +20,7 @@ use serde_json::{json, Value};
 use crate::challenge::detect::{
     clearance_cookie, detect, ChallengeKind, Detection, ResponseView, Vendor,
 };
-use crate::egress::geo::{GeoError, GeoResolver, Locale, LocaleExt};
+use crate::egress::geo::{placed_in, GeoError, GeoResolver, Locale, LocaleExt};
 use crate::egress::redact::RedactedUrl;
 use crate::egress::route::EgressRef;
 use crate::error::ScrapeError;
@@ -170,11 +170,17 @@ impl EgressLocale {
         })
     }
 
-    /// Sets the locale fields of `fingerprint` (language, `Accept-Language`, time zone, position)
-    /// from this locale, with the time zone this egress reported.
-    pub fn apply_to(&self, fingerprint: &mut Fingerprint) {
-        self.locale.apply_to(fingerprint);
-        fingerprint.timezone = Some(self.timezone.clone());
+    /// The fingerprint `fingerprint` becomes in this locale: its language, `Accept-Language`,
+    /// time zone and position are this locale's, with the time zone this egress reported, and
+    /// every other setting is kept. `fingerprint` is left as it was. See
+    /// [`LocaleExt::apply_to`].
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ScrapeError::Fingerprint`] when the changed settings do not build into a
+    /// fingerprint, which a fingerprint that was built before does not cause.
+    pub fn apply_to(&self, fingerprint: &Fingerprint) -> Result<Fingerprint, ScrapeError> {
+        Ok(placed_in(self.locale, &self.timezone, fingerprint)?)
     }
 }
 

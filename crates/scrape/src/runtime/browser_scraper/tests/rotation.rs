@@ -38,7 +38,7 @@ async fn rotating_the_profile_draws_another_one_for_the_same_machine_and_starts_
     assert_eq!(scraper.seed(), Rng::new(SEED).next_u64());
     let after = scraper.fingerprint();
     assert_ne!(after, &before);
-    assert_eq!(after.os_type, before.os_type);
+    assert_eq!(after.os_type(), before.os_type());
     assert_eq!(
         claimed_major(after),
         Some(155),
@@ -50,7 +50,7 @@ async fn rotating_the_profile_draws_another_one_for_the_same_machine_and_starts_
     );
     let new = rig.launcher.nth(2);
     assert!(new.browser.is_connected());
-    assert_eq!(new.options.user_agent(), after.user_agent.as_deref());
+    assert_eq!(new.options.user_agent(), after.user_agent().as_str());
     assert!(
         new.mock.calls_to("Network.setCookies").is_empty(),
         "nothing carries over"
@@ -122,12 +122,12 @@ async fn rotating_to_another_country_restarts_the_browser_in_the_language_and_zo
         "http://fr.proxy.example:8080"
     );
     let after = scraper.fingerprint();
-    assert_eq!(after.locale.as_deref(), Some("fr-FR"));
-    assert_eq!(after.timezone.as_deref(), Some("Europe/Paris"));
+    assert_eq!(after.locale().as_str(), Some("fr-FR"));
+    assert_eq!(after.timezone().as_str(), Some("Europe/Paris"));
     assert_eq!(scraper.seed(), SEED, "it is the same profile, moved");
-    assert_eq!(after.os_type, before.os_type);
-    assert_eq!(after.hardware_concurrency, before.hardware_concurrency);
-    assert_eq!(after.user_agent, before.user_agent);
+    assert_eq!(after.os_type(), before.os_type());
+    assert_eq!(after.hardware_concurrency(), before.hardware_concurrency());
+    assert_eq!(after.user_agent(), before.user_agent());
     let event = rig.sink.events().pop().expect("an event");
     assert!(matches!(
         &event,

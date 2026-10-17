@@ -65,7 +65,7 @@ pub(super) fn major_of(text: &str) -> Option<u32> {
 
 /// The major version a fingerprint claims in its user agent.
 pub(super) fn claimed_major(fingerprint: &Fingerprint) -> Option<u32> {
-    let agent = fingerprint.user_agent.as_deref()?;
+    let agent = fingerprint.user_agent().as_str()?;
     let (_, after) = agent.split_once(CHROME_TOKEN)?;
     after.split('.').next()?.parse().ok()
 }

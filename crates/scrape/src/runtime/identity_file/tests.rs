@@ -468,14 +468,20 @@ fn an_identity_with_a_proxy_is_not_written() {
     let dir = temp();
     let path = dir.path().join("identity.json");
     let mut identity = identity_with_clearance();
-    identity.fingerprint.proxy = Some(ProxyConfig {
+    let proxy = ProxyConfig {
         r#type: "http".to_owned(),
         host: "proxy.example".to_owned(),
         port: 8080,
         username: Some("alice".to_owned()),
         password: Some(PASSWORD.to_owned()),
         save_traffic: false,
-    });
+    };
+    identity.fingerprint = identity
+        .fingerprint
+        .to_builder()
+        .proxy(proxy)
+        .build()
+        .expect("a proxy builds");
     let error = save_blocking(&path, &identity).expect_err("refused");
     assert!(matches!(error, IdentityFileError::Identity { .. }));
     assert_clean(&error);

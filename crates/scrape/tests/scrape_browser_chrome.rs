@@ -316,7 +316,7 @@ async fn rotating_the_profile_starts_a_new_chrome_that_reports_the_new_profile()
         .evaluate("navigator.hardwareConcurrency")
         .await
         .expect("it reads");
-    assert_eq!(cores_before, json!(before.hardware_concurrency));
+    assert_eq!(cores_before, json!(before.hardware_concurrency().value()));
 
     scraper.rotate_profile().await.expect("the profile rotates");
     scraper
@@ -337,10 +337,10 @@ async fn rotating_the_profile_starts_a_new_chrome_that_reports_the_new_profile()
         .expect("it reads");
     assert_eq!(
         cores,
-        json!(after.hardware_concurrency),
+        json!(after.hardware_concurrency().value()),
         "the page reports the new profile"
     );
-    assert_eq!(agent, json!(after.user_agent));
+    assert_eq!(agent, json!(after.user_agent().as_str()));
     assert!(sink
         .events()
         .iter()

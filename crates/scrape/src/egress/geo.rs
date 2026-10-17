@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
 use super::route::{EgressKey, EgressRef};
-use seleniumbase_rs::stealth::fingerprint::Fingerprint;
+use seleniumbase_rs::stealth::fingerprint::{Fingerprint, FingerprintError, Geolocation};
 use seleniumbase_rs::stealth::humanize::Rng;
 pub use seleniumbase_rs::stealth::randomize::{Locale, LOCALES};
 
@@ -88,10 +88,20 @@ pub trait LocaleExt {
     #[must_use]
     fn by_tag(tag: &str) -> Option<&'static Locale>;
 
-    /// Sets the locale fields of `fingerprint` from this locale: the language list, the
-    /// `Accept-Language` header, the time zone and a position near the city. The position is a
-    /// function of the fingerprint's seed, so the same identity always reports the same spot.
-    fn apply_to(&self, fingerprint: &mut Fingerprint);
+    /// The fingerprint `fingerprint` becomes in this locale: the language list, the
+    /// `Accept-Language` header, the time zone and a position near the city are this locale's,
+    /// and every other setting is kept. The position is a function of the fingerprint's seed, so
+    /// the same identity always reports the same spot. A fingerprint that denies geolocation
+    /// (`Spoof::Off`) keeps denying it.
+    ///
+    /// A built fingerprint is never changed, so this returns the next one; `fingerprint` is left
+    /// as it was.
+    ///
+    /// # Errors
+    ///
+    /// Returns the [`FingerprintError`] of the core when the changed settings do not build into a
+    /// fingerprint. A fingerprint that was built before does not fail.
+    fn apply_to(&self, fingerprint: &Fingerprint) -> Result<Fingerprint, FingerprintError>;
 }
 
 impl LocaleExt for Locale {
@@ -107,17 +117,32 @@ impl LocaleExt for Locale {
             .find(|locale| locale.tag.eq_ignore_ascii_case(tag))
     }
 
-    fn apply_to(&self, fingerprint: &mut Fingerprint) {
-        let languages = self.accept_language();
-        let place = position(self, &mut Rng::new(fingerprint.seed.unwrap_or_default()));
-        fingerprint.locale = Some(self.tag.to_owned());
-        fingerprint.languages = Some(languages.clone());
-        fingerprint.accept_languages = Some(languages);
-        fingerprint.timezone = Some(self.timezone.to_owned());
-        fingerprint.latitude = Some(place.latitude);
-        fingerprint.longitude = Some(place.longitude);
-        fingerprint.accuracy = Some(place.accuracy);
+    fn apply_to(&self, fingerprint: &Fingerprint) -> Result<Fingerprint, FingerprintError> {
+        placed_in(self, self.timezone, fingerprint)
     }
+}
+
+/// `fingerprint` moved to `locale`, in the time zone `timezone` (the one the egress reported,
+/// which may differ from the locale's own).
+pub(crate) fn placed_in(
+    locale: &Locale,
+    timezone: &str,
+    fingerprint: &Fingerprint,
+) -> Result<Fingerprint, FingerprintError> {
+    let languages = locale.accept_language();
+    let mut builder = fingerprint
+        .to_builder()
+        .locale(locale.tag)
+        .languages(languages.clone())
+        .accept_languages(languages)
+        .timezone(timezone);
+    // A position answers a request without a prompt; a denial must stay one.
+    if !fingerprint.geolocation().is_off() {
+        let place = position(locale, &mut Rng::new(fingerprint.seed()));
+        builder = builder
+            .geolocation(Geolocation::new(place.latitude, place.longitude).accuracy(place.accuracy));
+    }
+    builder.build()
 }
 
 /// How far a reported position may sit from the city centre, in degrees (about four
@@ -208,7 +233,7 @@ impl GeoResolver for StaticGeoResolver {
 mod tests {
     use super::*;
     use futures_util::FutureExt;
-    use seleniumbase_rs::stealth::fingerprint::OsType;
+    use seleniumbase_rs::stealth::fingerprint::{OsType, Spoof};
 
     fn country(code: &str) -> CountryCode {
         CountryCode::new(code).expect("valid code")
@@ -304,46 +329,92 @@ mod tests {
 
     #[test]
     fn applying_a_locale_sets_the_language_zone_and_position() {
-        let mut fingerprint = Fingerprint::randomized(OsType::Windows, 3);
+        let before = Fingerprint::randomized(OsType::Windows, 3);
         let locale = Locale::by_tag("de-DE").expect("present");
-        locale.apply_to(&mut fingerprint);
-        assert_eq!(fingerprint.locale.as_deref(), Some("de-DE"));
-        assert_eq!(fingerprint.timezone.as_deref(), Some("Europe/Berlin"));
+        let fingerprint = locale.apply_to(&before).expect("builds");
+        assert_eq!(fingerprint.locale().as_str(), Some("de-DE"));
+        assert_eq!(fingerprint.timezone().as_str(), Some("Europe/Berlin"));
         assert_eq!(
-            fingerprint.accept_languages.as_deref(),
+            fingerprint.accept_languages().as_str(),
             Some("de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7")
         );
-        assert_eq!(fingerprint.languages, fingerprint.accept_languages);
-        let (lat, long) = (
-            fingerprint.latitude.expect("set"),
-            fingerprint.longitude.expect("set"),
-        );
-        assert!((lat - 52.52).abs() <= 0.05, "{lat}");
-        assert!((long - 13.405).abs() <= 0.05, "{long}");
-        assert!(fingerprint.accuracy.is_some());
+        assert_eq!(fingerprint.languages(), fingerprint.accept_languages());
+        let place = fingerprint.geolocation().value().expect("set");
+        assert!((place.latitude - 52.52).abs() <= 0.05, "{}", place.latitude);
+        assert!((place.longitude - 13.405).abs() <= 0.05, "{}", place.longitude);
+        assert!(place.accuracy.is_some());
         assert!(fingerprint.validate().is_coherent());
+    }
+
+    #[test]
+    fn applying_a_locale_leaves_the_fingerprint_it_was_given_as_it_was() {
+        let before = Fingerprint::randomized(OsType::Windows, 3);
+        let kept = before.clone();
+        let locale = Locale::by_tag("ja-JP").expect("present");
+        let moved = locale.apply_to(&before).expect("builds");
+        assert_eq!(before, kept);
+        assert_ne!(moved, before);
+    }
+
+    #[test]
+    fn applying_a_locale_keeps_every_other_setting() {
+        let before = Fingerprint::randomized(OsType::Macos, 9);
+        let locale = Locale::by_tag("ja-JP").expect("present");
+        let moved = locale.apply_to(&before).expect("builds");
+        assert_eq!(moved.user_agent(), before.user_agent());
+        assert_eq!(moved.platform(), before.platform());
+        assert_eq!(moved.screen(), before.screen());
+        assert_eq!(moved.webgl(), before.webgl());
+        assert_eq!(moved.client_hints(), before.client_hints());
+        assert_eq!(moved.policy(), before.policy());
+        assert_eq!(moved.seed(), before.seed());
+        assert_eq!(moved.os_type(), before.os_type());
+    }
+
+    #[test]
+    fn a_fingerprint_that_denies_geolocation_keeps_denying_it() {
+        let denying = Fingerprint::randomized(OsType::Linux, 4)
+            .to_builder()
+            .geolocation(Spoof::Off)
+            .build()
+            .expect("geolocation can be off");
+        let locale = Locale::by_tag("fr-FR").expect("present");
+        let moved = locale.apply_to(&denying).expect("builds");
+        assert!(moved.geolocation().is_off());
+        assert_eq!(moved.timezone().as_str(), Some(locale.timezone));
     }
 
     #[test]
     fn the_position_is_a_function_of_the_seed() {
         let locale = Locale::by_tag("fr-FR").expect("present");
         let place = |seed| {
-            let mut fingerprint = Fingerprint::randomized(OsType::Linux, seed);
-            fingerprint.seed = Some(seed);
-            locale.apply_to(&mut fingerprint);
-            (fingerprint.latitude, fingerprint.longitude)
+            let fingerprint = locale
+                .apply_to(&Fingerprint::randomized(OsType::Linux, seed))
+                .expect("builds");
+            fingerprint.geolocation().clone()
         };
+        assert!(place(11).is_value());
         assert_eq!(place(11), place(11));
         assert_ne!(place(11), place(12));
     }
 
     #[test]
+    fn the_egress_time_zone_replaces_the_one_of_the_locale() {
+        let locale = Locale::by_tag("de-DE").expect("present");
+        let before = Fingerprint::randomized(OsType::Windows, 3);
+        let moved = placed_in(locale, "Europe/Vienna", &before).expect("builds");
+        assert_eq!(moved.timezone().as_str(), Some("Europe/Vienna"));
+        assert_eq!(moved.locale().as_str(), Some("de-DE"));
+    }
+
+    #[test]
     fn a_locale_can_move_an_identity_to_any_listed_country() {
         for locale in LOCALES {
-            let mut fingerprint = Fingerprint::randomized(OsType::Macos, 5);
-            locale.apply_to(&mut fingerprint);
-            assert_eq!(fingerprint.locale.as_deref(), Some(locale.tag));
-            assert_eq!(fingerprint.timezone.as_deref(), Some(locale.timezone));
+            let fingerprint = locale
+                .apply_to(&Fingerprint::randomized(OsType::Macos, 5))
+                .expect("builds");
+            assert_eq!(fingerprint.locale().as_str(), Some(locale.tag));
+            assert_eq!(fingerprint.timezone().as_str(), Some(locale.timezone));
         }
     }
 

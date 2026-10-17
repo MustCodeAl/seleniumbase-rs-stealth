@@ -23,6 +23,15 @@ fn proxy_with(password: &str) -> ProxyConfig {
     }
 }
 
+/// `fingerprint` with a proxy that has the password `password`.
+fn with_proxy(fingerprint: &Fingerprint, password: &str) -> Fingerprint {
+    fingerprint
+        .to_builder()
+        .proxy(proxy_with(password))
+        .build()
+        .expect("a fingerprint with a proxy builds")
+}
+
 fn json_of(identity: &StealthIdentity) -> String {
     serde_json::to_string(identity).expect("an identity serializes")
 }
@@ -39,10 +48,10 @@ fn a_new_identity_is_empty_and_current() {
 
 #[test]
 fn new_clears_the_proxy_because_it_may_hold_a_password() {
-    let mut with_proxy = fingerprint();
-    with_proxy.proxy = Some(proxy_with(PASSWORD));
-    let made = StealthIdentity::new(with_proxy, emulation(), None, NOW).expect("coherent");
-    assert!(made.fingerprint.proxy.is_none());
+    let proxied = with_proxy(&fingerprint(), PASSWORD);
+    assert!(proxied.proxy().is_value(), "the proxy is there to be cleared");
+    let made = StealthIdentity::new(proxied, emulation(), None, NOW).expect("coherent");
+    assert!(made.fingerprint.proxy().is_natural());
     assert!(!json_of(&made).contains(PASSWORD));
     assert!(!format!("{made:?}").contains(PASSWORD));
 }
@@ -50,7 +59,7 @@ fn new_clears_the_proxy_because_it_may_hold_a_password() {
 #[test]
 fn a_proxy_set_after_construction_is_still_not_serialized() {
     let mut made = identity();
-    made.fingerprint.proxy = Some(proxy_with(PASSWORD));
+    made.fingerprint = with_proxy(&made.fingerprint, PASSWORD);
     let json = json_of(&made);
     for secret in [PASSWORD, "alice", "proxy.example"] {
         assert!(!json.contains(secret), "{secret} leaked into {json}");
@@ -60,7 +69,7 @@ fn a_proxy_set_after_construction_is_still_not_serialized() {
 #[test]
 fn verify_refuses_an_identity_that_carries_a_proxy() {
     let mut made = identity();
-    made.fingerprint.proxy = Some(proxy_with(PASSWORD));
+    made.fingerprint = with_proxy(&made.fingerprint, PASSWORD);
     let error = made.verify().expect_err("a proxy is refused");
     assert!(matches!(error, IdentityError::Incoherent(_)), "{error:?}");
     assert!(!error.to_string().contains(PASSWORD));
@@ -71,9 +80,8 @@ fn no_random_proxy_password_reaches_the_json_the_debug_or_an_error() {
     let mut rng = Rng::new(0x005E_C2E7);
     for _ in 0..64 {
         let secret = format!("pw-{:016x}", rng.next_u64());
-        let mut with_proxy = fingerprint();
-        with_proxy.proxy = Some(proxy_with(&secret));
-        let made = StealthIdentity::new(with_proxy, emulation(), None, NOW).expect("coherent");
+        let proxied = with_proxy(&fingerprint(), &secret);
+        let made = StealthIdentity::new(proxied, emulation(), None, NOW).expect("coherent");
         let mismatch = made
             .check_egress(Some(&egress("other.example")))
             .expect_err("a proxy is not the direct connection");
@@ -85,8 +93,11 @@ fn no_random_proxy_password_reaches_the_json_the_debug_or_an_error() {
 
 #[test]
 fn new_refuses_an_incoherent_fingerprint() {
-    let mut fp = fingerprint();
-    fp.platform = Some("Win32".to_owned());
+    let fp = fingerprint()
+        .to_builder()
+        .platform("Win32")
+        .build()
+        .expect("builds");
     let error = StealthIdentity::new(fp, emulation(), None, NOW).expect_err("incoherent");
     match error {
         IdentityError::Incoherent(reasons) => {
@@ -100,25 +111,27 @@ fn new_refuses_an_incoherent_fingerprint() {
 }
 
 #[test]
-fn new_refuses_a_fingerprint_that_cannot_be_saved_and_read_back() {
-    let mut fp = fingerprint();
-    fp.battery = Some(BatteryProfile::default());
-    let error = StealthIdentity::new(fp, emulation(), None, NOW).expect_err("infinity is not JSON");
-    match error {
-        IdentityError::Incoherent(reasons) => {
-            assert!(
-                reasons.iter().any(|reason| reason.contains("saved")),
-                "{reasons:?}"
-            );
-        }
-        other => panic!("expected Incoherent, got {other:?}"),
-    }
+fn a_battery_time_of_infinity_is_saved_and_read_back() {
+    // The core writes an infinite battery time as null and reads it back as infinity, so a
+    // default battery, which has an infinite time left, is a fingerprint that saves.
+    let fp = fingerprint()
+        .to_builder()
+        .battery(BatteryProfile::default())
+        .build()
+        .expect("builds");
+    let made = StealthIdentity::new(fp, emulation(), None, NOW).expect("it saves and reads back");
+    let back: StealthIdentity = serde_json::from_str(&json_of(&made)).expect("reads back");
+    assert_eq!(back, made);
+    assert!(back.fingerprint.battery().is_value());
 }
 
 #[test]
 fn new_refuses_a_number_that_json_turns_into_nothing() {
-    let mut fp = fingerprint();
-    fp.device_memory = Some(f64::INFINITY);
+    let fp = fingerprint()
+        .to_builder()
+        .device_memory(f64::INFINITY)
+        .build()
+        .expect("builds");
     let error = StealthIdentity::new(fp, emulation(), None, NOW).expect_err("infinity is not JSON");
     match error {
         IdentityError::Incoherent(reasons) => {
@@ -197,7 +210,12 @@ fn verify_accepts_a_good_identity_and_refuses_another_schema() {
 #[test]
 fn verify_refuses_a_fingerprint_that_no_longer_fits_its_os() {
     let mut made = identity();
-    made.fingerprint.platform = Some("Win32".to_owned());
+    made.fingerprint = made
+        .fingerprint
+        .to_builder()
+        .platform("Win32")
+        .build()
+        .expect("builds");
     assert!(matches!(made.verify(), Err(IdentityError::Incoherent(_))));
 }
 

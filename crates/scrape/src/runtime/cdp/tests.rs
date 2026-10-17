@@ -331,17 +331,22 @@ async fn the_time_zone_a_resolver_reports_wins_over_the_locale_default() {
     let placed = EgressLocale::resolve(&Vienna, &egress(Some("DE")))
         .await
         .expect("Germany has a locale");
-    let mut fingerprint = Fingerprint::randomized(OsType::Macos, 7);
+    let before = Fingerprint::randomized(OsType::Macos, 7);
 
-    placed.apply_to(&mut fingerprint);
+    let fingerprint = placed.apply_to(&before).expect("the fingerprint builds");
 
     assert_eq!(placed.timezone, "Europe/Vienna");
-    assert_eq!(fingerprint.timezone.as_deref(), Some("Europe/Vienna"));
-    assert_eq!(fingerprint.locale.as_deref(), Some("de-DE"));
+    assert_eq!(fingerprint.timezone().as_str(), Some("Europe/Vienna"));
+    assert_eq!(fingerprint.locale().as_str(), Some("de-DE"));
     assert!(fingerprint
-        .accept_languages
-        .as_deref()
+        .accept_languages()
+        .as_str()
         .is_some_and(|languages| languages.starts_with("de-DE")));
+    assert_ne!(
+        before.timezone().as_str(),
+        Some("Europe/Vienna"),
+        "the fingerprint that was given is not changed"
+    );
 }
 
 #[tokio::test]

@@ -12,6 +12,7 @@ use crate::egress::redact::RedactedUrl;
 use crate::egress::route::EgressError;
 use crate::ledger::state::StateError;
 use crate::passport::identity::IdentityError;
+use seleniumbase_rs::stealth::fingerprint::FingerprintError;
 use seleniumbase_rs::SeleniumBaseError;
 
 /// Why a scrape did not produce a page.
@@ -30,6 +31,12 @@ pub enum ScrapeError {
     /// An identity was refused.
     #[error(transparent)]
     Identity(#[from] IdentityError),
+    /// A fingerprint could not be built.
+    ///
+    /// A fingerprint is never changed once it is built; a change builds the next one, and the
+    /// core refuses a combination that is not a fingerprint.
+    #[error(transparent)]
+    Fingerprint(#[from] FingerprintError),
     /// A challenge was met and the attempts allowed ran out before it was passed.
     #[error("a {kind:?} challenge at {url} was not passed in {attempts} attempts")]
     Unsolved {

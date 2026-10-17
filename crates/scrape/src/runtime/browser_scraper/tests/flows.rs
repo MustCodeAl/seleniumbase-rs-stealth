@@ -236,7 +236,7 @@ async fn repeated_challenges_change_the_egress_and_then_the_profile() {
         scraper.egress().map(|key| key.host.as_str()),
         Some("fr.proxy.example")
     );
-    assert_eq!(scraper.fingerprint().locale.as_deref(), Some("fr-FR"));
+    assert_eq!(scraper.fingerprint().locale().as_str(), Some("fr-FR"));
     assert_ne!(scraper.seed(), first_seed);
     let state = state_of(&rig, "shop.example").await;
     assert_eq!(
@@ -308,7 +308,7 @@ async fn a_block_with_another_egress_moves_there_and_tries_again() {
     );
     assert_eq!(rig.launcher.last().options.lang(), Some("fr-FR"));
     assert_eq!(
-        scraper.fingerprint().timezone.as_deref(),
+        scraper.fingerprint().timezone().as_str(),
         Some("Europe/Paris")
     );
     let state = state_of(&rig, "shop.example").await;
