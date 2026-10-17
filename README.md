@@ -165,7 +165,7 @@ document before its scripts run. The country comes from the proxy spec, and
 `StaticGeoResolver` maps it through a built-in table of locales (no network
 lookup): language list, `Accept-Language`, time zone and a position near the city,
 derived from the fingerprint seed. A built `Fingerprint` is never edited (the core's
-fingerprint API v2): `Locale::apply_to` and `EgressLocale::apply_to` return the next
+fingerprint API v2): `Locale::localize` and `EgressLocale::localize` return the next
 one, and a fingerprint that denies geolocation keeps denying it.
 
 ### Profile and identity rotation
@@ -249,14 +249,18 @@ setting, read through accessors (`fp.timezone().as_str()`, `fp.screen().value()`
 never mutated; a change goes through `fp.to_builder()....build()?`. `Cargo.lock` pins the
 core at `c0bd111`; an older core, with public fields, does not compile against them.
 
-These crates need some core items to be public (in `seleniumbase_rs::sb_cdp` and
-`seleniumbase_rs::stealth::randomize`). Until that change is on the `main` branch of
-seleniumbase-rs, build against a local checkout of it, as below.
-
 ## Building this workspace
 
-The workspace builds against a checkout of seleniumbase-rs next to it: the `[patch]` section of
-`Cargo.toml` points the GitHub dependency at `../seleniumbase-rs`.
+The workspace builds against the core by its plain git URL, at the commit `Cargo.lock` records.
+To build against a local checkout of seleniumbase-rs next to it instead, patch that source in a
+`.cargo/config.toml` that you do not commit:
+
+```toml
+[patch."https://github.com/MustCodeAl/seleniumbase-rs"]
+seleniumbase-rs = { path = "../seleniumbase-rs" }
+```
+
+The commands below then use the checkout.
 
 ```sh
 git clone https://github.com/MustCodeAl/seleniumbase-rs

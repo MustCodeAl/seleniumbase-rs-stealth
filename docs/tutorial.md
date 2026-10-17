@@ -452,8 +452,8 @@ Things to know:
   `StealthIdentity::new` builds the fingerprint again without it (a built
   `Fingerprint` is never edited, see
   [Moving a fingerprint to a locale](#moving-a-fingerprint-to-a-locale)),
-  serialization leaves it out, and `verify` refuses an identity that has one. `Debug` prints the cookie count and the
-  egress key only. A clearance records the cookie's name, never its value.
+  serialization leaves it out, and `verify` refuses an identity that has one. `Debug`
+  prints the cookie count and the egress key only. A clearance records the cookie's name, never its value.
 - **The identity file is private.** It holds cookies, which are credentials. It
   is written atomically (a synced temporary file renamed over the target) with
   mode `0600` on Unix, and an older file with wider permissions is replaced. It
@@ -615,10 +615,10 @@ failures in a row is out of rotation for ten minutes by default.
 A built `Fingerprint` is read through accessors and never changed: every setting is
 one `Spoof` (`Natural`, `Random`, `Value` or `Off`) of the core's fingerprint API,
 and a change builds the next fingerprint. The locale helpers follow that.
-`LocaleExt::apply_to` and `EgressLocale::apply_to` return the fingerprint moved to
+`LocaleExt::localize` and `EgressLocale::localize` return the fingerprint moved to
 the locale (language list, `Accept-Language`, time zone and a position near the
 city, a function of the fingerprint's seed) and leave the one they were given as it
-was. `EgressLocale::apply_to` takes the time zone its egress reported.
+was. `EgressLocale::localize` takes the time zone its egress reported.
 
 ```rust
 use seleniumbase_rs::stealth::fingerprint::{Fingerprint, OsType};
@@ -628,7 +628,7 @@ use seleniumbase_rs_scrape::egress::geo::{Locale, LocaleExt};
 let fingerprint = Fingerprint::randomized_with_major(OsType::Macos, 7, 155);
 let german = Locale::by_tag("de-DE").ok_or("no such locale")?;
 
-let moved = german.apply_to(&fingerprint)?;
+let moved = german.localize(&fingerprint)?;
 
 assert_eq!(moved.locale().as_str(), Some("de-DE"));
 assert_eq!(moved.timezone().as_str(), Some("Europe/Berlin"));

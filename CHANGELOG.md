@@ -18,9 +18,9 @@ Only `scrape` and `mimic` were affected; `codec` holds no fingerprint.
 
 ### Breaking
 
-- **`LocaleExt::apply_to` and `EgressLocale::apply_to` return the next fingerprint.**
-  They wrote into a `&mut Fingerprint`, and a built fingerprint has no setters now.
-  The fingerprint they are given is left as it was. The result is the same one the
+- **`LocaleExt::apply_to` and `EgressLocale::apply_to` are now `localize` and return the
+  next fingerprint.** They wrote into a `&mut Fingerprint`, and a built fingerprint has
+  no setters now. The fingerprint they are given is left as it was. The result is the same one the
   old call left behind: the locale, the language list, `Accept-Language`, the time
   zone (the one the egress reported, for `EgressLocale`) and a position near the
   city, a function of the fingerprint's seed. Every other setting is kept.
@@ -30,14 +30,15 @@ Only `scrape` and `mimic` were affected; `codec` holds no fingerprint.
   let mut fingerprint = Fingerprint::randomized(OsType::Macos, 7);
   locale.apply_to(&mut fingerprint);
   // after
-  let fingerprint = locale.apply_to(&Fingerprint::randomized(OsType::Macos, 7))?;
+  let fingerprint = locale.localize(&Fingerprint::randomized(OsType::Macos, 7))?;
   ```
 
-  `LocaleExt::apply_to` fails with the core's `FingerprintError`, `EgressLocale::apply_to`
+  `LocaleExt::localize` fails with the core's `FingerprintError`, `EgressLocale::localize`
   with `ScrapeError::Fingerprint`. A fingerprint that was built before does not make
-  either fail. Code that still passes `&mut fingerprint` compiles (a mutable reference
-  coerces to a shared one) and only warns about an unused `Result`, so search for
-  `apply_to` when you migrate.
+  either fail. The old name is gone on purpose: a call to `apply_to(&mut fingerprint)`
+  would still have compiled (a mutable reference coerces to a shared one), dropped the
+  `Result` with a mere warning and left the fingerprint in its real locale. Now it is a
+  compile error.
 - **`ScrapeError::Fingerprint(FingerprintError)`** is a new variant (the enum is
   `#[non_exhaustive]`). `rotate_egress`, `rotate_profile` and `build` of the browser
   scraper return it when a fingerprint cannot be built, and so do the rotations and
@@ -52,10 +53,20 @@ Only `scrape` and `mimic` were affected; `codec` holds no fingerprint.
 - A fingerprint that denies geolocation (`Spoof::Off`) keeps denying it when it is moved
   to a locale. The old code left the popup mode alone, so a blocked popup kept denying
   the request; the position is not written now, so the denial stays.
-- The seed of a restored or imported identity, and of a session that starts from a
-  fingerprint of its own, is `Fingerprint::seed()`. A built fingerprint always has one
-  (the one given, else one derived from its user agent), where the old code fell back to
-  the seed of the builder when the fingerprint had none.
+- The seed of a restored or imported identity is `Fingerprint::seed()`. A built
+  fingerprint always has one: the one given, else fresh entropy when a setting was drawn
+  at random, else a value derived from its user agent (so a preset has the same seed
+  every time). The old code fell back to the seed of the builder or of the session when
+  the fingerprint had none. For an identity of a persona made by these crates the seed
+  is the explicit one, as before. An imported identity whose fingerprint is a preset
+  now continues from that derived seed, so two sessions that import it draw the same
+  next profile on `rotate_profile`.
+- `StealthSession` starts from the seed of its builder (`.seed(..)`, else a random one)
+  whatever fingerprint it is given, as `BrowserScraper` does. Before this change a
+  fingerprint of its own with a seed lent that seed to the session; with the v2 core a
+  preset would lend a constant one, and every session on the same preset would then draw
+  the same next profile on `rotate_profile`. A restored identity still brings its own
+  seed.
 - `StealthIdentity::new` clears the proxy by building the fingerprint again with the
   proxy `Natural`, and serialization does the same on a copy. `verify` asks
   `proxy().is_set()`.
@@ -70,6 +81,8 @@ Only `scrape` and `mimic` were affected; `codec` holds no fingerprint.
 - Tests for what the migration decided: a locale move leaves the given fingerprint as
   it was and keeps every other setting, keeps a denied geolocation denied and takes the
   time zone of the egress; an identity file in the old flat layout is refused without
-  echoing it.
+  echoing it; a fingerprint with the natural position gets the position of the locale;
+  sessions on the same fingerprint start from the seeds of their builders, and a restored
+  identity brings its own.
 - `README.md` and `docs/tutorial.md` describe the fingerprint API v2 where these crates
   use it (the locale move, the proxy of an identity, the new error).
