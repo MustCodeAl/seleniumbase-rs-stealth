@@ -153,7 +153,7 @@
 //!     .await?;
 //! let options = mitm.configure_launch(LaunchOptions::builder()).build()?;
 //! let browser = Browser::launch(options).await?;
-//! let page = browser.new_page(Some("https://example.com/")).await?;
+//! let page = browser.new_page_at("https://example.com/").await?;
 //! # drop(page);
 //! browser.close().await?;
 //! mitm.shutdown(Duration::from_secs(5)).await;
