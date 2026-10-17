@@ -79,7 +79,7 @@ impl EgressSwitch for ContextProxySwitch {
             ContextOptions::new().proxy(egress.proxy().clone())
         });
         let context = browser.new_context_with(options).await?;
-        let page = match context.new_page(None::<&str>).await {
+        let page = match context.new_page().await {
             Ok(page) => page,
             Err(error) => {
                 dispose(&context).await;

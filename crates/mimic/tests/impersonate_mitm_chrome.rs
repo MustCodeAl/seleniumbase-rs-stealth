@@ -186,7 +186,7 @@ async fn chrome_loads_a_page_through_the_proxy_and_the_origin_sees_the_measured_
         .allow_private_destinations(true);
     let (mitm, _sink) = start_mitm(None, options).await;
     let browser = launch_behind(&mitm).await;
-    let page = browser.new_page(None::<&str>).await.expect("a tab");
+    let page = browser.new_page().await.expect("a tab");
     let url = format!("https://{ORIGIN}:{}/", origin.addr().port());
 
     let started = Instant::now();
@@ -226,7 +226,7 @@ async fn a_loopback_server_carrying_the_pinned_key_is_never_served_to_the_page()
     let (mitm, _sink) = start_mitm(None, options).await;
     let attacker = Attacker::start(pinned_leaf(&mitm, &der(&ca)).await).await;
     let browser = launch_any_behind(&mitm).await;
-    let page = browser.new_page(None::<&str>).await.expect("a tab");
+    let page = browser.new_page().await.expect("a tab");
 
     // A navigation that fails outright is a refusal too; only what loads matters.
     let _loaded = page
@@ -258,7 +258,7 @@ async fn without_the_proxy_the_leaf_pin_alone_trusts_a_chain_carrying_the_leaf_k
         .find(|arg| arg.starts_with("--ignore-certificate-errors-spki-list="))
         .expect("the pin switch");
     let browser = launch_any(LaunchOptions::builder().arg(pin)).await;
-    let page = browser.new_page(None::<&str>).await.expect("a tab");
+    let page = browser.new_page().await.expect("a tab");
 
     let _loaded = page
         .goto(format!("https://127.0.0.1:{}/", attacker.port))
@@ -289,7 +289,7 @@ async fn a_page_cannot_use_the_direct_proxy_to_reach_a_loopback_service() {
     });
     let (mitm, _sink) = start_mitm(None, MitmOptions::default()).await;
     let browser = launch_any_behind(&mitm).await;
-    let page = browser.new_page(None::<&str>).await.expect("a tab");
+    let page = browser.new_page().await.expect("a tab");
 
     // Chrome sends loopback hosts to the proxy (`--proxy-bypass-list=<-loopback>`), which has
     // to be the one to say no. A navigation that fails outright is a refusal too.
@@ -326,7 +326,7 @@ async fn a_page_opens_a_websocket_through_the_proxy_and_receives_its_echo() {
         .allow_private_destinations(true);
     let (mitm, _sink) = start_mitm(None, options).await;
     let browser = launch_any_behind(&mitm).await;
-    let page = browser.new_page(None::<&str>).await.expect("a tab");
+    let page = browser.new_page().await.expect("a tab");
     let port = echo.addr().port();
     page.goto(format!("https://{WS}:{port}/"))
         .await
@@ -385,7 +385,7 @@ async fn a_plain_ws_websocket_goes_through_the_proxy_to_its_site() {
     let (mitm, _sink) = start_mitm(None, options).await;
     let browser = launch_any_behind(&mitm).await;
     // A blank tab is not a secure context, so it may open `ws://`.
-    let page = browser.new_page(None::<&str>).await.expect("a tab");
+    let page = browser.new_page().await.expect("a tab");
     let before = mitm.stats();
 
     let outcome = open_websocket(&page, &format!("ws://{PLAIN}:{}/echo", site.addr().port())).await;
@@ -431,7 +431,7 @@ async fn a_websocket_as_a_new_tabs_first_request_through_the_proxy_gets_its_echo
     let (mitm, _sink) = start_mitm(None, options).await;
     let browser = launch_any_behind(&mitm).await;
     let launched = mitm.stats();
-    let page = browser.new_page(None::<&str>).await.expect("a tab");
+    let page = browser.new_page().await.expect("a tab");
 
     let outcome = open_websocket(&page, &format!("wss://{WS}:{}/echo", echo.addr().port())).await;
 
@@ -469,14 +469,14 @@ async fn a_context_behind_the_proxy_takes_the_credentials_from_the_priming_page(
         .await
         .expect("a context");
     let url = format!("wss://{WS}:{}/echo", echo.addr().port());
-    let first = context.new_page(None::<&str>).await.expect("a tab");
+    let first = context.new_page().await.expect("a tab");
 
     let unprimed = open_websocket(&first, &url).await;
     first
         .goto(mitm.prime_url())
         .await
         .expect("the priming page loads");
-    let second = context.new_page(None::<&str>).await.expect("a second tab");
+    let second = context.new_page().await.expect("a second tab");
     let primed = open_websocket(&second, &url).await;
 
     eprintln!(
