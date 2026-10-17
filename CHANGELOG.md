@@ -1,0 +1,75 @@
+# Changelog
+
+All notable changes to the crates of this repository: `seleniumbase-rs-codec`,
+`seleniumbase-rs-scrape` and `seleniumbase-rs-mimic`. The format follows
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/). The crates are experimental
+and not published to crates.io, so their types and paths may change between commits.
+
+## [Unreleased]
+
+The workspace follows the fingerprint API v2 of seleniumbase-rs: one `Spoof<T>`
+(`Natural`, `Random`, `Value`, `Off`) per setting, read through accessors
+(`fp.timezone()`, `fp.screen().value()`), and a built `Fingerprint` that is never
+mutated. A change goes through `fp.to_builder()....build()?`, and `build()` can fail.
+The design is `docs/design/fingerprint-api-v2.md` in seleniumbase-rs, and its
+`CHANGELOG.md` (`## Unreleased`) has the migration table. `Cargo.lock` pins the core
+at `c0bd111`; a core from before that change does not compile against these crates.
+Only `scrape` and `mimic` were affected; `codec` holds no fingerprint.
+
+### Breaking
+
+- **`LocaleExt::apply_to` and `EgressLocale::apply_to` return the next fingerprint.**
+  They wrote into a `&mut Fingerprint`, and a built fingerprint has no setters now.
+  The fingerprint they are given is left as it was. The result is the same one the
+  old call left behind: the locale, the language list, `Accept-Language`, the time
+  zone (the one the egress reported, for `EgressLocale`) and a position near the
+  city, a function of the fingerprint's seed. Every other setting is kept.
+
+  ```rust
+  // before
+  let mut fingerprint = Fingerprint::randomized(OsType::Macos, 7);
+  locale.apply_to(&mut fingerprint);
+  // after
+  let fingerprint = locale.apply_to(&Fingerprint::randomized(OsType::Macos, 7))?;
+  ```
+
+  `LocaleExt::apply_to` fails with the core's `FingerprintError`, `EgressLocale::apply_to`
+  with `ScrapeError::Fingerprint`. A fingerprint that was built before does not make
+  either fail. Code that still passes `&mut fingerprint` compiles (a mutable reference
+  coerces to a shared one) and only warns about an unused `Result`, so search for
+  `apply_to` when you migrate.
+- **`ScrapeError::Fingerprint(FingerprintError)`** is a new variant (the enum is
+  `#[non_exhaustive]`). `rotate_egress`, `rotate_profile` and `build` of the browser
+  scraper return it when a fingerprint cannot be built, and so do the rotations and
+  `build` of `StealthSession`.
+- **Identity files written by an earlier version no longer load.** Their fingerprint is
+  in the flat layout of the old core (`screen_width`, `flags`, ...), which the core
+  refuses with an error that names no value. `identity_file::load` reports it as a
+  corrupt file. Make a new identity.
+
+### Changed
+
+- A fingerprint that denies geolocation (`Spoof::Off`) keeps denying it when it is moved
+  to a locale. The old code left the popup mode alone, so a blocked popup kept denying
+  the request; the position is not written now, so the denial stays.
+- The seed of a restored or imported identity, and of a session that starts from a
+  fingerprint of its own, is `Fingerprint::seed()`. A built fingerprint always has one
+  (the one given, else one derived from its user agent), where the old code fell back to
+  the seed of the builder when the fingerprint had none.
+- `StealthIdentity::new` clears the proxy by building the fingerprint again with the
+  proxy `Natural`, and serialization does the same on a copy. `verify` asks
+  `proxy().is_set()`.
+- The test that a fingerprint with an infinite battery time cannot be saved is replaced:
+  the core now writes that time as `null` and reads it back, so the default battery
+  saves. A device memory of infinity, which does not come back equal, is still refused.
+- `ImpersonationProfile::from_fingerprint` reads the accessors. A fingerprint whose user
+  agent is `Natural` is refused as one with no user agent, as before.
+
+### Added
+
+- Tests for what the migration decided: a locale move leaves the given fingerprint as
+  it was and keeps every other setting, keeps a denied geolocation denied and takes the
+  time zone of the egress; an identity file in the old flat layout is refused without
+  echoing it.
+- `README.md` and `docs/tutorial.md` describe the fingerprint API v2 where these crates
+  use it (the locale move, the proxy of an identity, the new error).

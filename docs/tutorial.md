@@ -449,8 +449,10 @@ Things to know:
   `check_emulation` refuses an identity made for another Chrome major than the
   measured one.
 - **It never holds a proxy.** A proxy can carry a password, so
-  `StealthIdentity::new` clears it, serialization leaves it out, and `verify`
-  refuses an identity that has one. `Debug` prints the cookie count and the
+  `StealthIdentity::new` builds the fingerprint again without it (a built
+  `Fingerprint` is never edited, see
+  [Moving a fingerprint to a locale](#moving-a-fingerprint-to-a-locale)),
+  serialization leaves it out, and `verify` refuses an identity that has one. `Debug` prints the cookie count and the
   egress key only. A clearance records the cookie's name, never its value.
 - **The identity file is private.** It holds cookies, which are credentials. It
   is written atomically (a synced temporary file renamed over the target) with
@@ -607,6 +609,40 @@ failures in a row is out of rotation for ten minutes by default.
   a `fingerprint(..)`, `build()` first starts a headless Chrome once to learn
   which version is installed, and closes it again. `seed(..)` makes a run
   repeatable.
+
+### Moving a fingerprint to a locale
+
+A built `Fingerprint` is read through accessors and never changed: every setting is
+one `Spoof` (`Natural`, `Random`, `Value` or `Off`) of the core's fingerprint API,
+and a change builds the next fingerprint. The locale helpers follow that.
+`LocaleExt::apply_to` and `EgressLocale::apply_to` return the fingerprint moved to
+the locale (language list, `Accept-Language`, time zone and a position near the
+city, a function of the fingerprint's seed) and leave the one they were given as it
+was. `EgressLocale::apply_to` takes the time zone its egress reported.
+
+```rust
+use seleniumbase_rs::stealth::fingerprint::{Fingerprint, OsType};
+use seleniumbase_rs_scrape::egress::geo::{Locale, LocaleExt};
+
+# fn demo() -> Result<(), Box<dyn std::error::Error>> {
+let fingerprint = Fingerprint::randomized_with_major(OsType::Macos, 7, 155);
+let german = Locale::by_tag("de-DE").ok_or("no such locale")?;
+
+let moved = german.apply_to(&fingerprint)?;
+
+assert_eq!(moved.locale().as_str(), Some("de-DE"));
+assert_eq!(moved.timezone().as_str(), Some("Europe/Berlin"));
+assert_eq!(moved.user_agent(), fingerprint.user_agent());
+# Ok(())
+# }
+```
+
+Every other setting is kept, and a fingerprint that denies geolocation
+(`Spoof::Off`) keeps denying it instead of being handed a position. The move
+fails with `ScrapeError::Fingerprint` (`FingerprintError` for `LocaleExt`) when the
+core refuses to build the result; a fingerprint that was built before does not
+cause that. To change anything else, start from `fingerprint.to_builder()`, change
+it and call `build()?`.
 
 ### Identities and sessions
 
@@ -1400,6 +1436,7 @@ State these plainly to yourself before you build on any of this.
 | `ScrapeError::CoolingDown` | The site answered with a block or rate limit and is being left alone. | Wait until the time in the error (seconds since the Unix epoch), or give the scraper another egress. |
 | `ScrapeError::Unsolved` | A challenge was still there after the attempts allowed. | Raise `with_max_challenge_attempts`, add egresses, or accept that this page needs a person. |
 | `ScrapeError::NoEgressAvailable` | A rotation was asked for and the pool has nothing else in rotation. | Add proxies with `with_geo_proxies`. |
+| `ScrapeError::Fingerprint` | The core refused to build the fingerprint a locale move or a rotation needed (`Off` where an API cannot be off, a proxy without a host, nothing coherent to draw). | Read the message: it names the setting. Build your own fingerprint with `to_builder()` and fix it. |
 | `HttpError::VersionMismatch`, `StealthError::Impersonate` | The page, the identity or the installed Chrome is another major than the measured one. | Update or downgrade Chrome to the measured major, or run the capture tools again. |
 | `HttpError::Impersonate` for a page | The page announces itself as `HeadlessChrome`, is not Chrome, or runs on a system that was not measured. | Give the browser a fingerprint or run it headed; use the measured system. |
 | `HttpError::ReservedHeader` | A request set a header the profile owns (`User-Agent`, `Sec-CH-UA*`, `Accept-Language`, `Accept-Encoding`, `Cookie`, `priority`). | Remove it. Change the identity instead. |
