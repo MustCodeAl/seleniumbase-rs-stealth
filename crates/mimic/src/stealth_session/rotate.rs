@@ -22,7 +22,7 @@ pub(super) fn persona_fingerprint(
 ) -> Result<Fingerprint, ScrapeError> {
     let fingerprint = Fingerprint::randomized_with_major(os, seed, major);
     match placed {
-        Some(placed) => placed.apply_to(&fingerprint),
+        Some(placed) => placed.localize(&fingerprint),
         None => Ok(fingerprint),
     }
 }
@@ -105,7 +105,7 @@ impl StealthSession {
     pub async fn rotate_egress(&mut self) -> Result<(), StealthError> {
         let next = self.next_egress()?;
         let placed = EgressLocale::resolve(&*self.wiring.geo, &next).await?;
-        let fingerprint = placed.apply_to(&self.identity.fingerprint)?;
+        let fingerprint = placed.localize(&self.identity.fingerprint)?;
         let identity = StealthIdentity::new(
             fingerprint,
             self.emulation(),

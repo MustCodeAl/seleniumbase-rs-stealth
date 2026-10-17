@@ -204,6 +204,41 @@ async fn rotating_the_profile_over_http_draws_a_new_one_and_drops_what_the_old_o
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn sessions_on_the_same_fingerprint_start_from_the_seed_of_their_builder() {
+    // The fingerprint of the world carries a seed of its own (7). A fingerprint without
+    // random settings, such as a preset, has a seed derived from its user agent: every
+    // session on it would draw the same next profile on a rotation if that were lent.
+    let world = World::new().await;
+    let first = world.session().seed(1).build().await.expect("a session");
+    let second = world.session().seed(2).build().await.expect("a session");
+
+    assert_eq!(first.seed(), 1);
+    assert_eq!(second.seed(), 2);
+    first.close().await.expect("closes");
+    second.close().await.expect("closes");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_restored_identity_brings_its_own_seed() {
+    let world = World::new().await;
+    let source = world.session().seed(1).build().await.expect("a session");
+    let identity = source.export_identity().await.expect("an identity");
+    let carried = identity.fingerprint.seed();
+    source.close().await.expect("closes");
+
+    let restored = world
+        .session()
+        .restore(identity)
+        .seed(99)
+        .build()
+        .await
+        .expect("a session");
+
+    assert_eq!(restored.seed(), carried);
+    restored.close().await.expect("closes");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_new_profile_earns_its_own_clearance_through_the_same_proxy() {
     let world = World::new().await;
     let mut session = world.session().build().await.expect("a session");

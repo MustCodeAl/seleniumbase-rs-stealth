@@ -339,7 +339,7 @@ async fn start_persona(
         (persona_for(host_os(), seed, major), major)
     };
     if let Some(current) = current {
-        fingerprint = current.placed.apply_to(&fingerprint)?;
+        fingerprint = current.placed.localize(&fingerprint)?;
     }
     Ok(Persona {
         fingerprint,

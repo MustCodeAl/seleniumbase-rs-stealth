@@ -209,6 +209,7 @@ impl StealthSessionBuilder {
 
     /// The first profile itself, instead of one drawn from the seed. It must claim the measured
     /// Chrome. A rotation replaces it with a generated profile of the same operating system.
+    /// The rotations derive from [`seed`](Self::seed), not from the seed of this fingerprint.
     #[doc(alias = "profile")]
     #[must_use]
     pub fn fingerprint(mut self, fingerprint: Fingerprint) -> Self {
@@ -288,7 +289,15 @@ impl StealthSessionBuilder {
         let leg = open_leg(&wiring, &mut mitm, mode, &identity, current.as_ref()).await?;
         Ok(StealthSession {
             persona: super::Persona {
-                seed: identity.fingerprint.seed(),
+                // A fingerprint without random settings, such as a preset, has a seed derived
+                // from its user agent, the same in every session; lending it would make every
+                // session on that preset draw the same next profile on a rotation. Only an
+                // identity that is restored brings its own seed.
+                seed: if start.restore.is_some() {
+                    identity.fingerprint.seed()
+                } else {
+                    start.seed
+                },
                 major: identity.emulation.major,
                 os: identity.emulation.os,
             },
@@ -404,7 +413,7 @@ async fn start_identity(
     if let Some(egress) = current {
         fingerprint = EgressLocale::resolve(&*wiring.geo, egress)
             .await?
-            .apply_to(&fingerprint)?;
+            .localize(&fingerprint)?;
     }
     let os = fingerprint.os_type();
     let emulation = EmulationRef {

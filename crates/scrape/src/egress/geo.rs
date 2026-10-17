@@ -76,7 +76,7 @@ pub enum GeoError {
 ///
 /// That is lookups in [`LOCALES`] by country and by tag, and the move of an identity to a
 /// locale. Bring the trait into scope to call `Locale::for_country`, `Locale::by_tag` and
-/// `locale.apply_to(..)`.
+/// `locale.localize(..)`.
 pub trait LocaleExt {
     /// The first locale of `country` in [`LOCALES`]. The US has four time zones under one
     /// country code; the first of them is returned.
@@ -101,7 +101,7 @@ pub trait LocaleExt {
     ///
     /// Returns the [`FingerprintError`] of the core when the changed settings do not build into a
     /// fingerprint. A fingerprint that was built before does not fail.
-    fn apply_to(&self, fingerprint: &Fingerprint) -> Result<Fingerprint, FingerprintError>;
+    fn localize(&self, fingerprint: &Fingerprint) -> Result<Fingerprint, FingerprintError>;
 }
 
 impl LocaleExt for Locale {
@@ -117,7 +117,7 @@ impl LocaleExt for Locale {
             .find(|locale| locale.tag.eq_ignore_ascii_case(tag))
     }
 
-    fn apply_to(&self, fingerprint: &Fingerprint) -> Result<Fingerprint, FingerprintError> {
+    fn localize(&self, fingerprint: &Fingerprint) -> Result<Fingerprint, FingerprintError> {
         placed_in(self, self.timezone, fingerprint)
     }
 }
@@ -332,7 +332,7 @@ mod tests {
     fn applying_a_locale_sets_the_language_zone_and_position() {
         let before = Fingerprint::randomized(OsType::Windows, 3);
         let locale = Locale::by_tag("de-DE").expect("present");
-        let fingerprint = locale.apply_to(&before).expect("builds");
+        let fingerprint = locale.localize(&before).expect("builds");
         assert_eq!(fingerprint.locale().as_str(), Some("de-DE"));
         assert_eq!(fingerprint.timezone().as_str(), Some("Europe/Berlin"));
         assert_eq!(
@@ -356,7 +356,7 @@ mod tests {
         let before = Fingerprint::randomized(OsType::Windows, 3);
         let kept = before.clone();
         let locale = Locale::by_tag("ja-JP").expect("present");
-        let moved = locale.apply_to(&before).expect("builds");
+        let moved = locale.localize(&before).expect("builds");
         assert_eq!(before, kept);
         assert_ne!(moved, before);
     }
@@ -365,7 +365,7 @@ mod tests {
     fn applying_a_locale_keeps_every_other_setting() {
         let before = Fingerprint::randomized(OsType::Macos, 9);
         let locale = Locale::by_tag("ja-JP").expect("present");
-        let moved = locale.apply_to(&before).expect("builds");
+        let moved = locale.localize(&before).expect("builds");
         assert_eq!(moved.user_agent(), before.user_agent());
         assert_eq!(moved.platform(), before.platform());
         assert_eq!(moved.screen(), before.screen());
@@ -384,9 +384,27 @@ mod tests {
             .build()
             .expect("geolocation can be off");
         let locale = Locale::by_tag("fr-FR").expect("present");
-        let moved = locale.apply_to(&denying).expect("builds");
+        let moved = locale.localize(&denying).expect("builds");
         assert!(moved.geolocation().is_off());
         assert_eq!(moved.timezone().as_str(), Some(locale.timezone));
+    }
+
+    #[test]
+    fn a_fingerprint_with_the_natural_position_gets_the_position_of_the_locale() {
+        let natural = Fingerprint::randomized(OsType::Linux, 4)
+            .to_builder()
+            .geolocation(Spoof::Natural)
+            .build()
+            .expect("geolocation can be natural");
+        assert!(natural.geolocation().is_natural());
+        let locale = Locale::by_tag("fr-FR").expect("present");
+
+        let moved = locale.localize(&natural).expect("builds");
+
+        let place = moved.geolocation().value().expect("a position is set");
+        assert!((place.latitude - locale.latitude).abs() <= 0.05);
+        assert!((place.longitude - locale.longitude).abs() <= 0.05);
+        assert!(natural.geolocation().is_natural(), "the input is unchanged");
     }
 
     #[test]
@@ -394,7 +412,7 @@ mod tests {
         let locale = Locale::by_tag("fr-FR").expect("present");
         let place = |seed| {
             let fingerprint = locale
-                .apply_to(&Fingerprint::randomized(OsType::Linux, seed))
+                .localize(&Fingerprint::randomized(OsType::Linux, seed))
                 .expect("builds");
             fingerprint.geolocation().clone()
         };
@@ -416,7 +434,7 @@ mod tests {
     fn a_locale_can_move_an_identity_to_any_listed_country() {
         for locale in LOCALES {
             let fingerprint = locale
-                .apply_to(&Fingerprint::randomized(OsType::Macos, 5))
+                .localize(&Fingerprint::randomized(OsType::Macos, 5))
                 .expect("builds");
             assert_eq!(fingerprint.locale().as_str(), Some(locale.tag));
             assert_eq!(fingerprint.timezone().as_str(), Some(locale.timezone));

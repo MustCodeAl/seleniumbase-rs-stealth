@@ -173,13 +173,13 @@ impl EgressLocale {
     /// The fingerprint `fingerprint` becomes in this locale: its language, `Accept-Language`,
     /// time zone and position are this locale's, with the time zone this egress reported, and
     /// every other setting is kept. `fingerprint` is left as it was. See
-    /// [`LocaleExt::apply_to`].
+    /// [`LocaleExt::localize`].
     ///
     /// # Errors
     ///
     /// Returns [`ScrapeError::Fingerprint`] when the changed settings do not build into a
     /// fingerprint, which a fingerprint that was built before does not cause.
-    pub fn apply_to(&self, fingerprint: &Fingerprint) -> Result<Fingerprint, ScrapeError> {
+    pub fn localize(&self, fingerprint: &Fingerprint) -> Result<Fingerprint, ScrapeError> {
         Ok(placed_in(self.locale, &self.timezone, fingerprint)?)
     }
 }

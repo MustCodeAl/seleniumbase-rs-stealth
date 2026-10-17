@@ -51,7 +51,7 @@ impl BrowserScraper {
             self.last = None;
             self.egress.current = Some(current);
         } else {
-            let fingerprint = current.placed.apply_to(&self.persona.fingerprint)?;
+            let fingerprint = current.placed.localize(&self.persona.fingerprint)?;
             self.relaunch(fingerprint, Some(current)).await?;
         }
         self.emit(&ScraperEvent::EgressRotated { from, to: Some(to) });
@@ -78,7 +78,7 @@ impl BrowserScraper {
         let os = self.persona.fingerprint.os_type();
         let mut fingerprint = persona_for(os, to_seed, self.persona.major);
         if let Some(current) = &self.egress.current {
-            fingerprint = current.placed.apply_to(&fingerprint)?;
+            fingerprint = current.placed.localize(&fingerprint)?;
         }
         self.relaunch(fingerprint, self.egress.current.clone())
             .await?;

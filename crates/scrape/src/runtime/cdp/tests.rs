@@ -333,7 +333,7 @@ async fn the_time_zone_a_resolver_reports_wins_over_the_locale_default() {
         .expect("Germany has a locale");
     let before = Fingerprint::randomized(OsType::Macos, 7);
 
-    let fingerprint = placed.apply_to(&before).expect("the fingerprint builds");
+    let fingerprint = placed.localize(&before).expect("the fingerprint builds");
 
     assert_eq!(placed.timezone, "Europe/Vienna");
     assert_eq!(fingerprint.timezone().as_str(), Some("Europe/Vienna"));
