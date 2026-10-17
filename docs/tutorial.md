@@ -21,10 +21,10 @@ of it.
 
 ## Status
 
-| Part | Feature | State |
+| Part | Crate | State |
 |---|---|---|
-| Wire parsers: `ClientHello`, JA3, JA4 and `JA4_r`, peetprint, Akamai HTTP/2 strings | `scrape` | Available |
-| Measured browser tables (Chrome 155 on macOS) and the lookup that refuses everything else | `scrape` | Available |
+| Wire parsers: `ClientHello`, JA3, JA4 and `JA4_r`, peetprint, Akamai HTTP/2 strings | `codec` | Available |
+| Measured browser tables (Chrome 155 on macOS) and the lookup that refuses everything else | `codec` | Available |
 | Capture tools `capture_tls` and `capture_hints` | `scrape` | Available |
 | Capture tool `capture_h2` | `mimic` | Available |
 | `ImpersonationProfile`, `CustomProfileBuilder`, `impersonation_client` (wreq with BoringSSL) | `mimic` | Available |
@@ -44,7 +44,7 @@ leaves open.
 
 ## What you will learn
 
-- Which feature to turn on, and what each one costs to build.
+- Which crate to depend on, and what each one costs to build.
 - What is measured, what is refused, and why a Windows or Linux persona gets an
   error instead of a guess.
 - How to re-measure when Chrome updates.
@@ -61,26 +61,28 @@ leaves open.
   real Chrome behind the same fingerprint.
 - How `StealthSession` moves between the two as the policies decide.
 
-## Two features
+## Which crate to depend on
 
 ```toml
 [dependencies]
-# Pure Rust. Adds only the `psl` crate (the Public Suffix List).
-seleniumbase-rs = { git = "https://github.com/MustCodeAl/SeleniumBase", features = ["scrape"] }
+seleniumbase-rs = { git = "https://github.com/MustCodeAl/seleniumbase-rs" }
+# No BoringSSL and no cmake. Adds the `psl` crate (the Public Suffix List) and
+# `ring` (through `codec`, for hashing), which the core already builds.
+seleniumbase-rs-scrape = { git = "https://github.com/MustCodeAl/seleniumbase-rs-stealth" }
 
 # Also builds BoringSSL through btls and drives it with wreq. Needs cmake and a
-# C/C++ toolchain. It includes `scrape`.
-# seleniumbase-rs = { git = "https://github.com/MustCodeAl/SeleniumBase", features = ["impersonate"] }
+# C/C++ toolchain. It depends on `scrape`.
+# seleniumbase-rs-mimic = { git = "https://github.com/MustCodeAl/seleniumbase-rs-stealth" }
 ```
 
-| Feature | What it adds | Cost |
+| Crate | What it adds | Cost |
 |---|---|---|
-| `scrape` | `seleniumbase_rs_codec` (pure wire formats and the measured tables) and `seleniumbase_rs_scrape` (jar, identity, challenge detection, egress, state, events, `BrowserScraper`, capture tools). | Pure Rust. The default build gains no dependency and no C code. |
+| `scrape` | `seleniumbase_rs_codec` (pure wire formats and the measured tables) and `seleniumbase_rs_scrape` (jar, identity, challenge detection, egress, state, events, `BrowserScraper`, capture tools). | No BoringSSL and no TLS spoofing. It builds `ring` (C and assembly), as the core does for its own TLS. |
 | `mimic` | `seleniumbase_rs_mimic`: the wreq client, the conversion from a spec to wreq options, `capture_h2`, the ephemeral-CA TLS server, `HttpSession`, `MitmProxy` and `StealthSession`. | Builds BoringSSL: `cmake` and a C/C++ toolchain, and about 1 GB of build output (the design plan's estimate). `wreq` and `btls` are pinned to exact versions (`=6.0.0-rc.31` and `=0.5.6`). |
 
-Neither feature is on by default. The main types are re-exported at the crate
-root (`seleniumbase_rs::BrowserScraper`, `seleniumbase_rs::HttpSession`, ...) and
-at the top of `codec`, `scrape` and `mimic`; the examples below use the
+These are crates, not Cargo features of `seleniumbase-rs`. The main types are re-exported at the
+root of each crate (`seleniumbase_rs_scrape::BrowserScraper`,
+`seleniumbase_rs_mimic::HttpSession`, ...); the examples below use the
 module paths where the module says more. The TLS and HTTP/2 spec error enums are
 both called `SpecError` in their modules, so the re-exports are `TlsSpecError`
 and `H2SpecError`. The crate links only one BoringSSL, so do not add a second
@@ -244,7 +246,7 @@ BoringSSL and wreq stack can send it, and names what it cannot.
 
 ## An impersonating client
 
-The `mimic` feature turns a measured profile into a wreq client:
+The `mimic` crate turns a measured profile into a wreq client:
 
 ```rust
 use seleniumbase_rs_mimic::client::{
@@ -1291,7 +1293,7 @@ real detection service: each one needs nothing, or starts its own site on
 (`examples/stealth_support/shop.rs`), is a stand-in written for the examples. It is
 not any vendor's challenge, and getting past it says nothing about a real service.
 
-| Example | Feature | Needs | What it shows |
+| Example | Crate | Needs | What it shows |
 |---|---|---|---|
 | `examples/cookie_jar.rs` | `scrape` | Nothing | Made-up `Set-Cookie` headers into the [cookie jar](#the-cookie-jar): which are stored, which are refused and why, and the `Cookie` header for five requests. |
 | `examples/custom_profile.rs` | `mimic` | `cmake`; Chrome 155 on macOS | The measured profile, with an Akamai string and a JA3 laid over it with `CustomProfileBuilder`, and four inputs the stack [refuses](#what-is-refused). |
@@ -1312,7 +1314,7 @@ message on any system but macOS: they do not borrow the values of another system
 `stealth_session` also needs the installed Chrome to be the measured major, or it is
 refused before it loads a page. The two that drive Chrome should run one at a time,
 and not beside another Chrome-driving program. The `mimic` ones start from the
-[feature costs](#two-features); the first build compiles BoringSSL.
+[crate costs](#which-crate-to-depend-on); the first build compiles BoringSSL.
 
 What was run: each example was run once on macOS with Chrome 155.0.8059.40, the two
 that drive Chrome headless, and each exited with status 0. `browser_scraper` solved
@@ -1393,7 +1395,7 @@ State these plainly to yourself before you build on any of this.
 | `NotMeasured { kind, os }` | The browser and system pair has no capture. | Run the capture tools on that system, or use the measured one. |
 | `VersionMismatch { browser, measured }` | The identity's user agent claims another Chrome major than the measured profile. | Build the identity with `Fingerprint::randomized_with_major(os, seed, measured_major)`, or re-measure. |
 | `UnsupportedExtension`, `UnsupportedSigalg`, `UnsupportedSetting` | The input asks for something BoringSSL or wreq cannot send. | Remove it. The error names the id. |
-| The build fails while compiling BoringSSL | `cmake` or a C/C++ toolchain is missing. | Install them, or drop the `mimic` feature. |
+| The build fails while compiling BoringSSL | `cmake` or a C/C++ toolchain is missing. | Install them, or do not depend on the `mimic` crate. |
 | `IdentityFileError::Permissions` | Group or others can read the identity file. | `chmod 600` it, or delete it and make a new one. |
 | `ScrapeError::CoolingDown` | The site answered with a block or rate limit and is being left alone. | Wait until the time in the error (seconds since the Unix epoch), or give the scraper another egress. |
 | `ScrapeError::Unsolved` | A challenge was still there after the attempts allowed. | Raise `with_max_challenge_attempts`, add egresses, or accept that this page needs a person. |

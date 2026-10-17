@@ -50,8 +50,8 @@ Run `capture_tls`, then `capture_hints`, then `capture_h2` against the new Chrom
 `crates/codec/src/measured/<browser>-<major>-<os>.json` and the raw fixtures next to the wire
 tests; `cargo test -p seleniumbase-rs-codec --test wire_emulation` and
 `cargo test -p seleniumbase-rs-mimic --test impersonate_capture_h2` then check the files
-against each other. The full procedure is in `docs/tutorials/stealth_scraping.md` of
-[seleniumbase-rs](https://github.com/MustCodeAl/seleniumbase-rs).
+against each other. The full procedure is the section "Re-measuring when Chrome updates" of
+[docs/tutorial.md](tutorial.md).
 
 ## Tests that start a real Chrome
 
