@@ -1,20 +1,20 @@
 # seleniumbase-rs-stealth
 
 The experimental stealth layer of [seleniumbase-rs](https://github.com/MustCodeAl/seleniumbase-rs),
-the Rust port of SeleniumBase, as three crates of their own.
+the Rust port of SeleniumBase, packaged with a unified root facade crate (`seleniumbase-rs-stealth`) and three workspace crates of their own.
 
 Documentation: <https://mustcodeal-seleniumbase-rs.docs7.io>. Start with the
 [stealth pages](https://mustcodeal-seleniumbase-rs.docs7.io/stealth/overview) and the
 [fingerprint tutorial](https://mustcodeal-seleniumbase-rs.docs7.io/tutorials/fingerprint_stealth).
 
-
 | Crate | What it is |
 |---|---|
+| `seleniumbase-rs-stealth` (root `.`) | Unified facade crate: re-exports all of `seleniumbase-rs` (including `sb_cdp` and `stealth`) alongside `codec`, `scrape` (enabled by default), and `mimic` (with `features = ["mimic"]`) so downstream projects need only one dependency. |
 | `seleniumbase-rs-codec` (`crates/codec`) | Pure wire formats, no I/O: a TLS `ClientHello` parser, JA3, JA4 and peetprint, the Akamai HTTP/2 fingerprint, HTTP/2 frame and HPACK reading, the TLS, HTTP/2 and header specs, and the measured browser table (`emulation`) embedded from `src/measured/*.json`. |
 | `seleniumbase-rs-scrape` (`crates/scrape`) | Stealth scraping without TLS spoofing, over the pure CDP engine of seleniumbase-rs. Pure modules for challenge detection and the mitigation policy, egress (proxy pool, geo locale, URL redaction), an RFC 6265 cookie jar, the per-site ledger and its events, and the stealth identity with its session policy; the `runtime` module holds the I/O: `BrowserScraper`, `EgressSwitch`, `JsonStateStore`, the identity file, the tracing sink and the capture tools. No TLS spoofing and no BoringSSL. |
 | `seleniumbase-rs-mimic` (`crates/mimic`) | Browser-identical TLS and HTTP/2 through wreq and BoringSSL: `ImpersonationProfile` and `CustomProfileBuilder`, `HttpSession` (plain HTTP that continues a browser's session), `MitmProxy` (a loopback proxy that gives a real Chrome the measured TLS), `StealthSession` (moves between plain HTTP and Chrome), `EphemeralCa`, and the HTTP/2 capture tool. Builds BoringSSL, so it needs `cmake` and a C/C++ toolchain. |
 
-`mimic` depends on `scrape`, which depends on `codec`; all three depend on `seleniumbase-rs`.
+`mimic` depends on `scrape`, which depends on `codec`; all three depend on `seleniumbase-rs`, and the root `seleniumbase-rs-stealth` crate re-exports them all.
 
 ## Status
 
@@ -90,7 +90,7 @@ is read as a stream and capped.
 ### Dual-mode sessions
 
 `StealthSession` holds one `StealthIdentity` (the fingerprint with its locale,
-the measured browser, the cookies, the client hints, and the egress they were
+the measured browser, the cookies, the client hints, and the `egress` they were
 earned through) and works in one of two modes. In HTTP mode an `HttpSession`
 sends the requests. In browser mode a real Chrome sends them behind the
 `MitmProxy`, so both modes show the same handshake and a clearance earned in one
@@ -112,8 +112,9 @@ each tab it sends `Page.enable` and `Emulation.setFocusEmulationEnabled`;
 blocking, proxy authentication, request interception, HAR, a fingerprint). It
 never switches on `Runtime`, `DOM`, `Log`, `Debugger` or `Profiler`, because a
 page can feel that traffic; a test in seleniumbase-rs
-(`tests/sb_cdp_domain_hygiene.rs`) fails if a new call does. Elements are found by running `document.querySelector`
-through `Runtime.evaluate`. The `scrape` crate adds only `Network`.
+(`tests/sb_cdp_domain_hygiene.rs`) fails if a new call does. Elements are found by
+running `document.querySelector` through `Runtime.evaluate`. The `scrape` crate
+adds only `Network`.
 
 ### Stealth overrides in the page
 
@@ -213,7 +214,7 @@ Pointer drift while idle is not built.
 
 ### Code quality
 
-All three crates declare `#![forbid(unsafe_code)]`, and their error types are
+All crates declare `#![forbid(unsafe_code)]`, and their error types are
 `thiserror` enums.
 
 ### TLS stack and licences
@@ -222,20 +223,37 @@ All three crates declare `#![forbid(unsafe_code)]`, and their error types are
 `=0.5.6`, which build BoringSSL (`btls-sys`) and need `cmake` and a C/C++
 toolchain. The core crate uses `reqwest` with `rustls` and `ring` for its own
 HTTP (the WebDriver engine, downloads), and the CDP engine talks to Chrome over
-a plain WebSocket; `codec` and `mimic` also use `ring` for hashing. The three
-stealth crates are MIT (workspace `Cargo.toml` and `LICENSE`); BoringSSL
-carries its own licences.
+a plain WebSocket; `codec` and `mimic` also use `ring` for hashing. The stealth
+crates are MIT (workspace `Cargo.toml` and `LICENSE`); BoringSSL carries its own
+licences.
 
 ## Using the crates
 
-Depend on them by git:
+### Option 1: Single unified crate (Recommended)
+
+Depend on the root `seleniumbase-rs-stealth` facade crate, which re-exports all of `seleniumbase-rs` (including `sb_cdp` and `stealth`) alongside `codec`, `scrape`, and optionally `mimic`:
 
 ```toml
 [dependencies]
-seleniumbase-rs = { git = "https://github.com/MustCodeAl/seleniumbase-rs" }
-seleniumbase-rs-scrape = { git = "https://github.com/MustCodeAl/seleniumbase-rs-stealth" }
+# Includes seleniumbase-rs + codec + scrape (no BoringSSL and no cmake):
+seleniumbase-rs-stealth = { git = "[https://github.com/MustCodeAl/seleniumbase-rs-stealth](https://github.com/MustCodeAl/seleniumbase-rs-stealth)" }
+
+# Or enable browser-identical TLS/HTTP2 (builds BoringSSL, needs cmake and a C/C++ toolchain):
+seleniumbase-rs-stealth = { git = "[https://github.com/MustCodeAl/seleniumbase-rs-stealth](https://github.com/MustCodeAl/seleniumbase-rs-stealth)", features = ["mimic"] }
+```
+
+Because `seleniumbase-rs-stealth` re-exports `seleniumbase-rs`, you only need one git dependency in `Cargo.toml` and everything is available under one root (`seleniumbase_rs_stealth::sb_cdp`, `seleniumbase_rs_stealth::fingerprint`, `seleniumbase_rs_stealth::codec`, `seleniumbase_rs_stealth::scrape`, and `seleniumbase_rs_stealth::mimic`).
+
+### Option 2: Individual sub-crates
+
+You can also depend on the sub-crates directly:
+
+```toml
+[dependencies]
+seleniumbase-rs = { git = "[https://github.com/MustCodeAl/seleniumbase-rs](https://github.com/MustCodeAl/seleniumbase-rs)" }
+seleniumbase-rs-scrape = { git = "[https://github.com/MustCodeAl/seleniumbase-rs-stealth](https://github.com/MustCodeAl/seleniumbase-rs-stealth)" }
 # Only if you need browser-identical TLS (builds BoringSSL):
-seleniumbase-rs-mimic = { git = "https://github.com/MustCodeAl/seleniumbase-rs-stealth" }
+seleniumbase-rs-mimic = { git = "[https://github.com/MustCodeAl/seleniumbase-rs-stealth](https://github.com/MustCodeAl/seleniumbase-rs-stealth)" }
 ```
 
 Cargo finds each package inside the repository by its name. These crates take `seleniumbase-rs`
@@ -252,19 +270,19 @@ core at `c0bd111`; an older core, with public fields, does not compile against t
 ## Building this workspace
 
 The workspace builds against the core by its plain git URL, at the commit `Cargo.lock` records.
-To build against a local checkout of seleniumbase-rs next to it instead, patch that source in a
-`.cargo/config.toml` that you do not commit:
+To build against a local checkout of `seleniumbase-rs` next to it instead, patch that source in
+a `.cargo/config.toml` that you do not commit:
 
 ```toml
-[patch."https://github.com/MustCodeAl/seleniumbase-rs"]
+[patch."[https://github.com/MustCodeAl/seleniumbase-rs](https://github.com/MustCodeAl/seleniumbase-rs)"]
 seleniumbase-rs = { path = "../seleniumbase-rs" }
 ```
 
 The commands below then use the checkout.
 
 ```sh
-git clone https://github.com/MustCodeAl/seleniumbase-rs
-git clone https://github.com/MustCodeAl/seleniumbase-rs-stealth
+git clone [https://github.com/MustCodeAl/seleniumbase-rs](https://github.com/MustCodeAl/seleniumbase-rs)
+git clone [https://github.com/MustCodeAl/seleniumbase-rs-stealth](https://github.com/MustCodeAl/seleniumbase-rs-stealth)
 cd seleniumbase-rs-stealth
 
 cargo fmt --all -- --check
