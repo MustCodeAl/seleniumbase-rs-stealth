@@ -43,7 +43,7 @@ services.
   lists of a local Chrome. They write
   `crates/codec/src/measured/chrome-155-macos.json` and keep the raw bytes as
   test fixtures.
-- Nothing is typed by hand. `seleniumbase_rs_codec::emulation` embeds that file.
+- Nothing is typed by hand. `seleniumbase_rs_stealth::codec::emulation` embeds that file.
   A system that was not measured gets `NotMeasured`, and a Chrome of another
   major version gets `VersionMismatch`; no other system's values are borrowed.
 - The round trip is capture, emulate, compare. The wire test builds a client from
@@ -227,45 +227,44 @@ a plain WebSocket; `codec` and `mimic` also use `ring` for hashing. The stealth
 crates are MIT (workspace `Cargo.toml` and `LICENSE`); BoringSSL carries its own
 licences.
 
-## Using the crates
+## Using the unified facade
 
-### Option 1: Single unified crate (Recommended)
-
-Depend on the root `seleniumbase-rs-stealth` facade crate, which re-exports all of `seleniumbase-rs` (including `sb_cdp` and `stealth`) alongside `codec`, `scrape`, and optionally `mimic`:
+Use one Git dependency for core automation, in-page stealth and scraping:
 
 ```toml
 [dependencies]
-# Includes seleniumbase-rs + codec + scrape (no BoringSSL and no cmake):
-seleniumbase-rs-stealth = { git = "[https://github.com/MustCodeAl/seleniumbase-rs-stealth](https://github.com/MustCodeAl/seleniumbase-rs-stealth)" }
-
-# Or enable browser-identical TLS/HTTP2 (builds BoringSSL, needs cmake and a C/C++ toolchain):
-seleniumbase-rs-stealth = { git = "[https://github.com/MustCodeAl/seleniumbase-rs-stealth](https://github.com/MustCodeAl/seleniumbase-rs-stealth)", features = ["mimic"] }
+seleniumbase-rs-stealth = { git = "https://github.com/MustCodeAl/seleniumbase-rs-stealth" }
 ```
 
-Because `seleniumbase-rs-stealth` re-exports `seleniumbase-rs`, you only need one git dependency in `Cargo.toml` and everything is available under one root (`seleniumbase_rs_stealth::sb_cdp`, `seleniumbase_rs_stealth::fingerprint`, `seleniumbase_rs_stealth::codec`, `seleniumbase_rs_stealth::scrape`, and `seleniumbase_rs_stealth::mimic`).
-
-### Option 2: Individual sub-crates
-
-You can also depend on the sub-crates directly:
+Default features include `codec` and `scrape`, with no BoringSSL or cmake.
+For TLS/HTTP2 impersonation, use this dependency instead:
 
 ```toml
 [dependencies]
-seleniumbase-rs = { git = "[https://github.com/MustCodeAl/seleniumbase-rs](https://github.com/MustCodeAl/seleniumbase-rs)" }
-seleniumbase-rs-scrape = { git = "[https://github.com/MustCodeAl/seleniumbase-rs-stealth](https://github.com/MustCodeAl/seleniumbase-rs-stealth)" }
-# Only if you need browser-identical TLS (builds BoringSSL):
-seleniumbase-rs-mimic = { git = "[https://github.com/MustCodeAl/seleniumbase-rs-stealth](https://github.com/MustCodeAl/seleniumbase-rs-stealth)" }
+seleniumbase-rs-stealth = { git = "https://github.com/MustCodeAl/seleniumbase-rs-stealth", features = ["mimic"] }
 ```
 
-Cargo finds each package inside the repository by its name. These crates take `seleniumbase-rs`
-by its plain git URL, so write it exactly as above (no `branch`, `tag` or `rev`) when your code
-uses its types (`sb_cdp::Browser`, `Fingerprint`, ...): the same source spelling makes Cargo
-resolve both to one commit, recorded in your `Cargo.lock`. A different spelling, such as a
-`tag`, would make them two different crates to Cargo and their types would not match.
+`mimic` builds BoringSSL and needs cmake and a C/C++ toolchain. With that
+feature enabled, the combined import is:
 
-These crates are written for the fingerprint API v2 of seleniumbase-rs: one `Spoof` per
-setting, read through accessors (`fp.timezone().as_str()`, `fp.screen().value()`) and
-never mutated; a change goes through `fp.to_builder()....build()?`. `Cargo.lock` pins the
-core at `c0bd111`; an older core, with public fields, does not compile against them.
+```rust
+use seleniumbase_rs_stealth::{
+    fingerprint::{CanvasNoise, Fingerprint, StealthPolicy},
+    scrape::BrowserScraper,
+    mimic::{StealthSession, MitmProxy},
+};
+```
+
+The facade also re-exports `sb_cdp`, `stealth`, `BrowserConfig`, `BaseCase` and
+the rest of the core public API. Import these through `seleniumbase_rs_stealth`
+to share the same core types; no separate core or implementation-crate Git
+dependency is needed. Without `mimic`, omit the `mimic` imports. Core APIs behind
+optional Cargo features retain their gates; this facade currently exposes the
+`codec`, `scrape` and `mimic` feature switches.
+
+Fingerprints use API v2: one `Spoof` per setting, read through accessors and
+changed with `to_builder()....build()?`. The core dependency selected by Cargo
+supplies these types to every enabled module.
 
 ## Building this workspace
 
@@ -274,22 +273,24 @@ To build against a local checkout of `seleniumbase-rs` next to it instead, patch
 a `.cargo/config.toml` that you do not commit:
 
 ```toml
-[patch."[https://github.com/MustCodeAl/seleniumbase-rs](https://github.com/MustCodeAl/seleniumbase-rs)"]
+[patch."https://github.com/MustCodeAl/seleniumbase-rs"]
 seleniumbase-rs = { path = "../seleniumbase-rs" }
 ```
 
-The commands below then use the checkout.
+A local core checkout is optional. Without that override, Cargo retrieves the
+core from Git. The default facade can be checked without BoringSSL:
 
 ```sh
-git clone [https://github.com/MustCodeAl/seleniumbase-rs](https://github.com/MustCodeAl/seleniumbase-rs)
-git clone [https://github.com/MustCodeAl/seleniumbase-rs-stealth](https://github.com/MustCodeAl/seleniumbase-rs-stealth)
+git clone https://github.com/MustCodeAl/seleniumbase-rs-stealth
 cd seleniumbase-rs-stealth
 
 cargo fmt --all -- --check
-cargo clippy --workspace --all-targets -- -D warnings
-cargo test --workspace
+cargo clippy -p seleniumbase-rs-stealth --all-targets -- -D warnings
+cargo test -p seleniumbase-rs-stealth
 ```
 
+Use `--features mimic` for impersonation, or `--workspace` to check every
+implementation crate; both include BoringSSL.
 The first build of `mimic` compiles BoringSSL (about 1 GB of target directory). Tests that
 start a real Chrome are the `*_chrome.rs` files and are `#[ignore]`d; run them one binary at a time
 with `-- --ignored --test-threads=1`.

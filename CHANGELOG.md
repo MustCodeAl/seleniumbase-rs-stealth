@@ -1,7 +1,7 @@
 # Changelog
 
-All notable changes to the crates of this repository: `seleniumbase-rs-codec`,
-`seleniumbase-rs-scrape` and `seleniumbase-rs-mimic`. The format follows
+All notable changes to the unified `seleniumbase-rs-stealth` facade and its
+`seleniumbase-rs-codec`, `seleniumbase-rs-scrape` and `seleniumbase-rs-mimic` implementations. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). The crates are experimental
 and not published to crates.io, so their types and paths may change between commits.
 
@@ -78,6 +78,13 @@ Only `scrape` and `mimic` were affected; `codec` holds no fingerprint.
 
 ### Added
 
+- Unified root facade `seleniumbase-rs-stealth`: re-exports the core public API,
+  including `sb_cdp`, `stealth` and `fingerprint`, plus default `codec` and
+  `scrape` modules. `mimic` is opt-in for BoringSSL-backed TLS/HTTP2 impersonation.
+- Single-dependency README examples with valid Git URLs and feature-gated
+  combined imports; removed split-dependency setup instructions.
+- Facade rustdoc uses feature-safe module references, so documentation with
+  default features no longer fails on the disabled `mimic` module link.
 - Tests for what the migration decided: a locale move leaves the given fingerprint as
   it was and keeps every other setting, keeps a denied geolocation denied and takes the
   time zone of the egress; an identity file in the old flat layout is refused without

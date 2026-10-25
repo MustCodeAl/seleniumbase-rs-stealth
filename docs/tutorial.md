@@ -1,15 +1,14 @@
 # Stealth Scraping: Wire Fingerprints, Identities and the Browser Scraper
 
 > [!NOTE]
-> This tutorial moved here from seleniumbase-rs on 2026-10-15, when the stealth
-> layer became its own crates. Paths now name `seleniumbase_rs_codec`,
-> `seleniumbase_rs_scrape` and `seleniumbase_rs_mimic`; the examples run with
-> `cargo run -p <crate> --example <name>` in this repository. Where it still says
-> "feature `scrape`" or "feature `mimic`", read "the crate".
+> Use the unified `seleniumbase-rs-stealth` facade. It re-exports the core API,
+> including `sb_cdp`, `stealth` and `fingerprint`, plus default `codec` and
+> `scrape` modules. Enable `mimic` for TLS/HTTP2 impersonation. The `cargo run -p`
+> commands in this guide run implementation-crate examples inside this repository.
 
 A site can tell a client apart before any page script runs: by the TLS
 `ClientHello`, by the HTTP/2 connection start, and by the order and spelling of
-the request headers. [Fingerprint & Stealth Profiles](fingerprint_stealth.md)
+the request headers. [Fingerprint & Stealth Profiles](https://mustcodeal-seleniumbase-rs.docs7.io/tutorials/fingerprint_stealth)
 covers what a page can read from inside the browser. This page covers the
 other side, the wire, and the pieces that keep an identity, its cookies and its
 exit address together while a scraper works through a site's defences.
@@ -63,30 +62,38 @@ leaves open.
 
 ## Which crate to depend on
 
+For in-page stealth and scraping, without BoringSSL or cmake:
+
 ```toml
 [dependencies]
-seleniumbase-rs = { git = "https://github.com/MustCodeAl/seleniumbase-rs" }
-# No BoringSSL and no cmake. Adds the `psl` crate (the Public Suffix List) and
-# `ring` (through `codec`, for hashing), which the core already builds.
-seleniumbase-rs-scrape = { git = "https://github.com/MustCodeAl/seleniumbase-rs-stealth" }
-
-# Also builds BoringSSL through btls and drives it with wreq. Needs cmake and a
-# C/C++ toolchain. It depends on `scrape`.
-# seleniumbase-rs-mimic = { git = "https://github.com/MustCodeAl/seleniumbase-rs-stealth" }
+seleniumbase-rs-stealth = { git = "https://github.com/MustCodeAl/seleniumbase-rs-stealth" }
 ```
 
-| Crate | What it adds | Cost |
-|---|---|---|
-| `scrape` | `seleniumbase_rs_codec` (pure wire formats and the measured tables) and `seleniumbase_rs_scrape` (jar, identity, challenge detection, egress, state, events, `BrowserScraper`, capture tools). | No BoringSSL and no TLS spoofing. It builds `ring` (C and assembly), as the core does for its own TLS. |
-| `mimic` | `seleniumbase_rs_mimic`: the wreq client, the conversion from a spec to wreq options, `capture_h2`, the ephemeral-CA TLS server, `HttpSession`, `MitmProxy` and `StealthSession`. | Builds BoringSSL: `cmake` and a C/C++ toolchain, and about 1 GB of build output (the design plan's estimate). `wreq` and `btls` are pinned to exact versions (`=6.0.0-rc.31` and `=0.5.6`). |
+For TLS/HTTP2 impersonation, use this dependency instead (builds BoringSSL and
+needs cmake and a C/C++ toolchain):
 
-These are crates, not Cargo features of `seleniumbase-rs`. The main types are re-exported at the
-root of each crate (`seleniumbase_rs_scrape::BrowserScraper`,
-`seleniumbase_rs_mimic::HttpSession`, ...); the examples below use the
-module paths where the module says more. The TLS and HTTP/2 spec error enums are
-both called `SpecError` in their modules, so the re-exports are `TlsSpecError`
-and `H2SpecError`. The crate links only one BoringSSL, so do not add a second
-crate that links it to the same build.
+```toml
+[dependencies]
+seleniumbase-rs-stealth = { git = "https://github.com/MustCodeAl/seleniumbase-rs-stealth", features = ["mimic"] }
+```
+
+The default `scrape` feature also enables `codec`. `mimic` keeps both enabled.
+Import every browser and fingerprint type through the same facade; no separate
+core or implementation-crate Git dependency is needed. With `mimic` enabled:
+
+```rust
+use seleniumbase_rs_stealth::{
+    fingerprint::{CanvasNoise, Fingerprint, StealthPolicy},
+    scrape::BrowserScraper,
+    mimic::{StealthSession, MitmProxy},
+};
+```
+
+Examples importing the `mimic` module require that feature; the codec, scraping
+and in-page examples use the default configuration. The facade's feature
+switches are `codec`, `scrape` and `mimic`; optional core APIs retain their own
+feature gates. TLS and HTTP/2 spec errors remain `TlsSpecError` and `H2SpecError`
+in the codec re-exports.
 
 ## What is measured, and what is refused
 
@@ -101,9 +108,9 @@ uses for WebSocket), the HTTP/2 start, the header lists and their order, the
 client hints, and where it came from:
 
 ```rust
-use seleniumbase_rs::stealth::fingerprint::OsType;
-use seleniumbase_rs_codec::emulation::{self, EmulationError};
-use seleniumbase_rs_codec::BrowserKind;
+use seleniumbase_rs_stealth::stealth::fingerprint::OsType;
+use seleniumbase_rs_stealth::codec::emulation::{self, EmulationError};
+use seleniumbase_rs_stealth::codec::BrowserKind;
 
 # fn demo() -> Result<(), EmulationError> {
 let chrome = emulation::get(BrowserKind::Chrome, OsType::Macos)?;
@@ -213,9 +220,9 @@ Only JA4 itself is implemented. JA4H, JA4S, JA4X and the other JA4+ methods carr
 a different licence and are not part of this crate.
 
 ```rust
-use seleniumbase_rs_codec::akamai::Akamai;
-use seleniumbase_rs_codec::ja3::Ja3;
-use seleniumbase_rs_codec::ja4::Ja4;
+use seleniumbase_rs_stealth::codec::akamai::Akamai;
+use seleniumbase_rs_stealth::codec::ja3::Ja3;
+use seleniumbase_rs_stealth::codec::ja4::Ja4;
 
 # fn demo() -> Result<(), Box<dyn std::error::Error>> {
 // The Akamai string measured from Chrome 155 on macOS.
@@ -249,11 +256,11 @@ BoringSSL and wreq stack can send it, and names what it cannot.
 The `mimic` crate turns a measured profile into a wreq client:
 
 ```rust
-use seleniumbase_rs_mimic::client::{
+use seleniumbase_rs_stealth::mimic::client::{
     impersonation_client, ImpersonationProfile, WireProtocol,
 };
-use seleniumbase_rs_codec::header_spec::RequestShape;
-use seleniumbase_rs_codec::BrowserKind;
+use seleniumbase_rs_stealth::codec::header_spec::RequestShape;
+use seleniumbase_rs_stealth::codec::BrowserKind;
 
 # async fn demo() -> Result<(), Box<dyn std::error::Error>> {
 let profile = ImpersonationProfile::measured(BrowserKind::Chrome)?;
@@ -298,7 +305,7 @@ the base: a JA3 has no signature algorithms, an Akamai string has no HEADERS
 priority, a header list has no TLS.
 
 ```rust
-use seleniumbase_rs_mimic::client::ImpersonationProfile;
+use seleniumbase_rs_stealth::mimic::client::ImpersonationProfile;
 
 # fn demo() -> Result<(), Box<dyn std::error::Error>> {
 let profile = ImpersonationProfile::custom()
@@ -353,8 +360,8 @@ For example, a JA3 that adds `trust_anchors` and a signature algorithm BoringSSL
 cannot write:
 
 ```rust
-use seleniumbase_rs_mimic::client::{ImpersonateError, ImpersonationProfile};
-use seleniumbase_rs_codec::tls_spec::SpecError;
+use seleniumbase_rs_stealth::mimic::client::{ImpersonateError, ImpersonationProfile};
+use seleniumbase_rs_stealth::codec::tls_spec::SpecError;
 
 # fn demo(ja3_with_trust_anchors: &str) {
 let refused = ImpersonationProfile::custom().ja3(ja3_with_trust_anchors);
@@ -384,7 +391,7 @@ and converts to and from CDP cookies. Every function that needs the time takes
 `now` in seconds since the Unix epoch.
 
 ```rust
-use seleniumbase_rs_scrape::jar::store::{CookieJar, SiteContext};
+use seleniumbase_rs_stealth::scrape::jar::store::{CookieJar, SiteContext};
 use url::Url;
 
 # fn demo() -> Result<(), Box<dyn std::error::Error>> {
@@ -424,10 +431,10 @@ hints each origin asked for, the clearances found in the jar, and the egress
 those cookies were earned through.
 
 ```rust
-use seleniumbase_rs_scrape::passport::identity::{EmulationRef, StealthIdentity};
-use seleniumbase_rs_scrape::runtime::identity_file;
-use seleniumbase_rs::stealth::fingerprint::{Fingerprint, OsType};
-use seleniumbase_rs_codec::BrowserKind;
+use seleniumbase_rs_stealth::scrape::passport::identity::{EmulationRef, StealthIdentity};
+use seleniumbase_rs_stealth::scrape::runtime::identity_file;
+use seleniumbase_rs_stealth::stealth::fingerprint::{Fingerprint, OsType};
+use seleniumbase_rs_stealth::codec::BrowserKind;
 
 # async fn demo(now: u64) -> Result<(), Box<dyn std::error::Error>> {
 let fingerprint = Fingerprint::randomized_with_major(OsType::Macos, 7, 155);
@@ -471,9 +478,9 @@ between plain HTTP and the browser, as a pure function of the mode, the identity
 the site's state and the time:
 
 ```rust
-use seleniumbase_rs_scrape::challenge::mitigation::Mode;
-use seleniumbase_rs_scrape::passport::identity::StealthIdentity;
-use seleniumbase_rs_scrape::passport::policy::{SessionPolicy, Transition};
+use seleniumbase_rs_stealth::scrape::challenge::mitigation::Mode;
+use seleniumbase_rs_stealth::scrape::passport::identity::StealthIdentity;
+use seleniumbase_rs_stealth::scrape::passport::policy::{SessionPolicy, Transition};
 
 # fn demo(identity: &StealthIdentity, now: u64) {
 let policy = SessionPolicy {
@@ -538,10 +545,10 @@ machine, so the page sees a genuine browser. What it adds is the loop a
 bot-protected site needs around it.
 
 ```rust
-use seleniumbase_rs_scrape::egress::geo::CountryCode;
-use seleniumbase_rs_scrape::runtime::browser_scraper::BrowserScraper;
+use seleniumbase_rs_stealth::scrape::egress::geo::CountryCode;
+use seleniumbase_rs_stealth::scrape::runtime::browser_scraper::BrowserScraper;
 
-# async fn demo() -> Result<(), seleniumbase_rs_scrape::error::ScrapeError> {
+# async fn demo() -> Result<(), seleniumbase_rs_stealth::scrape::error::ScrapeError> {
 let mut scraper = BrowserScraper::builder()
     .with_geo_proxies([("http://user:pass@de.proxy.example:8080", CountryCode::new("DE")?)])?
     .with_max_challenge_attempts(4)
@@ -621,8 +628,8 @@ city, a function of the fingerprint's seed) and leave the one they were given as
 was. `EgressLocale::localize` takes the time zone its egress reported.
 
 ```rust
-use seleniumbase_rs::stealth::fingerprint::{Fingerprint, OsType};
-use seleniumbase_rs_scrape::egress::geo::{Locale, LocaleExt};
+use seleniumbase_rs_stealth::stealth::fingerprint::{Fingerprint, OsType};
+use seleniumbase_rs_stealth::scrape::egress::geo::{Locale, LocaleExt};
 
 # fn demo() -> Result<(), Box<dyn std::error::Error>> {
 let fingerprint = Fingerprint::randomized_with_major(OsType::Macos, 7, 155);
@@ -682,8 +689,8 @@ identity. A browser or system that was not measured is refused, not
 approximated.
 
 ```rust
-use seleniumbase_rs_mimic::{HttpOptions, HttpSession};
-use seleniumbase_rs::sb_cdp::Page;
+use seleniumbase_rs_stealth::mimic::{HttpOptions, HttpSession};
+use seleniumbase_rs_stealth::sb_cdp::Page;
 
 # async fn demo(page: Page) -> Result<(), Box<dyn std::error::Error>> {
 let session = HttpSession::from_page(&page, None, HttpOptions::new()).await?;
@@ -729,8 +736,8 @@ Both refuse, before any request, what would contradict the measured handshake:
 is reported there.
 
 ```rust
-use seleniumbase_rs_mimic::{HttpSession, Method};
-use seleniumbase_rs_codec::header_spec::RequestShape;
+use seleniumbase_rs_stealth::mimic::{HttpSession, Method};
+use seleniumbase_rs_stealth::codec::header_spec::RequestShape;
 
 # async fn demo(session: HttpSession) -> Result<(), Box<dyn std::error::Error>> {
 let reply = session
@@ -800,9 +807,9 @@ println!("{}: {}", reply.status(), reply.text()?);
   pieces of your own loop; [`StealthSession`](#stealthsession) is that loop.
 
   ```rust
-  use seleniumbase_rs_mimic::http_session::{Attempt, Rules};
-  use seleniumbase_rs_mimic::HttpSession;
-  use seleniumbase_rs_scrape::StealthIdentity;
+  use seleniumbase_rs_stealth::mimic::http_session::{Attempt, Rules};
+  use seleniumbase_rs_stealth::mimic::HttpSession;
+  use seleniumbase_rs_stealth::scrape::StealthIdentity;
 
   # async fn demo(session: HttpSession, identity: StealthIdentity) -> Result<(), Box<dyn std::error::Error>> {
   let fetched = session
@@ -859,7 +866,7 @@ handshake and refuses the connection when the client's SNI names another host.
 
 ```rust
 use std::time::SystemTime;
-use seleniumbase_rs_mimic::tls_server::{
+use seleniumbase_rs_stealth::mimic::tls_server::{
     accept, acceptor, EphemeralCa, ALPN_HTTP1, DEFAULT_HANDSHAKE_TIMEOUT,
 };
 
@@ -916,10 +923,10 @@ the browser is valid over `HttpSession`.
 use std::sync::Arc;
 use std::time::Duration;
 
-use seleniumbase_rs_mimic::{ImpersonationProfile, MitmOptions, MitmProxy};
-use seleniumbase_rs::sb_cdp::{Browser, LaunchOptions};
-use seleniumbase_rs_scrape::NoopEventSink;
-use seleniumbase_rs_codec::BrowserKind;
+use seleniumbase_rs_stealth::mimic::{ImpersonationProfile, MitmOptions, MitmProxy};
+use seleniumbase_rs_stealth::sb_cdp::{Browser, LaunchOptions};
+use seleniumbase_rs_stealth::scrape::NoopEventSink;
+use seleniumbase_rs_stealth::codec::BrowserKind;
 
 # async fn demo() -> Result<(), Box<dyn std::error::Error>> {
 let profile = ImpersonationProfile::measured(BrowserKind::Chrome)?;
@@ -1096,8 +1103,8 @@ does not share the default context's (measured). Before a WebSocket in a context
 behind the proxy, load the priming page in its first tab:
 
 ```rust
-use seleniumbase_rs_mimic::MitmProxy;
-use seleniumbase_rs::sb_cdp::{Browser, ContextOptions};
+use seleniumbase_rs_stealth::mimic::MitmProxy;
+use seleniumbase_rs_stealth::sb_cdp::{Browser, ContextOptions};
 
 # async fn demo(browser: Browser, mitm: MitmProxy) -> Result<(), Box<dyn std::error::Error>> {
 let context = browser
@@ -1189,8 +1196,8 @@ and moves between them by the policies:
   handshake. A clearance earned here is valid in the other mode.
 
 ```rust
-use seleniumbase_rs_mimic::StealthSession;
-use seleniumbase_rs_scrape::CountryCode;
+use seleniumbase_rs_stealth::mimic::StealthSession;
+use seleniumbase_rs_stealth::scrape::CountryCode;
 
 # async fn demo() -> Result<(), Box<dyn std::error::Error>> {
 let mut session = StealthSession::builder()
