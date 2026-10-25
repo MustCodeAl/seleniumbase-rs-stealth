@@ -1,6 +1,30 @@
+[package]
+name = "seleniumbase-rs-stealth"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[features]
+default = ["scrape"]
+codec = ["dep:seleniumbase-rs-codec"]
+scrape = ["dep:seleniumbase-rs-scrape", "codec"]
+mimic = ["dep:seleniumbase-rs-mimic", "scrape"]
+
+[dependencies]
+seleniumbase-rs = { workspace = true }
+seleniumbase-rs-codec = { workspace = true, optional = true }
+seleniumbase-rs-scrape = { workspace = true, optional = true }
+seleniumbase-rs-mimic = { workspace = true, optional = true }
+
+[lints]
+workspace = true
+
 [workspace]
 resolver = "3"
-members = ["crates/codec", "crates/scrape", "crates/mimic"]
+members = [".", "crates/codec", "crates/scrape", "crates/mimic"]
 
 [workspace.package]
 version = "0.1.0"
