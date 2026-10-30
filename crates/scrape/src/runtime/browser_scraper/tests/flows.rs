@@ -119,6 +119,58 @@ async fn a_widget_challenge_is_clicked_and_the_page_is_loaded_again_with_the_cle
 }
 
 #[tokio::test(start_paused = true)]
+async fn a_widget_the_page_never_accepts_leaves_the_decision_to_the_policy() {
+    // The core's solver presses a widget up to three times and fails with a typed error when the
+    // page never shows it cleared. For the scraper that is one failed attempt: it loads the page
+    // again and the policy decides, as it does for a script challenge that stands.
+    let rig = Rig::new(vec![widget_challenge()]);
+    rig.site.show_widget(true);
+    rig.site.ignore_clicks();
+    let mut scraper = rig
+        .builder()
+        .with_max_challenge_attempts(3)
+        .build()
+        .await
+        .expect("the scraper builds");
+
+    let error = scraper.fetch(URL).await.expect_err("it is never passed");
+
+    assert!(
+        matches!(
+            &error,
+            ScrapeError::Unsolved {
+                kind: ChallengeKind::Interactive,
+                attempts: 3,
+                ..
+            }
+        ),
+        "{error:?}"
+    );
+    assert!(
+        mouse_events(&rig, "mousePressed") >= 2,
+        "the widget is pressed on every solve"
+    );
+    assert!(!rig.site.is_cleared());
+    let chosen: Vec<Action> = rig
+        .sink
+        .events()
+        .into_iter()
+        .filter_map(|event| match event {
+            ScraperEvent::ActionChosen { action, .. } => Some(action),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        chosen,
+        [
+            Action::Solve,
+            Action::Solve,
+            Action::GiveUp(GiveUpReason::AttemptsExhausted)
+        ]
+    );
+}
+
+#[tokio::test(start_paused = true)]
 async fn a_script_challenge_is_waited_for_without_a_click() {
     let rig = Rig::new(vec![script_challenge(), real_page()]);
     rig.site.clear_at_poll(3);

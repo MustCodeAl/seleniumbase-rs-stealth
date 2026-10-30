@@ -110,15 +110,17 @@ impl BrowserScraper {
     /// The status and headers used for detection are those of the navigation that led to the page
     /// ([`fetch`](Self::fetch) loads it). A page that is not a challenge is returned as it is.
     ///
-    /// A challenge with a widget is attempted with [`Page::solve_captcha`](seleniumbase_rs::sb_cdp::Page),
-    /// after the pointer has arrived on the page like a person's. A script challenge needs no
-    /// click: it is waited for. The wait ends when the vendor's clearance cookie holds a new value
-    /// or, for a vendor without one, when the page stops being a challenge, and is bounded by the
-    /// solve timeout of the builder.
+    /// A challenge with a widget is attempted with [`cdp::solve_widget`], after the pointer has
+    /// arrived on the page like a person's. The core's solver presses a widget again when the page
+    /// shows no result, up to three times; a widget that never clears is a challenge that stands,
+    /// not an error. A script challenge needs no click: it is waited for. The wait ends when the
+    /// vendor's clearance cookie holds a new value or, for a vendor without one, when the page
+    /// stops being a challenge, and is bounded by the solve timeout of the builder. That timeout does
+    /// not bound the solver, which has limits of its own.
     ///
     /// # Errors
     ///
-    /// Returns [`ScrapeError::Browser`] when the browser cannot be read or refuses the click.
+    /// Returns [`ScrapeError::Browser`] when the browser cannot be read or refuses the input.
     #[tracing::instrument(skip_all)]
     pub async fn solve_challenge(&mut self) -> Result<Detection, ScrapeError> {
         let before = self.read_current().await?;
@@ -130,7 +132,7 @@ impl BrowserScraper {
         let has_widget = before.detection.evidence.widget.is_some();
         if has_widget || before.detection.kind == ChallengeKind::Interactive {
             cdp::human_warm_up(&self.page, self.persona.seed).await;
-            self.page.solve_captcha().await?;
+            cdp::solve_widget(&self.page).await?;
         }
         cdp::wait_for_clearance(
             &self.page,

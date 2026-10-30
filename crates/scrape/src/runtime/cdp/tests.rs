@@ -693,3 +693,68 @@ async fn a_warm_up_the_browser_refuses_is_only_logged() {
 
     assert_ne!(mock.calls_to("Input.dispatchMouseEvent").len(), 0);
 }
+
+/// How many times the mouse button was pressed in the browser.
+fn presses(mock: &MockCtrl) -> usize {
+    mock.calls_to("Input.dispatchMouseEvent")
+        .iter()
+        .filter(|call| call.params["type"] == "mousePressed")
+        .count()
+}
+
+/// A page that shows a CAPTCHA widget, on a site that answers `mock`.
+async fn page_with_a_widget() -> (Page, MockCtrl, Site) {
+    let (page, mock) = mocked_page().await;
+    let site = Site::serve(&mock, vec![Served::new(200, NORMAL_PAGE)]);
+    goto_with_response(&page, "https://shop.example/")
+        .await
+        .expect("the page loads");
+    site.show_widget(true);
+    (page, mock, site)
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_widget_is_pressed_once_and_the_page_shows_it_cleared() {
+    let (page, mock, site) = page_with_a_widget().await;
+
+    solve_widget(&page).await.expect("the widget is attempted");
+
+    assert_eq!(presses(&mock), 1);
+    assert!(site.is_cleared());
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_page_with_no_widget_is_left_alone() {
+    let (page, mock, site) = page_with_a_widget().await;
+    site.show_widget(false);
+
+    solve_widget(&page).await.expect("nothing to attempt");
+
+    assert_eq!(presses(&mock), 0);
+    assert!(!site.is_cleared());
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_widget_the_page_never_accepts_is_pressed_again_and_is_not_an_error() {
+    let (page, mock, site) = page_with_a_widget().await;
+    site.ignore_clicks();
+
+    solve_widget(&page)
+        .await
+        .expect("a widget that stands is a failed attempt, not an error");
+
+    assert!(presses(&mock) > 1, "the solver presses a widget again");
+    assert!(!site.is_cleared());
+}
+
+#[tokio::test(start_paused = true)]
+async fn input_the_browser_refuses_is_an_error() {
+    let (page, mock, _site) = page_with_a_widget().await;
+    mock.fail("Input.dispatchMouseEvent", "no input");
+
+    let error = solve_widget(&page)
+        .await
+        .expect_err("the browser refuses the input");
+
+    assert!(matches!(error, ScrapeError::Browser(_)), "{error:?}");
+}

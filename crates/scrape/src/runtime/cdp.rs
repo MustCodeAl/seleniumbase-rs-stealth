@@ -11,7 +11,8 @@
 //!   the country its egress is in.
 //! - [`export_cookies`] and [`import_cookies`] move cookies between the browser and a
 //!   [`CookieJar`]; [`capture_session`] and [`restore_session`] do the same for a whole login.
-//! - [`wait_for_clearance`] waits for a solved challenge to show in the browser.
+//! - [`solve_widget`] attempts the CAPTCHA widget of a page; [`wait_for_clearance`] waits for a
+//!   solved challenge to show in the browser.
 
 use std::time::Duration;
 
@@ -27,9 +28,10 @@ use crate::error::ScrapeError;
 use crate::jar::store::CookieJar;
 use seleniumbase_rs::evasion::behavior::Behavior;
 use seleniumbase_rs::evasion::fingerprint::Fingerprint;
-use seleniumbase_rs::sb_cdp::{CdpEvent, Page, Session};
+use seleniumbase_rs::sb_cdp::{CdpEvent, Page, Session, SolveOptions};
 use seleniumbase_rs::utilities::retry::{poll_until, RetryPolicy};
 use seleniumbase_rs::utils::urls::normalize_page_url;
+use seleniumbase_rs::SeleniumBaseError;
 
 #[cfg(test)]
 pub(crate) mod testkit;
@@ -359,6 +361,37 @@ pub async fn human_warm_up(page: &Page, seed: u64) {
     if let Err(error) = page.human(behavior).scroll_by(WARM_UP_SCROLL_PIXELS).await {
         tracing::debug!(%error, "the pointer warm-up failed");
     }
+}
+
+/// Attempts the CAPTCHA widget the page shows, if it shows one, with the solver of the core
+/// ([`Page::solve_captcha_with`]).
+///
+/// The solver finds the widget, waits for it to stand still, presses it along a human pointer path
+/// and reads the page for a result. When the page could show a result and does not, it presses
+/// again, up to three times. A page with no widget is left alone.
+///
+/// A widget that was pressed and never showed cleared is not an error here: it is one failed
+/// attempt, and judging it is the caller's work. [`wait_for_clearance`] looks at the browser, and
+/// the mitigation policy decides what a challenge that stands is worth, exactly as it does for a
+/// script challenge. Only a browser that cannot be read, or that refuses the input, is an error.
+///
+/// # Errors
+///
+/// Returns [`ScrapeError::Browser`] when the browser cannot be read or refuses the input.
+pub async fn solve_widget(page: &Page) -> Result<(), ScrapeError> {
+    match page.solve_captcha_with(&SolveOptions::default()).await {
+        Ok(Some(solved)) => tracing::debug!(%solved, "the CAPTCHA widget was attempted"),
+        Ok(None) => tracing::debug!("the page shows no CAPTCHA widget"),
+        Err(SeleniumBaseError::Captcha {
+            captcha,
+            attempts,
+            reason,
+        }) => {
+            tracing::debug!(%captcha, attempts, %reason, "the CAPTCHA widget did not clear");
+        }
+        Err(error) => return Err(error.into()),
+    }
+    Ok(())
 }
 
 /// Reads the answer to the main-frame navigation out of one protocol event.

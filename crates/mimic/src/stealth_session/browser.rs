@@ -108,8 +108,9 @@ impl BrowserLeg {
     /// Solves the challenge `detection` describes and waits for the browser to show the
     /// clearance, for at most `timeout`. Returns whether it showed in time.
     ///
-    /// A challenge with a widget is attempted with a click, after the pointer has arrived on the
-    /// page like a person's. A script challenge needs none: it is waited for. The wait ends when
+    /// A challenge with a widget is attempted with [`cdp::solve_widget`], after the pointer has
+    /// arrived on the page like a person's; a widget that never clears is a challenge that stands,
+    /// not an error. A script challenge needs no click: it is waited for. The wait ends when
     /// the vendor's clearance cookie holds a new value or, for a vendor without one, when the
     /// page stops being a challenge.
     pub(super) async fn solve(
@@ -123,7 +124,7 @@ impl BrowserLeg {
         let has_widget = detection.evidence.widget.is_some();
         if has_widget || detection.kind == ChallengeKind::Interactive {
             cdp::human_warm_up(&self.page, seed).await;
-            self.page.solve_captcha().await?;
+            cdp::solve_widget(&self.page).await?;
         }
         cdp::wait_for_clearance(&self.page, vendor, stale.as_deref(), timeout).await
     }

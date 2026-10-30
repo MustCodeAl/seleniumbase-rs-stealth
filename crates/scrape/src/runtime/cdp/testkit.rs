@@ -175,6 +175,12 @@ impl Site {
         locked(&self.script).cleared
     }
 
+    /// Makes the page refuse a press of the mouse: no token, no clearance cookie. A widget the
+    /// page never accepts.
+    pub(crate) fn ignore_clicks(&self) {
+        locked(&self.script).click_clears = false;
+    }
+
     /// Every URL navigated to so far, oldest first.
     pub(crate) fn navigations(&self) -> Vec<String> {
         locked(&self.script).navigations.clone()
