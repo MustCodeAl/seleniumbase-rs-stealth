@@ -533,7 +533,11 @@ the streak of challenges the site has shown, whether another egress exists, and
 | Script or interactive challenge, browser mode | `Solve`; a streak of 2 rotates the egress (when another exists) and a streak of 3 rotates the profile |
 
 A solve is the browser waiting for the vendor's clearance cookie, after clicking
-a widget if there is one (`Page::solve_captcha`). It is an attempt, not a
+a widget if there is one (`cdp::solve_widget`, which uses the core's
+`Page::solve_captcha_with`: it presses along a human path and again, up to three
+times, when the page shows no result). A widget that never clears is a failed
+attempt, which the policy judges like a script challenge that stands, not an
+error. It is an attempt, not a
 guarantee: sites change their pages, and no solver here promises to pass any
 service.
 

@@ -147,11 +147,14 @@ after 3, a 900 second cooldown after a block, 60 seconds after a rate limit
 without `Retry-After`, and a `Retry-After` capped at 3600 seconds, with
 `RetryPolicy::network()` for backoff. `BrowserScraper::solve_challenge` is the
 solving step: for a challenge with a widget it moves the pointer onto the page
-and calls `Page::solve_captcha` (a click or a drag on Turnstile, reCAPTCHA,
-hCaptcha, Friendly Captcha or the DataDome slider; the site decides whether it
+and calls the core's solver, `Page::solve_captcha_with` (a click or a drag on
+Turnstile, reCAPTCHA, hCaptcha, Friendly Captcha or the DataDome slider, pressed
+again up to three times when the page shows no result; the site decides whether it
 is accepted), then waits for the vendor's clearance cookie or for the page to
-stop being a challenge, bounded by a timeout. A script challenge is only waited
-for. There is no connection to a solving service.
+stop being a challenge, bounded by a timeout. A widget the page never shows
+cleared is a failed attempt, not an error: the policy decides what follows. A
+script challenge is only waited for.
+There is no connection to a solving service.
 
 ### Proxy pool, rotation and locale from the proxy's country
 

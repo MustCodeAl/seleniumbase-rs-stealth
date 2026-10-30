@@ -82,6 +82,17 @@ Only `scrape` and `mimic` were affected; `codec` holds no fingerprint.
   saves. A device memory of infinity, which does not come back equal, is still refused.
 - `ImpersonationProfile::from_fingerprint` reads the accessors. A fingerprint whose user
   agent is `Natural` is refused as one with no user agent, as before.
+- A challenge with a widget is attempted through the new `scrape::runtime::cdp::solve_widget`,
+  which `BrowserScraper::solve_challenge` and `StealthSession` call. It uses the core's CAPTCHA
+  solver (`Page::solve_captcha_with`), which presses the widget along a human pointer path, reads
+  the page for a result and presses again, up to three times, and fails with
+  `SeleniumBaseError::Captcha` when the page never shows it cleared. That error does not end a
+  fetch: it is one failed attempt, and the wait for the clearance and the mitigation policy judge
+  it, as they judge a script challenge that stands (`ScrapeError::Unsolved` once the attempts are
+  used). Only a browser that cannot be read or refuses the input is `ScrapeError::Browser`. The
+  scripted browsers of the tests now answer the solver's page scripts, which replaced the single
+  locate script they used to match.
+
 
 ### Added
 
