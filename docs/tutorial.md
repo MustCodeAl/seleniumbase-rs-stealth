@@ -2,7 +2,7 @@
 
 > [!NOTE]
 > Use the unified `seleniumbase-rs-stealth` facade. It re-exports the core API,
-> including `sb_cdp`, `stealth` and `fingerprint`, plus default `codec` and
+> including `sb_cdp`, `evasion` and `fingerprint`, plus default `codec` and
 > `scrape` modules. Enable `mimic` for TLS/HTTP2 impersonation. The `cargo run -p`
 > commands in this guide run implementation-crate examples inside this repository.
 
@@ -108,7 +108,7 @@ uses for WebSocket), the HTTP/2 start, the header lists and their order, the
 client hints, and where it came from:
 
 ```rust
-use seleniumbase_rs_stealth::stealth::fingerprint::OsType;
+use seleniumbase_rs_stealth::evasion::fingerprint::OsType;
 use seleniumbase_rs_stealth::codec::emulation::{self, EmulationError};
 use seleniumbase_rs_stealth::codec::BrowserKind;
 
@@ -433,7 +433,7 @@ those cookies were earned through.
 ```rust
 use seleniumbase_rs_stealth::scrape::passport::identity::{EmulationRef, StealthIdentity};
 use seleniumbase_rs_stealth::scrape::runtime::identity_file;
-use seleniumbase_rs_stealth::stealth::fingerprint::{Fingerprint, OsType};
+use seleniumbase_rs_stealth::evasion::fingerprint::{Fingerprint, OsType};
 use seleniumbase_rs_stealth::codec::BrowserKind;
 
 # async fn demo(now: u64) -> Result<(), Box<dyn std::error::Error>> {
@@ -628,7 +628,7 @@ city, a function of the fingerprint's seed) and leave the one they were given as
 was. `EgressLocale::localize` takes the time zone its egress reported.
 
 ```rust
-use seleniumbase_rs_stealth::stealth::fingerprint::{Fingerprint, OsType};
+use seleniumbase_rs_stealth::evasion::fingerprint::{Fingerprint, OsType};
 use seleniumbase_rs_stealth::scrape::egress::geo::{Locale, LocaleExt};
 
 # fn demo() -> Result<(), Box<dyn std::error::Error>> {

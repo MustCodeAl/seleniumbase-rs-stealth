@@ -9,7 +9,7 @@ Documentation: <https://mustcodeal-seleniumbase-rs.docs7.io>. Start with the
 
 | Crate | What it is |
 |---|---|
-| `seleniumbase-rs-stealth` (root `.`) | Unified facade crate: re-exports all of `seleniumbase-rs` (including `sb_cdp` and `stealth`) alongside `codec`, `scrape` (enabled by default), and `mimic` (with `features = ["mimic"]`) so downstream projects need only one dependency. |
+| `seleniumbase-rs-stealth` (root `.`) | Unified facade crate: re-exports all of `seleniumbase-rs` (including `sb_cdp` and `evasion`) alongside `codec`, `scrape` (enabled by default), and `mimic` (with `features = ["mimic"]`) so downstream projects need only one dependency. |
 | `seleniumbase-rs-codec` (`crates/codec`) | Pure wire formats, no I/O: a TLS `ClientHello` parser, JA3, JA4 and peetprint, the Akamai HTTP/2 fingerprint, HTTP/2 frame and HPACK reading, the TLS, HTTP/2 and header specs, and the measured browser table (`emulation`) embedded from `src/measured/*.json`. |
 | `seleniumbase-rs-scrape` (`crates/scrape`) | Stealth scraping without TLS spoofing, over the pure CDP engine of seleniumbase-rs. Pure modules for challenge detection and the mitigation policy, egress (proxy pool, geo locale, URL redaction), an RFC 6265 cookie jar, the per-site ledger and its events, and the stealth identity with its session policy; the `runtime` module holds the I/O: `BrowserScraper`, `EgressSwitch`, `JsonStateStore`, the identity file, the tracing sink and the capture tools. No TLS spoofing and no BoringSSL. |
 | `seleniumbase-rs-mimic` (`crates/mimic`) | Browser-identical TLS and HTTP/2 through wreq and BoringSSL: `ImpersonationProfile` and `CustomProfileBuilder`, `HttpSession` (plain HTTP that continues a browser's session), `MitmProxy` (a loopback proxy that gives a real Chrome the measured TLS), `StealthSession` (moves between plain HTTP and Chrome), `EphemeralCa`, and the HTTP/2 capture tool. Builds BoringSSL, so it needs `cmake` and a C/C++ toolchain. |
@@ -118,7 +118,7 @@ adds only `Network`.
 
 ### Stealth overrides in the page
 
-A set of built-in evasion providers (`seleniumbase_rs::stealth::providers`)
+A set of built-in evasion providers (`seleniumbase_rs::evasion::providers`)
 writes one script that runs before any page script
 (`Page.addScriptToEvaluateOnNewDocument`), applied by `Page::apply_fingerprint`
 or `LaunchOptionsBuilder::fingerprint`. Replaced methods go on their prototype
@@ -255,7 +255,7 @@ use seleniumbase_rs_stealth::{
 };
 ```
 
-The facade also re-exports `sb_cdp`, `stealth`, `BrowserConfig`, `BaseCase` and
+The facade also re-exports `sb_cdp`, `evasion`, `BrowserConfig`, `BaseCase` and
 the rest of the core public API. Import these through `seleniumbase_rs_stealth`
 to share the same core types; no separate core or implementation-crate Git
 dependency is needed. Without `mimic`, omit the `mimic` imports. Core APIs behind

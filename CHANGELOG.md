@@ -18,6 +18,13 @@ Only `scrape` and `mimic` were affected; `codec` holds no fingerprint.
 
 ### Breaking
 
+- **The core module `seleniumbase_rs::stealth` is now `seleniumbase_rs::evasion`.** The crates
+  import it under the new name, and the facade re-exports it as
+  `seleniumbase_rs_stealth::evasion` (it was `seleniumbase_rs_stealth::stealth`) and, as before,
+  at its root (`seleniumbase_rs_stealth::fingerprint`). The crate names and the modules
+  `codec`, `scrape` and `mimic` are unchanged. `Cargo.lock` still pins the core before the
+  rename; bump it with the core release that has `evasion`.
+
 - **`LocaleExt::apply_to` and `EgressLocale::apply_to` are now `localize` and return the
   next fingerprint.** They wrote into a `&mut Fingerprint`, and a built fingerprint has
   no setters now. The fingerprint they are given is left as it was. The result is the same one the
