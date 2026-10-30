@@ -77,6 +77,59 @@ struct Script {
     navigations: usize,
     widget: bool,
     cleared: bool,
+    /// The document (the number of navigations so far) whose CAPTCHA response field holds a token:
+    /// the one in which the widget was pressed.
+    token_in: Option<usize>,
+}
+
+impl Script {
+    /// The mark of the document now open. A page loaded by another navigation has another.
+    fn document(&self) -> String {
+        format!("document-{}", self.navigations)
+    }
+
+    /// The widget as the solver's scripts read it: where it is, wholly in the viewport, or `null`.
+    fn widget_box(&self) -> Value {
+        if !self.widget {
+            return Value::Null;
+        }
+        json!({ "kind": 0, "x": 100.0, "y": 200.0, "width": 300.0, "height": 65.0, "inView": true })
+    }
+
+    /// What the page answers to one script of `Page::solve_captcha`, or `None` when `expression`
+    /// is not one of them.
+    ///
+    /// The widget is a Turnstile that stands still where `widget_box` says. It has a response
+    /// field, which holds a token in the document where the widget was pressed. A solver script
+    /// this does not know is refused with an error, so a change in the solver shows as a failing
+    /// test and not as a page that has no widget.
+    fn solver_answer(&self, expression: &str) -> Option<Result<Value, String>> {
+        // Every script of the solver but one begins with the same page library.
+        if !expression.contains("const DATA = ") {
+            return expression
+                .contains("__sbCaptcha")
+                .then(|| Ok(json!(self.document())));
+        }
+        let answer = if expression.contains("epoch: window.__sbCaptcha") {
+            json!({
+                "fields": 1,
+                "filled": self.token_in == Some(self.navigations),
+                "success": false,
+                "widget": self.widget,
+                "pending": false,
+                "epoch": self.document(),
+            })
+        } else if expression.contains("pending: pending()") {
+            json!({ "widget": self.widget_box(), "pending": false })
+        } else if expression.contains("return find(") {
+            self.widget_box()
+        } else {
+            return Some(Err(
+                "the scripted site has no answer for this script of the CAPTCHA solver".to_owned(),
+            ));
+        };
+        Some(Ok(answer))
+    }
 }
 
 /// A scripted site that mocked browsers talk to.
@@ -143,10 +196,11 @@ impl Site {
             let state = lock(&script);
             let value = if expression.contains("outerHTML") {
                 json!(state.body)
+            } else if let Some(answer) = state.solver_answer(expression) {
+                // Before the viewport: the solver's page library reads `window.innerWidth` too.
+                answer?
             } else if expression.contains("innerWidth") {
                 json!([1280, 720])
-            } else if expression.contains("const selectors") && state.widget {
-                json!({ "kind": 0, "x": 100.0, "y": 200.0, "width": 300.0, "height": 65.0 })
             } else {
                 Value::Null
             };
@@ -169,7 +223,9 @@ impl Site {
         let script = Arc::clone(&self.0);
         mock.on("Input.dispatchMouseEvent", move |params| {
             if params["type"] == "mousePressed" {
-                lock(&script).cleared = true;
+                let mut state = lock(&script);
+                state.cleared = true;
+                state.token_in = Some(state.navigations);
             }
             Ok(json!({}))
         });

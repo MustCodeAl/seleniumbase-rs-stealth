@@ -27,6 +27,14 @@ const VIEWPORT: [u32; 2] = [1280, 720];
 /// Where the scripted CAPTCHA widget sits, as `(x, y, width, height)`.
 const WIDGET_BOX: (f64, f64, f64, f64) = (100.0, 200.0, 300.0, 65.0);
 
+/// What every script of the core's CAPTCHA solver begins with: its page library, and the data it
+/// reads, as JSON.
+const SOLVER_LIBRARY: &str = "const DATA = ";
+
+/// The name the solver gives the mark it puts on a document, to tell later that the page was
+/// replaced. The script that sets the mark has no library.
+const SOLVER_MARK: &str = "__sbCaptcha";
+
 /// One answer of a scripted site.
 #[derive(Clone, Debug)]
 pub(crate) struct Served {
@@ -66,6 +74,59 @@ struct Script {
     /// The clearance cookie is set at this many reads of the cookies.
     polls_to_clear: Option<usize>,
     cookie_polls: usize,
+    /// The document (the number of navigations so far) whose CAPTCHA response field holds a token:
+    /// the one in which the widget was pressed. A page loaded afterwards has an empty field.
+    token_in: Option<usize>,
+}
+
+impl Script {
+    /// The mark of the document now open. A page loaded by another navigation has another.
+    fn document(&self) -> String {
+        format!("document-{}", self.navigations.len())
+    }
+
+    /// The widget as the solver's scripts read it: where it is, wholly in the viewport, or `null`.
+    fn widget_box(&self) -> Value {
+        if !self.widget {
+            return Value::Null;
+        }
+        let (x, y, width, height) = WIDGET_BOX;
+        json!({ "kind": 0, "x": x, "y": y, "width": width, "height": height, "inView": true })
+    }
+
+    /// What the page answers to one script of `Page::solve_captcha`, or `None` when `expression`
+    /// is not one of them.
+    ///
+    /// The widget is a Turnstile that stands still where [`WIDGET_BOX`] says. It has a response
+    /// field, which holds a token in the document where the widget was pressed and the page accepted
+    /// the press. A solver script this does not know is refused with an error, so a change in the
+    /// solver shows as a failing test and not as a page that has no widget.
+    fn solver_answer(&self, expression: &str) -> Option<Result<Value, String>> {
+        if !expression.contains(SOLVER_LIBRARY) {
+            return expression
+                .contains(SOLVER_MARK)
+                .then(|| Ok(json!(self.document())));
+        }
+        let answer = if expression.contains("epoch: window.__sbCaptcha") {
+            json!({
+                "fields": 1,
+                "filled": self.token_in == Some(self.navigations.len()),
+                "success": false,
+                "widget": self.widget,
+                "pending": false,
+                "epoch": self.document(),
+            })
+        } else if expression.contains("pending: pending()") {
+            json!({ "widget": self.widget_box(), "pending": false })
+        } else if expression.contains("return find(") {
+            self.widget_box()
+        } else {
+            return Some(Err(
+                "the scripted site has no answer for this script of the CAPTCHA solver".to_owned(),
+            ));
+        };
+        Some(Ok(answer))
+    }
 }
 
 /// A mocked browser answering like a web server.
@@ -196,6 +257,7 @@ impl Site {
             let mut state = locked(&script);
             if params["type"] == "mousePressed" && state.click_clears {
                 state.cleared = true;
+                state.token_in = Some(state.navigations.len());
             }
             Ok(json!({}))
         });
@@ -208,15 +270,15 @@ impl Site {
             let state = locked(&script);
             let value = if expression.contains("outerHTML") {
                 json!(state.body)
+            } else if let Some(answer) = state.solver_answer(expression) {
+                // Before the viewport: the solver's page library reads `window.innerWidth` too.
+                answer?
             } else if expression.contains("innerWidth") {
                 json!(VIEWPORT)
             } else if expression.contains("Object.fromEntries") {
                 state.local_storage.clone().unwrap_or_else(|| json!({}))
             } else if expression.contains("location.origin") {
                 json!(state.navigations.last().map(|url| origin_of(url)))
-            } else if expression.contains("const selectors") && state.widget {
-                let (x, y, width, height) = WIDGET_BOX;
-                json!({ "kind": 0, "x": x, "y": y, "width": width, "height": height })
             } else {
                 Value::Null
             };
