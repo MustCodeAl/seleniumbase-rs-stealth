@@ -4,7 +4,7 @@
 use super::identity::{quote, sec_ch_ua, user_agent_major};
 use super::{impersonation_client, ImpersonateError, ImpersonationProfile, WireProtocol};
 use crate::convert::ConvertError;
-use seleniumbase_rs::stealth::fingerprint::{BrandVersion, Fingerprint, OsType, Spoof};
+use seleniumbase_rs::evasion::fingerprint::{BrandVersion, Fingerprint, OsType, Spoof};
 use seleniumbase_rs_codec::client_hello::ext_id;
 use seleniumbase_rs_codec::emulation::{self, Emulation, EmulationError, KnownGap};
 use seleniumbase_rs_codec::h2_spec::SpecError as H2SpecError;
@@ -300,7 +300,7 @@ fn a_fingerprint_of_an_unmeasured_system_or_another_browser_is_refused() {
     ));
     let firefox = Fingerprint::randomized_with_major(OsType::Macos, 3, 155)
         .to_builder()
-        .browser_type(seleniumbase_rs::stealth::fingerprint::BrowserType::Firefox)
+        .browser_type(seleniumbase_rs::evasion::fingerprint::BrowserType::Firefox)
         .build()
         .expect("builds");
     assert!(matches!(

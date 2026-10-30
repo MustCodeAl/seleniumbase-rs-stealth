@@ -14,7 +14,7 @@ use super::probes::{Probe, DOCUMENT, FETCH, IMAGE, PROBES, SCRIPT, STYLE};
 use super::site::{Observed, Seen};
 use super::store::{write_h2_fixtures, MeasuredDoc};
 use super::{parse_args, CaptureH2Error, Passes};
-use seleniumbase_rs::stealth::fingerprint::OsType;
+use seleniumbase_rs::evasion::fingerprint::OsType;
 use seleniumbase_rs_codec::akamai::Pseudo;
 use seleniumbase_rs_codec::h2_frames::{encode_frame, frame_type, read_preface, CLIENT_PREFACE};
 use seleniumbase_rs_codec::BrowserKind;

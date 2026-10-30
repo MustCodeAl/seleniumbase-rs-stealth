@@ -6,7 +6,7 @@
 //!   whether that is a TLS `ClientHello`, an HTTP/1 request or an HTTP/2 connection preface.
 //! - [`hints`]: a small web site ([`HintsServer`]) that makes a browser report its client hints, and
 //!   the parsers that turn the report and the request headers into
-//!   [`ClientHints`](seleniumbase_rs::stealth::fingerprint::ClientHints).
+//!   [`ClientHints`](seleniumbase_rs::evasion::fingerprint::ClientHints).
 //! - [`record`]: the JSON the tools write ([`MeasuredFile`]), with its provenance, fingerprints and raw bytes.
 //! - [`chrome`]: drives a local Chrome through `sb_cdp` and returns what it sent.
 //! - [`args`]: the command line the `capture_tls` and `capture_hints` examples share.

@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use seleniumbase_rs::stealth::fingerprint::{Fingerprint, OsType};
+use seleniumbase_rs::evasion::fingerprint::{Fingerprint, OsType};
 use seleniumbase_rs_codec::{emulation, BrowserKind};
 use seleniumbase_rs_mimic::stealth_session::{StealthSession, StealthSessionBuilder};
 use seleniumbase_rs_scrape::challenge::mitigation::Mode;

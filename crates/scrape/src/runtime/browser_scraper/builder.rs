@@ -19,8 +19,8 @@ use crate::ledger::state::{InMemoryStateStore, StateStore};
 use crate::runtime::cdp::EgressLocale;
 use crate::runtime::egress_switch::{ContextProxySwitch, EgressSwitch};
 use crate::runtime::tracing_sink::TracingEventSink;
+use seleniumbase_rs::evasion::fingerprint::Fingerprint;
 use seleniumbase_rs::sb_cdp::{LaunchOptionsBuilder, SessionStore};
-use seleniumbase_rs::stealth::fingerprint::Fingerprint;
 
 /// How long a challenge is given to show as solved, unless the builder says otherwise.
 pub const DEFAULT_SOLVE_TIMEOUT: Duration = Duration::from_secs(30);

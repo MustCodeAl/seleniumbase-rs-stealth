@@ -66,8 +66,8 @@ use crate::egress::route::{EgressKey, EgressRef};
 use crate::error::ScrapeError;
 use crate::ledger::events::{EventSink, ScraperEvent};
 use crate::ledger::state::StateStore;
+use seleniumbase_rs::evasion::fingerprint::Fingerprint;
 use seleniumbase_rs::sb_cdp::{Browser, LaunchOptionsBuilder, Page, SessionStore};
-use seleniumbase_rs::stealth::fingerprint::Fingerprint;
 
 use super::cdp::{EgressLocale, NavResponse};
 use super::egress_switch::EgressSwitch;

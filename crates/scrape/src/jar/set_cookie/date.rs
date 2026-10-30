@@ -180,7 +180,7 @@ fn parse_month(token: &[u8]) -> Option<u32> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use seleniumbase_rs::stealth::humanize::Rng;
+    use seleniumbase_rs::evasion::humanize::Rng;
 
     fn date(text: &str) -> Option<i64> {
         parse_cookie_date(text)

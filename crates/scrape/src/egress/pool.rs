@@ -7,7 +7,7 @@ use std::sync::Mutex;
 use super::geo::CountryCode;
 use super::route::{EgressError, EgressKey, EgressRef};
 use crate::sync::locked;
-use seleniumbase_rs::stealth::humanize::Rng;
+use seleniumbase_rs::evasion::humanize::Rng;
 
 /// Failures in a row that quarantine an egress, unless the pool says otherwise.
 pub const DEFAULT_QUARANTINE_AFTER: u32 = 3;

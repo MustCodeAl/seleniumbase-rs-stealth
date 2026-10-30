@@ -3,7 +3,7 @@
 //! The expected values are never typed here: they come from the measured file through
 //! `codec::emulation`, and from the evidence that file keeps.
 
-use seleniumbase_rs::stealth::fingerprint::OsType;
+use seleniumbase_rs::evasion::fingerprint::OsType;
 use seleniumbase_rs_codec::client_hello::{ext_id, is_grease, without_grease, ClientHello};
 use seleniumbase_rs_codec::emulation::{self, Emulation, KnownGap};
 use seleniumbase_rs_codec::h2_spec::H2Spec;

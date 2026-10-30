@@ -3,7 +3,7 @@
 
 use std::time::Duration;
 
-use seleniumbase_rs::stealth::fingerprint::{ClientHints, OsType};
+use seleniumbase_rs::evasion::fingerprint::{ClientHints, OsType};
 use seleniumbase_rs_codec::client_hello::ClientHello;
 use seleniumbase_rs_codec::h2_frames::{encode_frame, frame_type, CLIENT_PREFACE};
 use seleniumbase_rs_codec::ja3::Ja3;

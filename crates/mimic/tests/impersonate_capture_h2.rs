@@ -8,7 +8,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use seleniumbase_rs::stealth::fingerprint::OsType;
+use seleniumbase_rs::evasion::fingerprint::OsType;
 use seleniumbase_rs_codec::emulation::{self, Emulation};
 use seleniumbase_rs_codec::BrowserKind;
 use seleniumbase_rs_mimic::capture_h2::{derive, H1Evidence, H2Evidence, PROBES};

@@ -11,7 +11,7 @@ use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use seleniumbase_rs::stealth::fingerprint::OsType;
+use seleniumbase_rs::evasion::fingerprint::OsType;
 use seleniumbase_rs_codec::akamai::{Akamai, Pseudo};
 use seleniumbase_rs_codec::emulation::{self, source_names};
 use seleniumbase_rs_codec::h2_spec::H2Spec;

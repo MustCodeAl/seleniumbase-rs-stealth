@@ -3,7 +3,7 @@
 use super::identity::with_hints;
 use super::{ImpersonateError, ImpersonationProfile};
 use crate::convert;
-use seleniumbase_rs::stealth::fingerprint::{ClientHints, OsType};
+use seleniumbase_rs::evasion::fingerprint::{ClientHints, OsType};
 use seleniumbase_rs_codec::akamai::Akamai;
 use seleniumbase_rs_codec::header_spec::{HeaderSpec, HeaderValue, RequestShape};
 use seleniumbase_rs_codec::ja3::{Ja3, Peetprint};

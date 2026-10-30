@@ -23,7 +23,7 @@ use serde_json::error::Category;
 use crate::challenge::detect::{clearance_cookie, Vendor};
 use crate::egress::route::EgressKey;
 use crate::jar::store::{site_of, CookieJar};
-use seleniumbase_rs::stealth::fingerprint::{Fingerprint, FingerprintError, OsType, Spoof};
+use seleniumbase_rs::evasion::fingerprint::{Fingerprint, FingerprintError, OsType, Spoof};
 use seleniumbase_rs_codec::BrowserKind;
 
 #[cfg(test)]

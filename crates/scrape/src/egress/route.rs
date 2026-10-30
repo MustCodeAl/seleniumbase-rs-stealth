@@ -184,7 +184,7 @@ pub enum EgressError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use seleniumbase_rs::stealth::humanize::Rng;
+    use seleniumbase_rs::evasion::humanize::Rng;
 
     /// Compiles only for a type that does not implement `Serialize`.
     trait AmbiguousIfSerialize<A> {

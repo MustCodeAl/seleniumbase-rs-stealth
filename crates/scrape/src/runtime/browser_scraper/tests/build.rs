@@ -15,8 +15,8 @@ use crate::runtime::browser_scraper::fetch::Target;
 use crate::runtime::browser_scraper::launcher::{claimed_major, major_of, persona_for};
 use crate::runtime::browser_scraper::{BrowserFetch, BrowserScraper};
 use crate::runtime::egress_switch::{ContextProxySwitch, EgressSwitch};
+use seleniumbase_rs::evasion::fingerprint::{Fingerprint, OsType};
 use seleniumbase_rs::sb_cdp::{Browser, LaunchOptions, Page, SessionStore};
-use seleniumbase_rs::stealth::fingerprint::{Fingerprint, OsType};
 
 #[test]
 fn the_major_version_is_read_from_a_product_token() {

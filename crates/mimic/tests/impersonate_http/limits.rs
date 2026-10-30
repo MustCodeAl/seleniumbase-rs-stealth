@@ -302,11 +302,11 @@ async fn a_proxy_that_cannot_be_reached_leaks_no_credentials() {
     let proxy = egress(&format!("http://alice:s3cret@127.0.0.1:{port}"));
     let major = measured_major();
     let base = identity_of(
-        fingerprint(seleniumbase_rs::stealth::fingerprint::OsType::Macos, major),
+        fingerprint(seleniumbase_rs::evasion::fingerprint::OsType::Macos, major),
         seleniumbase_rs_scrape::passport::identity::EmulationRef {
             kind: seleniumbase_rs_codec::BrowserKind::Chrome,
             major,
-            os: seleniumbase_rs::stealth::fingerprint::OsType::Macos,
+            os: seleniumbase_rs::evasion::fingerprint::OsType::Macos,
         },
         Some(proxy.key().clone()),
     );

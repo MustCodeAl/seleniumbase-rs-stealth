@@ -7,7 +7,7 @@ use super::{
 };
 use crate::tls_spec::KnownGap as TlsKnownGap;
 use crate::BrowserKind;
-use seleniumbase_rs::stealth::fingerprint::OsType;
+use seleniumbase_rs::evasion::fingerprint::OsType;
 
 /// The one browser that exists today, with the guard that makes a new variant fail to compile
 /// here until it is classified.
@@ -87,7 +87,7 @@ fn the_measured_client_hints_agree_with_the_browser_they_describe() {
         .expect("the hints were measured");
     let major = chrome.major.to_string();
 
-    let names = |list: &[seleniumbase_rs::stealth::fingerprint::BrandVersion]| -> Vec<String> {
+    let names = |list: &[seleniumbase_rs::evasion::fingerprint::BrandVersion]| -> Vec<String> {
         list.iter().map(|entry| entry.brand.clone()).collect()
     };
     assert_eq!(hints.brands.len(), 3, "two real brands and one decoy");
@@ -98,7 +98,7 @@ fn the_measured_client_hints_agree_with_the_browser_they_describe() {
     );
     assert_eq!(
         names(&hints.brands),
-        names(&seleniumbase_rs::stealth::randomize::chromium_hints(chrome.major).brands),
+        names(&seleniumbase_rs::evasion::randomize::chromium_hints(chrome.major).brands),
         "the measured brand order is the order the library generates for this major version"
     );
     let (decoys, real): (Vec<_>, Vec<_>) = hints

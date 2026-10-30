@@ -50,7 +50,7 @@ use wreq::{Emulation, Group, RequestBuilder};
 
 use self::identity::{identity_for, user_agent_major, DEFAULT_LOCALE_TAG};
 use super::convert::{self, ConvertError};
-use seleniumbase_rs::stealth::fingerprint::{BrowserType, Fingerprint, OsType};
+use seleniumbase_rs::evasion::fingerprint::{BrowserType, Fingerprint, OsType};
 use seleniumbase_rs_codec::akamai::AkamaiError;
 use seleniumbase_rs_codec::client_hello::ext_id;
 use seleniumbase_rs_codec::emulation::{self, Emulation as Measured, EmulationError, KnownGap};

@@ -234,7 +234,7 @@ fn stronger(so_far: Option<Finding>, kind: ChallengeKind, vendor: Vendor) -> Fin
 mod tests {
     use super::*;
     use crate::challenge::markers::{Gate, Marker};
-    use seleniumbase_rs::stealth::humanize::Rng;
+    use seleniumbase_rs::evasion::humanize::Rng;
 
     macro_rules! fixture {
         ($name:literal) => {

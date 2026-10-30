@@ -1,7 +1,7 @@
 //! An identity going into a session: the egress it belongs to, the Chrome version it claims, and
 //! the systems that were never measured.
 
-use seleniumbase_rs::stealth::fingerprint::OsType;
+use seleniumbase_rs::evasion::fingerprint::OsType;
 use seleniumbase_rs_codec::BrowserKind;
 use seleniumbase_rs_mimic::client::ImpersonateError;
 use seleniumbase_rs_mimic::http_session::{HttpError, HttpOptions, HttpSession};

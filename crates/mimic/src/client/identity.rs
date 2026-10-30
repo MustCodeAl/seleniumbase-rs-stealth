@@ -1,6 +1,6 @@
 //! The identity headers of a profile: the user agent, the client hints and `Accept-Language`.
 
-use seleniumbase_rs::stealth::fingerprint::{BrandVersion, ClientHints};
+use seleniumbase_rs::evasion::fingerprint::{BrandVersion, ClientHints};
 use seleniumbase_rs_codec::header_spec::HeaderIdentity;
 
 /// The locale whose `Accept-Language` a measured profile starts with.

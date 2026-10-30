@@ -10,7 +10,7 @@ mod times;
 use super::super::set_cookie::MAX_LIFETIME_SECS;
 use super::rules::is_public_suffix;
 use super::*;
-use seleniumbase_rs::stealth::humanize::Rng;
+use seleniumbase_rs::evasion::humanize::Rng;
 
 const NOW: u64 = 1_700_000_000;
 const SAME: SiteContext = SiteContext::SameSite { top_level: true };

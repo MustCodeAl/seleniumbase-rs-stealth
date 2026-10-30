@@ -12,7 +12,7 @@ use super::{
     check_emittable, compressor, http2_options, tls_options, wreq_headers, ConvertError,
     CERT_COMPRESSION_BROTLI, CERT_COMPRESSION_ZLIB, MAX_DECOMPRESSED_CERTIFICATE,
 };
-use seleniumbase_rs::stealth::fingerprint::OsType;
+use seleniumbase_rs::evasion::fingerprint::OsType;
 use seleniumbase_rs_codec::akamai::Akamai;
 use seleniumbase_rs_codec::client_hello::ext_id;
 use seleniumbase_rs_codec::emulation::{self, Emulation};

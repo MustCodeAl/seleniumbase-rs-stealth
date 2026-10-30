@@ -6,7 +6,7 @@ use super::{EmulationRef, StealthIdentity};
 use crate::egress::geo::CountryCode;
 use crate::egress::route::EgressKey;
 use crate::jar::store::StoreOutcome;
-use seleniumbase_rs::stealth::fingerprint::{Fingerprint, OsType};
+use seleniumbase_rs::evasion::fingerprint::{Fingerprint, OsType};
 use seleniumbase_rs_codec::BrowserKind;
 
 /// An arbitrary "now", in seconds since the Unix epoch.

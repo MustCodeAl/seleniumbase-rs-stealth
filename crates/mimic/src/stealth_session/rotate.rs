@@ -2,8 +2,8 @@
 
 use super::{StealthError, StealthSession};
 use crate::client::ImpersonationProfile;
-use seleniumbase_rs::stealth::fingerprint::{Fingerprint, OsType};
-use seleniumbase_rs::stealth::humanize::Rng;
+use seleniumbase_rs::evasion::fingerprint::{Fingerprint, OsType};
+use seleniumbase_rs::evasion::humanize::Rng;
 use seleniumbase_rs_codec::BrowserKind;
 use seleniumbase_rs_scrape::challenge::mitigation::Mode;
 use seleniumbase_rs_scrape::egress::route::{EgressKey, EgressRef};
@@ -356,7 +356,7 @@ mod tests {
         identity.fingerprint = identity
             .fingerprint
             .to_builder()
-            .proxy(seleniumbase_rs::stealth::fingerprint::ProxyConfig {
+            .proxy(seleniumbase_rs::evasion::fingerprint::ProxyConfig {
                 host: "proxy.example".to_owned(),
                 ..Default::default()
             })

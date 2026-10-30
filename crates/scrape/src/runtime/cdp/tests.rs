@@ -9,8 +9,8 @@ use serde_json::json;
 use super::testkit::{cdp_cookie, mocked_page, response_params, Served, Site, MOCK_SESSION};
 use super::*;
 use crate::egress::geo::{CountryCode, GeoInfo, StaticGeoResolver};
+use seleniumbase_rs::evasion::fingerprint::OsType;
 use seleniumbase_rs::sb_cdp::{Cookie, MockCtrl};
-use seleniumbase_rs::stealth::fingerprint::OsType;
 
 const CLOUDFLARE_JS: &str =
     include_str!("../../../tests/fixtures/challenge/cloudflare_legacy_js.html");

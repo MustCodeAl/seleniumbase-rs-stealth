@@ -9,7 +9,7 @@ use crate::error::ScrapeError;
 use crate::ledger::events::ScraperEvent;
 use crate::passport::identity::{IdentityError, NO_EXPIRY};
 use crate::runtime::browser_scraper::launcher::{claimed_major, host_os};
-use seleniumbase_rs::stealth::humanize::Rng;
+use seleniumbase_rs::evasion::humanize::Rng;
 use seleniumbase_rs_codec::BrowserKind;
 
 const URL: &str = "https://shop.example/";

@@ -7,7 +7,7 @@
 //! cargo test -p seleniumbase-rs-scrape --test scrape_capture_chrome -- --ignored --test-threads=1
 //! ```
 
-use seleniumbase_rs::stealth::fingerprint::{ClientHints, OsType};
+use seleniumbase_rs::evasion::fingerprint::{ClientHints, OsType};
 use seleniumbase_rs_codec::client_hello::ClientHello;
 use seleniumbase_rs_codec::tls_spec::TlsSpec;
 use seleniumbase_rs_codec::BrowserKind;

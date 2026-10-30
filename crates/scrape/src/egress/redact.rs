@@ -143,7 +143,7 @@ fn is_sensitive(raw_key: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use seleniumbase_rs::stealth::humanize::Rng;
+    use seleniumbase_rs::evasion::humanize::Rng;
 
     /// Compiles only for a type that does not implement `Serialize`: for one that does, the
     /// call below is ambiguous. This is how a test proves a secret type cannot be serialized.

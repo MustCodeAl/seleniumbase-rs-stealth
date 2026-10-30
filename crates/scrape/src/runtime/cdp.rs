@@ -25,9 +25,9 @@ use crate::egress::redact::RedactedUrl;
 use crate::egress::route::EgressRef;
 use crate::error::ScrapeError;
 use crate::jar::store::CookieJar;
+use seleniumbase_rs::evasion::behavior::Behavior;
+use seleniumbase_rs::evasion::fingerprint::Fingerprint;
 use seleniumbase_rs::sb_cdp::{CdpEvent, Page, Session};
-use seleniumbase_rs::stealth::behavior::Behavior;
-use seleniumbase_rs::stealth::fingerprint::Fingerprint;
 use seleniumbase_rs::utilities::retry::{poll_until, RetryPolicy};
 use seleniumbase_rs::utils::urls::normalize_page_url;
 

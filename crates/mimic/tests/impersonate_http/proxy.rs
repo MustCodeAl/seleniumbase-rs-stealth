@@ -1,7 +1,7 @@
 //! The egress as a proxy: where the traffic goes, how the credentials travel, and what the
 //! failure says.
 
-use seleniumbase_rs::stealth::fingerprint::OsType;
+use seleniumbase_rs::evasion::fingerprint::OsType;
 use seleniumbase_rs_codec::BrowserKind;
 use seleniumbase_rs_mimic::http_session::{HttpError, HttpOptions, HttpSession};
 use seleniumbase_rs_scrape::passport::identity::EmulationRef;

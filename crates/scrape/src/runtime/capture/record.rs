@@ -16,7 +16,7 @@ use serde_json::{json, Map, Value};
 use super::hints::HintsMeasurement;
 use super::CaptureError;
 use crate::runtime::json_store::atomic_write;
-use seleniumbase_rs::stealth::fingerprint::OsType;
+use seleniumbase_rs::evasion::fingerprint::OsType;
 use seleniumbase_rs_codec::client_hello::{ext_id, is_grease, ClientHello};
 use seleniumbase_rs_codec::ids::ML_DSA_SIGALGS;
 use seleniumbase_rs_codec::ja3::{hex_lower, Ja3, Peetprint};

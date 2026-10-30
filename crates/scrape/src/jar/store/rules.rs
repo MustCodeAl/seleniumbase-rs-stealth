@@ -265,7 +265,7 @@ fn check_scope(cookie: &StoredCookie) -> Result<(), IgnoreReason> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use seleniumbase_rs::stealth::humanize::Rng;
+    use seleniumbase_rs::evasion::humanize::Rng;
 
     #[test]
     fn site_of_uses_the_public_suffix_list() {

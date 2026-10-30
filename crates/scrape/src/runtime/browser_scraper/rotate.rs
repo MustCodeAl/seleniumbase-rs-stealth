@@ -7,9 +7,9 @@ use crate::error::ScrapeError;
 use crate::ledger::events::ScraperEvent;
 use crate::passport::identity::{EmulationRef, StealthIdentity};
 use crate::runtime::cdp::{self, EgressLocale};
+use seleniumbase_rs::evasion::fingerprint::Fingerprint;
+use seleniumbase_rs::evasion::humanize::Rng;
 use seleniumbase_rs::sb_cdp::Browser;
-use seleniumbase_rs::stealth::fingerprint::Fingerprint;
-use seleniumbase_rs::stealth::humanize::Rng;
 use seleniumbase_rs_codec::BrowserKind;
 
 impl BrowserScraper {

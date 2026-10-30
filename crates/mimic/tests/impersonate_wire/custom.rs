@@ -5,7 +5,7 @@
 //! crate's parsers; what comes back must be the input, exactly. Each refused input must name its
 //! reason and must never reach a client.
 
-use seleniumbase_rs::stealth::fingerprint::{BrandVersion, ClientHints};
+use seleniumbase_rs::evasion::fingerprint::{BrandVersion, ClientHints};
 use seleniumbase_rs_codec::akamai::Akamai;
 use seleniumbase_rs_codec::client_hello::{ext_id, ClientHello};
 use seleniumbase_rs_codec::h2_spec::SpecError as H2SpecError;

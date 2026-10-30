@@ -12,7 +12,7 @@ use crate::egress::redact::RedactedUrl;
 use crate::egress::route::EgressError;
 use crate::ledger::state::StateError;
 use crate::passport::identity::IdentityError;
-use seleniumbase_rs::stealth::fingerprint::FingerprintError;
+use seleniumbase_rs::evasion::fingerprint::FingerprintError;
 use seleniumbase_rs::SeleniumBaseError;
 
 /// Why a scrape did not produce a page.

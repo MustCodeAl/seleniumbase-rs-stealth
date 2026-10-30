@@ -12,8 +12,8 @@ use super::transition::open_leg;
 use super::{Clock, Egress, StealthError, StealthSession, Wiring};
 use crate::http_session::{HttpOptions, Rules};
 use crate::mitm::MitmOptions;
+use seleniumbase_rs::evasion::fingerprint::{Fingerprint, OsType};
 use seleniumbase_rs::sb_cdp::LaunchOptionsBuilder;
-use seleniumbase_rs::stealth::fingerprint::{Fingerprint, OsType};
 use seleniumbase_rs_codec::{emulation, BrowserKind};
 use seleniumbase_rs_scrape::challenge::mitigation::{
     MitigationPolicy, DEFAULT_MAX_CHALLENGE_ATTEMPTS,

@@ -12,7 +12,7 @@
 //! Rust has no run-time skip, so a skipped test passes. Its note goes to standard error, which the
 //! test harness shows for a passing test only with `-- --nocapture`.
 
-use seleniumbase_rs::stealth::fingerprint::OsType;
+use seleniumbase_rs::evasion::fingerprint::OsType;
 use seleniumbase_rs_codec::emulation;
 use seleniumbase_rs_codec::BrowserKind;
 

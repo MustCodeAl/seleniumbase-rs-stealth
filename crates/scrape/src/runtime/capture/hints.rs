@@ -25,7 +25,7 @@ use tokio::task::{JoinHandle, JoinSet};
 use super::stream::{http1_response, read_http1_request, Http1Request};
 use super::CaptureError;
 use crate::sync::locked;
-use seleniumbase_rs::stealth::fingerprint::{BrandVersion, ClientHints};
+use seleniumbase_rs::evasion::fingerprint::{BrandVersion, ClientHints};
 
 /// The hints the page asks for beyond the low-entropy ones the browser always sends.
 pub const ACCEPT_CH: &str = "Sec-CH-UA-Arch, Sec-CH-UA-Bitness, Sec-CH-UA-Form-Factors, \

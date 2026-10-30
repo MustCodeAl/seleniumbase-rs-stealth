@@ -4,7 +4,7 @@ use std::fs;
 
 use super::*;
 use crate::passport::identity::fixtures::identity_with_clearance;
-use seleniumbase_rs::stealth::fingerprint::ProxyConfig;
+use seleniumbase_rs::evasion::fingerprint::ProxyConfig;
 
 /// The value of the clearance cookie in the sample identity. It must be in the file, and in no error.
 const COOKIE_VALUE: &str = "SECRET-CLEARANCE-VALUE";

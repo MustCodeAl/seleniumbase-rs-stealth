@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine as _;
 use futures_util::{SinkExt as _, StreamExt as _};
-use seleniumbase_rs::stealth::fingerprint::OsType;
+use seleniumbase_rs::evasion::fingerprint::OsType;
 use seleniumbase_rs_codec::emulation::{self, Emulation};
 use seleniumbase_rs_codec::ja4::{Ja4, Ja4AField};
 use seleniumbase_rs_codec::BrowserKind;
