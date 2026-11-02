@@ -1,0 +1,92 @@
+# claims.sh over: chrome chrome-1 chrome-2 chrome-3 chrome-4 chrome-5 chrome-qpack phantom-h3 phantom-1 phantom-2 phantom-3 phantom-4 phantom-5 phantom-qpack
+
+== 1. TLS ClientHello inside the QUIC Initial (14 captures)
+chrome: 7 captures; extensions flagged GREASE by the parser: 0
+phantom: 7 captures; extensions flagged GREASE by the parser: 0
+chrome cipher suites, distinct lists: [["0x1301","0x1302","0x1303"]]
+phantom cipher suites, distinct lists: [["0x1301","0x1302","0x1303"]]
+chrome extension ids (sorted), distinct lists: [["0x0000","0x000a","0x000d","0x0010","0x001b","0x002b","0x002d","0x0033","0x0039","0x44cd","0xca34","0xfe0d"]]
+phantom extension ids (sorted), distinct lists: [["0x0000","0x000a","0x000d","0x0010","0x001b","0x002b","0x002d","0x0033","0x0039","0x44cd","0xca34","0xfe0d"]]
+extension ids (sorted) identical for both clients: true
+0x0000 length 14: distinct (length, decoded) values, chrome 1, phantom 1; identical across all 14: true; decoded: {"host_name":"localhost"}
+0x000a length 10: distinct (length, decoded) values, chrome 1, phantom 1; identical across all 14: true; decoded: ["0x11ec","0x001d","0x0017","0x0018"]
+0x000d length 20: distinct (length, decoded) values, chrome 1, phantom 1; identical across all 14: true; decoded: ["0x0403","0x0804","0x0401","0x0503","0x0805","0x0501","0x0806","0x0601"
+0x0010 length 5: distinct (length, decoded) values, chrome 1, phantom 1; identical across all 14: true; decoded: ["h3"]
+0x001b length 3: distinct (length, decoded) values, chrome 1, phantom 1; identical across all 14: true; decoded: ["0x0002"]
+0x002b length 3: distinct (length, decoded) values, chrome 1, phantom 1; identical across all 14: true; decoded: ["0x0304"]
+0x002d length 2: distinct (length, decoded) values, chrome 1, phantom 1; identical across all 14: true; decoded: "01"
+0x0033 length 1258: distinct (length, decoded) values, chrome 1, phantom 1; identical across all 14: true; decoded: ["0x11ec keylen=1216","0x001d keylen=32"]
+0x44cd length 5: distinct (length, decoded) values, chrome 1, phantom 1; identical across all 14: true; decoded: ["h3"]
+0xca34 length 186: distinct (length, decoded) values, chrome 1, phantom 1; identical across all 14: true; decoded: "00b80582df1302010582df1302060582df13020d0582df13020e0582df13020f"
+chrome ECH 0xfe0d (type, kdf, aead, enc_len), distinct: [{"type":0,"kdf":1,"aead":1,"enc_len":32}]; payload_len in capture order (chrome, chrome-1..5, chrome-qpack / phantom-h3, phantom-1..5, phantom-qpack): [208,176,176,208,240,176,144]
+phantom ECH 0xfe0d (type, kdf, aead, enc_len), distinct: [{"type":0,"kdf":1,"aead":1,"enc_len":32}]; payload_len in capture order (chrome, chrome-1..5, chrome-qpack / phantom-h3, phantom-1..5, phantom-qpack): [144,144,176,240,176,208,144]
+
+== 2. QUIC transport parameters (14 captures)
+chrome: parameter orders, distinct of 7 captures: 7; parameter count per capture: [13]; GREASE parameter length per capture: [[5],[12],[7],[7],[5],[7],[11]]
+phantom: parameter orders, distinct of 7 captures: 7; parameter count per capture: [13]; GREASE parameter length per capture: [[10],[14],[10],[6],[12],[2],[3]]
+parameter orders seen in both clients: 0
+parameter ids seen in any capture: ["0x1","0x11","0x20","0x3","0x3128","0x4","0x5","0x6","0x7","0x8","0x9","0xf","GREASE"]
+0x1 max_idle_timeout: chrome 1 distinct, phantom 1 distinct; one value in all 14 captures, same for both: 30000
+0x11 version_information: chrome 7 distinct, phantom 7 distinct
+0x20 max_datagram_frame_size: chrome 1 distinct, phantom 1 distinct; one value in all 14 captures, same for both: 65536
+0x3 max_udp_payload_size: chrome 1 distinct, phantom 1 distinct; one value in all 14 captures, same for both: 1472
+0x3128 unlabelled: chrome 1 distinct, phantom 1 distinct; one value in all 14 captures, same for both: "4f524947"
+0x4 initial_max_data: chrome 1 distinct, phantom 1 distinct; one value in all 14 captures, same for both: 15728640
+0x5 initial_max_stream_data_bidi_local: chrome 1 distinct, phantom 1 distinct; one value in all 14 captures, same for both: 6291456
+0x6 initial_max_stream_data_bidi_remote: chrome 1 distinct, phantom 1 distinct; one value in all 14 captures, same for both: 6291456
+0x7 initial_max_stream_data_uni: chrome 1 distinct, phantom 1 distinct; one value in all 14 captures, same for both: 6291456
+0x8 initial_max_streams_bidi: chrome 1 distinct, phantom 1 distinct; one value in all 14 captures, same for both: 100
+0x9 initial_max_streams_uni: chrome 1 distinct, phantom 1 distinct; one value in all 14 captures, same for both: 103
+0xf initial_source_connection_id: chrome 1 distinct, phantom 1 distinct; one value in all 14 captures, same for both: ""
+fixed parameters (one value in all 14 captures, same for both clients): 11 of 12 non-GREASE parameters
+
+== 3. HTTP/3 control stream (14 captures)
+chrome: control stream 68 bytes as logged (type byte included); SETTINGS 0x1=65536 0x6=262144 0x7=100 0x33=1 GREASE=*; frames SETTINGS(0x4) GREASE unknown(0xf0700) unknown(0xf0700); 0xf0700 payloads (hex) 00753d302c2069 04753d312c2069
+chrome-1: control stream 63 bytes as logged (type byte included); SETTINGS 0x1=65536 0x6=262144 0x7=100 0x33=1 GREASE=*; frames SETTINGS(0x4) GREASE unknown(0xf0700) unknown(0xf0700); 0xf0700 payloads (hex) 00753d302c2069 04753d312c2069
+chrome-2: control stream 68 bytes as logged (type byte included); SETTINGS 0x1=65536 0x6=262144 0x7=100 0x33=1 GREASE=*; frames SETTINGS(0x4) GREASE unknown(0xf0700) unknown(0xf0700); 0xf0700 payloads (hex) 00753d302c2069 04753d312c2069
+chrome-3: control stream 70 bytes as logged (type byte included); SETTINGS 0x1=65536 0x6=262144 0x7=100 0x33=1 GREASE=*; frames SETTINGS(0x4) GREASE unknown(0xf0700) unknown(0xf0700); 0xf0700 payloads (hex) 00753d302c2069 04753d312c2069
+chrome-4: control stream 68 bytes as logged (type byte included); SETTINGS 0x1=65536 0x6=262144 0x7=100 0x33=1 GREASE=*; frames SETTINGS(0x4) GREASE unknown(0xf0700) unknown(0xf0700); 0xf0700 payloads (hex) 00753d302c2069 04753d312c2069
+chrome-5: control stream 67 bytes as logged (type byte included); SETTINGS 0x1=65536 0x6=262144 0x7=100 0x33=1 GREASE=*; frames SETTINGS(0x4) GREASE unknown(0xf0700) unknown(0xf0700); 0xf0700 payloads (hex) 00753d302c2069 04753d312c2069
+chrome-qpack: control stream 69 bytes as logged (type byte included); SETTINGS 0x1=65536 0x6=262144 0x7=100 0x33=1 GREASE=*; frames SETTINGS(0x4) GREASE unknown(0xf0700) unknown(0xf0700); 0xf0700 payloads (hex) 00753d302c2069 04753d312c2069
+phantom-h3: control stream 34 bytes as logged (type byte included); SETTINGS 0x1=65536 0x6=262144 0x7=100 0x33=1 GREASE=*; frames SETTINGS(0x4)
+phantom-1: control stream 30 bytes as logged (type byte included); SETTINGS 0x1=65536 0x6=262144 0x7=100 0x33=1 GREASE=*; frames SETTINGS(0x4)
+phantom-2: control stream 34 bytes as logged (type byte included); SETTINGS 0x1=65536 0x6=262144 0x7=100 0x33=1 GREASE=*; frames SETTINGS(0x4)
+phantom-3: control stream 34 bytes as logged (type byte included); SETTINGS 0x1=65536 0x6=262144 0x7=100 0x33=1 GREASE=*; frames SETTINGS(0x4)
+phantom-4: control stream 30 bytes as logged (type byte included); SETTINGS 0x1=65536 0x6=262144 0x7=100 0x33=1 GREASE=*; frames SETTINGS(0x4)
+phantom-5: control stream 34 bytes as logged (type byte included); SETTINGS 0x1=65536 0x6=262144 0x7=100 0x33=1 GREASE=*; frames SETTINGS(0x4)
+phantom-qpack: control stream 30 bytes as logged (type byte included); SETTINGS 0x1=65536 0x6=262144 0x7=100 0x33=1 GREASE=*; frames SETTINGS(0x4)
+chrome: distinct SETTINGS lists (GREASE value masked) 1, distinct frame sequences 1, control stream bytes seen [63,67,68,69,70]
+phantom: distinct SETTINGS lists (GREASE value masked) 1, distinct frame sequences 1, control stream bytes seen [30,34]
+SETTINGS lists identical for both clients: true
+
+== 4. Client unidirectional streams as the server logged them, per capture
+chrome: stream 2 control 68 bytes; stream 6 accepted, no bytes read (no type); stream 10 qpack-encoder 2 bytes (first bytes after the type: 20)
+chrome-1: stream 2 control 63 bytes; stream 6 qpack-decoder 2 bytes; stream 10 qpack-encoder 2 bytes (first bytes after the type: 20)
+chrome-2: stream 2 control 68 bytes; stream 6 qpack-decoder 2 bytes; stream 10 qpack-encoder 2 bytes (first bytes after the type: 20)
+chrome-3: stream 2 control 70 bytes; stream 6 qpack-decoder 2 bytes; stream 10 qpack-encoder 2 bytes (first bytes after the type: 20)
+chrome-4: stream 2 control 68 bytes; stream 6 qpack-decoder 2 bytes; stream 10 qpack-encoder 2 bytes (first bytes after the type: 20)
+chrome-5: stream 2 control 67 bytes; stream 6 accepted, no bytes read (no type); stream 10 qpack-encoder 2 bytes (first bytes after the type: 20)
+chrome-qpack: stream 2 control 69 bytes; stream 6 qpack-decoder 2 bytes; stream 10 qpack-encoder 410 bytes (first bytes after the type: 3fe11fc0)
+phantom-1: stream 2 control 30 bytes
+phantom-2: stream 2 control 34 bytes
+phantom-3: stream 2 control 34 bytes
+phantom-4: stream 2 control 30 bytes
+phantom-5: stream 2 control 34 bytes
+phantom-h3: stream 2 control 34 bytes
+phantom-qpack: stream 2 control 30 bytes; stream 6 accepted, no bytes read (no type); stream 10 qpack-encoder 439 bytes (first bytes after the type: 3fe11fc0)
+
+== 5. QPACK request sections (server table 4096, 100 blocked streams)
+chrome-qpack request stream 0: HEADERS frame 457 bytes, required insert count 0, dynamic-table references 0
+chrome-qpack request stream 4: HEADERS frame 18 bytes, required insert count 15, dynamic-table references 14
+phantom-qpack request stream 0: HEADERS frame 20 bytes, required insert count 15, dynamic-table references 14
+
+== 6. Request header fields of the first request (the 12 captures with table 0)
+chrome: 6 captures, distinct field-name lists (order kept) 1, distinct :path values ["/chrome-nav"]
+phantom: 6 captures, distinct field-name lists (order kept) 1, distinct :path values ["/h3fetch"]
+field names and order identical for both clients: true
+values identical for both clients once :path is left out and HeadlessChrome is read as Chrome: true
+field names in order: :method :authority :scheme :path sec-ch-ua sec-ch-ua-mobile sec-ch-ua-platform upgrade-insecure-requests user-agent accept sec-fetch-site sec-fetch-mode sec-fetch-user sec-fetch-dest accept-encoding accept-language priority
+
+== 7. QUIC Initial datagrams (14 captures)
+chrome: datagrams per capture [2]; distinct (length, version, DCID length, SCID length, token length, packet number) per datagram: [[{"len":1250,"version":"0x00000001","dcid":8,"scid":0,"token":0,"pn":1},{"len":1250,"version":"0x00000001","dcid":8,"scid":0,"token":0,"pn":2}]]; frames in the first datagram 8 to 25, in the second 11 to 20
+phantom: datagrams per capture [2]; distinct (length, version, DCID length, SCID length, token length, packet number) per datagram: [[{"len":1200,"version":"0x00000001","dcid":20,"scid":0,"token":0,"pn":0},{"len":1200,"version":"0x00000001","dcid":20,"scid":0,"token":0,"pn":1}]]; frames in the first datagram 1 to 1, in the second 2 to 2

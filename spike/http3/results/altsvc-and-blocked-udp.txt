@@ -1,6 +1,10 @@
 # phantom-http 0.6.0, profile chrome-156-macos, negotiated requests (h3fetch auto --alt-svc --repeat 3)
 # against h3srv started with --alt-svc (its TCP responses say `Alt-Svc: h3=":4433"; ma=60`).
-# Total request deadline set by h3fetch: 15 s. Everything on 127.0.0.1.
+# Total request deadline set by h3fetch: 15 s (RequestTimeouts::new().total(15 s), client/src/bin/h3fetch.rs:154).
+# Everything on 127.0.0.1.
+# The lines below are shortened from what h3fetch prints (h3fetch.rs:169-175): the success lines lack the
+# `profile=chrome-156-macos` field, and a failure line is the error text plus a short form of the timeline,
+# not the full source chain. No copy of h3fetch's stdout is kept in out/ (the server's and relay's logs are).
 
 ## UDP open (scripts/serve-and-run.sh altsvc-open scripts/client-phantom.sh auto --alt-svc --repeat 3)
 #1 asked=Auto got=Http1 status=200 OK body: proto=http/1.1 over TLS/TCP alpn=http/1.1 sni=localhost (8 ms)
