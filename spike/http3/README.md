@@ -13,12 +13,13 @@ host name to 127.0.0.1.
 
 | Path | What |
 |---|---|
-| `client/src/bin/clash.rs` | Question (a): one binary that links phantom and the stealth crates (wreq over btls 0.5.6) and calls both TLS stacks alternately, against the local server. |
-| `client/src/bin/h3fetch.rs` | Question (b): one phantom request over an exact protocol (`h1`, `h2`, `h3`); prints the protocol phantom reports. |
+| `client/src/bin/clash.rs` | Question (a): one binary that links phantom and the stealth crates (wreq over btls 0.5.6) and calls both TLS stacks alternately, against the local server. **It does not link on macOS arm64** (duplicate BoringSSL symbols); `build.sh` leaves it out. |
+| `client/src/bin/wreqonly.rs` | Control for (a): the stealth crates alone, one request. Links and runs. |
+| `client/src/bin/h3fetch.rs` | Question (b): phantom requests over an exact protocol (`h1`, `h2`, `h3`) or negotiated (`auto`, with `--alt-svc` and `--repeat`); prints the protocol phantom reports for each. |
 | `tools/src/bin/h3srv.rs` | Local server: HTTP/3 over QUIC (quinn + rustls, no h3 library) and HTTP/1.1 over TLS. Logs the HTTP/3 control stream (SETTINGS in order), QPACK streams and the request HEADERS as they arrived. |
 | `tools/src/bin/relay.rs` | UDP relay in front of the server. Decrypts the client's QUIC Initial packet (RFC 9001 section 5) and prints the TLS ClientHello with the QUIC transport parameters in wire order. |
 | `tools/src/initial.rs`, `h3wire.rs` | The parsers behind them; unit tests include the RFC 9001 appendix A.2 client Initial. |
-| `scripts/` | `mkcert.sh`, `serve-and-run.sh` and the three `client-*.sh`. |
+| `scripts/` | `build.sh`, `mkcert.sh`, `serve-and-run.sh`, the three `client-*.sh`, `summarize.sh`, `samples.sh`, `symbols.sh`, `link-experiments.sh`. |
 | `results/` | Small, curated captures quoted in `docs/design/http3.md`. |
 | `certs/`, `out/`, `target/` | Gitignored: certificate and key, raw logs, build output. |
 
@@ -29,21 +30,40 @@ BoringSSL builds, `openssl` for the certificate, and Chrome for question (c).
 
 ```sh
 cd spike/http3
-cargo build                      # builds both packages; two BoringSSL builds, slow the first time
+scripts/build.sh                 # every binary that links, copied to bin/ (two BoringSSL builds: slow once)
 cargo test -p http3-spike-tools  # the wire parsers, including the RFC 9001 A.2 test vector
 scripts/mkcert.sh                # certs/{key.pem,cert.pem,cert.der,spki.b64}
 
-# (a) both TLS stacks in one process
-scripts/serve-and-run.sh clash scripts/client-clash.sh
+# (a) both TLS stacks in one process: this does NOT link on macOS arm64; the script shows how
+scripts/link-experiments.sh      # builds `clash` three ways, runs symbols.sh, runs any binary that links
+CLASH_BIN=wreqonly scripts/serve-and-run.sh wreqonly scripts/client-clash.sh   # the stealth stack alone
 
 # (b) phantom over HTTP/3 against the local server
 scripts/serve-and-run.sh phantom-h3 scripts/client-phantom.sh h3
 
-# (c) the same server, headless Chrome, then compare out/phantom-h3 with out/chrome
+# (c) the same server, headless Chrome, then compare
 scripts/serve-and-run.sh chrome scripts/client-chrome.sh
+scripts/summarize.sh out/chrome ; scripts/summarize.sh out/phantom-h3
+scripts/samples.sh 5             # 5 runs of each (order and GREASE are random), one block per run
+
+# Alt-Svc, and UDP silently dropped (H3_RELAY_TO points the relay at a port nobody serves)
+H3SRV_ARGS="--alt-svc" scripts/serve-and-run.sh altsvc-open scripts/client-phantom.sh auto --alt-svc --repeat 3
+H3_RELAY_TO=4449 H3SRV_ARGS="--alt-svc" scripts/serve-and-run.sh altsvc-blocked scripts/client-phantom.sh auto --alt-svc --repeat 3
+
+# a server whose QPACK dynamic table is allowed
+H3SRV_ARGS="--qpack-capacity 4096 --qpack-blocked 100" scripts/serve-and-run.sh phantom-qpack scripts/client-phantom.sh h3
 ```
 
 `serve-and-run.sh <label> <command...>` starts `h3srv` (TCP and UDP) and `relay`, runs the
-command, stops them, and leaves `out/<label>/h3srv.jsonl` and `out/<label>/relay.jsonl`.
-`scripts/symbols.sh` compares the two BoringSSL static libraries and the final `clash` binary.
-Set `CHROME=/path/to/chrome` to use another Chrome.
+command, stops them, and leaves `out/<label>/h3srv.jsonl` and `out/<label>/relay.jsonl`
+(`out/` is gitignored; the curated captures quoted by the design note are in `results/`).
+Set `CHROME=/path/to/chrome` to use another Chrome. `scripts/symbols.sh` compares the two BoringSSL
+static libraries and needs the `target/` of a finished build.
+
+Builds go through whatever your `cargo` is. With mr-boxington managing `target/` and a disk under its
+free-space minimum, it deleted `target/` after some builds while this spike was written; that is why
+`build.sh` copies the binaries to `bin/` and why `link-experiments.sh` runs `symbols.sh` right after the
+first link.
+
+Keep every request on loopback: `h3srv` and `relay` refuse any other address, the clients only dial
+`localhost`, and Chrome is told to resolve every name to 127.0.0.1.
