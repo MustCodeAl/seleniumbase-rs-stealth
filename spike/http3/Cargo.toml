@@ -1,0 +1,12 @@
+# The HTTP/3 spike. A scratch workspace of its own, so the root workspace of
+# seleniumbase-rs-stealth does not pick it up and its published crates, root
+# Cargo.toml and root Cargo.lock stay untouched. Run it as spike/http3/README.md says.
+[workspace]
+resolver = "3"
+members = ["client", "tools"]
+
+[workspace.package]
+version = "0.0.0"
+edition = "2021"
+publish = false
+license = "MIT"

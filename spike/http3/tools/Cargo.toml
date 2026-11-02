@@ -1,0 +1,17 @@
+[package]
+name = "http3-spike-tools"
+description = "Spike: a local HTTP/3 + TLS server that logs what it parsed, and a UDP relay that decrypts the QUIC Initial"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[dependencies]
+# Upstream quinn and rustls (ring provider), not phantom's forks: the server is the neutral party.
+quinn = { version = "=0.11.12", default-features = false, features = ["runtime-tokio", "rustls-ring"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12"] }
+# HKDF, AES-GCM and AES header protection for the QUIC Initial packet (RFC 9001 section 5).
+ring = "0.17"
+serde_json = "1"
+tokio = { version = "1.53", features = ["macros", "rt-multi-thread", "time", "net", "io-util", "sync", "signal"] }
