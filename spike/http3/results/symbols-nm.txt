@@ -1,0 +1,36 @@
+phantom-btls-sys: <spike>/target/debug/build/phantom-btls-sys-30aa7c4e8ebe3146/out/build/libcrypto.a
+phantom-btls-sys: <spike>/target/debug/build/phantom-btls-sys-30aa7c4e8ebe3146/out/build/libssl.a
+phantom-btls-sys: 9644 global symbols defined
+btls-sys: <spike>/target/debug/build/btls-sys-71eb4569810a1fa3/out/build/libcrypto.a
+btls-sys: <spike>/target/debug/build/btls-sys-71eb4569810a1fa3/out/build/libssl.a
+btls-sys: 7339 global symbols defined
+--- defined by both archives (intersection):
+count: 6047
+_ACCESS_DESCRIPTION_free
+_ACCESS_DESCRIPTION_new
+_AES_CMAC
+_AES_cbc_encrypt
+_AES_cfb128_encrypt
+_AES_ctr128_encrypt
+_AES_decrypt
+_AES_ecb_encrypt
+_AES_encrypt
+_AES_ofb128_encrypt
+_AES_set_decrypt_key
+_AES_set_encrypt_key
+_AES_unwrap_key
+_AES_unwrap_key_padded
+_AES_wrap_key
+--- sample of each stack's symbol naming:
+phantom-btls-sys:
+_EVP_AEAD_CTX_aead
+_EVP_AEAD_CTX_cleanup
+_EVP_AEAD_CTX_free
+_EVP_AEAD_CTX_get_iv
+_EVP_AEAD_CTX_init
+btls-sys:
+_EVP_AEAD_CTX_aead
+_EVP_AEAD_CTX_cleanup
+_EVP_AEAD_CTX_free
+_EVP_AEAD_CTX_get_iv
+_EVP_AEAD_CTX_init

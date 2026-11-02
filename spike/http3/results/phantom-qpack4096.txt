@@ -1,0 +1,54 @@
+== out/phantom-qpack
+-- QUIC Initial: ClientHello
+cipher_suites (3): 0x1301 0x1302 0x1303
+extension_order: 0x0033 0x0000 0x0010 0xfe0d 0xca34 0x002d 0x001b 0x44cd 0x000d 0x000a 0x0039 0x002b
+message_len: 1874
+-- QUIC Initial: packets
+datagram 1: len=1200 packet_len=1200 version=0x00000001 dcid_len=20 scid_len=0 token_len=0 pn=0 frames=CRYPTO off=0 len=1149
+datagram 2: len=1200 packet_len=1200 version=0x00000001 dcid_len=20 scid_len=0 token_len=0 pn=1 frames=CRYPTO off=1149 len=725,PADDING x423
+-- QUIC transport parameters, wire order (id name grease len value)
+extension 0x0039
+1	0x5	initial_max_stream_data_bidi_local	-	len=4	6291456
+2	0x11	version_information	-	len=12	000000014a0a1a1a00000001
+3	0xf	initial_source_connection_id	-	len=0	
+4	0x20	max_datagram_frame_size	-	len=4	65536
+5	0x9	initial_max_streams_uni	-	len=2	103
+6	0x3128	unlabelled	-	len=4	4f524947
+7	0x147e0748c8ffc219	GREASE	GREASE	len=3	24c0d0
+8	0x1	max_idle_timeout	-	len=4	30000
+9	0x8	initial_max_streams_bidi	-	len=2	100
+10	0x6	initial_max_stream_data_bidi_remote	-	len=4	6291456
+11	0x3	max_udp_payload_size	-	len=2	1472
+12	0x4	initial_max_data	-	len=4	15728640
+13	0x7	initial_max_stream_data_uni	-	len=4	6291456
+-- server saw: QUIC connection
+alpn=h3 sni=localhost max_datagram_size=1170
+-- server saw: unidirectional streams, in arrival order of their log lines
+stream 6 type=null (null) bytes=null
+stream 10 type=qpack-encoder (0x2) bytes=439
+stream 2 type=control (0x0) bytes=30
+    setting 0x1 QPACK_MAX_TABLE_CAPACITY = 65536
+    setting 0x6 MAX_FIELD_SECTION_SIZE = 262144
+    setting 0x7 QPACK_BLOCKED_STREAMS = 100
+    setting 0x33 H3_DATAGRAM = 1
+    setting 0x1c6a4a1a65 GREASE (GREASE) = 553281326
+-- server saw: request HEADERS, field order (name: value [representation])
+request stream 0, frames: HEADERS
+    :method: GET   [indexed-static[17]]
+    dynamic:13:    [indexed-dynamic[13]]
+    :scheme: https   [indexed-static[23]]
+    dynamic:12:    [indexed-dynamic[12]]
+    dynamic:11:    [indexed-dynamic[11]]
+    dynamic:10:    [indexed-dynamic[10]]
+    dynamic:9:    [indexed-dynamic[9]]
+    upgrade-insecure-requests: 1   [indexed-static[94]]
+    dynamic:8:    [indexed-dynamic[8]]
+    dynamic:7:    [indexed-dynamic[7]]
+    dynamic:6:    [indexed-dynamic[6]]
+    dynamic:5:    [indexed-dynamic[5]]
+    dynamic:4:    [indexed-dynamic[4]]
+    dynamic:3:    [indexed-dynamic[3]]
+    dynamic:2:    [indexed-dynamic[2]]
+    dynamic:1:    [indexed-dynamic[1]]
+    dynamic:0:    [indexed-dynamic[0]]
+-- server saw: TCP requests

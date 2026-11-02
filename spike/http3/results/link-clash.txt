@@ -1,0 +1,30 @@
+# Question (a): phantom-http =0.6.0 and the stealth crates (wreq 6.0.0-rc.31 over btls/btls-sys 0.5.6)
+# in ONE binary (client/src/bin/clash.rs). macOS arm64 (Darwin 27.0.0), rustc 1.99.1,
+# Apple clang 21.0.0. Output of scripts/link-experiments.sh; logs in out/link-*.log (not committed).
+
+== default: cargo exit 101; ld warnings 928 (duplicate symbol 599); linker crashed 2; error lines 2
+== ld_classic: cargo exit 101; ld warnings 929 (duplicate symbol 599); linker crashed 2; error lines 2
+== link_dead: cargo exit 101; ld warnings 329 (duplicate symbol 1333); linker crashed 0; error lines 2
+
+# default and ld_classic: 599 `ld: warning: duplicate symbol '_X' in:` pairs, then
+#   clang: error: unable to execute command: Trace/BPT trap: 5
+#   clang: error: linker command failed due to signal (use -v to see invocation)
+# `-ld_classic` changed nothing: "ld: warning: -ld_classic is no longer supported and will be ignored".
+# link_dead (rustc `-C link-dead-code`, i.e. no -dead_strip): the linker finishes and refuses:
+#   ld: 1332 duplicate symbols
+#   clang: error: linker command failed with exit code 1
+#
+# Each duplicate names the same object file in the two rlibs that carry the two BoringSSL builds, e.g.
+#   duplicate symbol '_BIO_meth_free' in:
+#     .../libbtls_sys-2f14b6403f42931e.rlib[134](bio.cc.o)     <- btls-sys 0.5.6 (wreq's stack)
+#     .../libbtls_sys-48fa548f9eb4d2f3.rlib[134](bio.cc.o)     <- phantom-btls-sys 0.5.6-phantom.3
+# (both packages name their library `btls_sys`; phantom's has `links = "phantom_boringssl"`, which is
+# why Cargo accepts the two in one build.)
+#
+# No binary was produced, so nothing could run: "does each stack still work after the other has run"
+# is NOT measured in one process. The controls below link and run (separate processes):
+#   wreqonly (stealth crates only)   OK   wreq HTTP/1.1 status=200 OK   (scripts/serve-and-run.sh wreqonly ...)
+#   h3fetch  (phantom only)          OK   Http1 / Http3 status=200 OK    (results/phantom-h3-single.txt)
+#
+# The symbol listing is in results/symbols-nm.txt: phantom-btls-sys's libssl.a+libcrypto.a define
+# 9644 global symbols, btls-sys's 7339, and 6047 are the same name in both (no prefix on either).

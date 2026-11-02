@@ -1,0 +1,71 @@
+== out/chrome-qpack
+-- QUIC Initial: ClientHello
+cipher_suites (3): 0x1301 0x1302 0x1303
+extension_order: 0xca34 0x44cd 0xfe0d 0x000a 0x0033 0x000d 0x002d 0x002b 0x0000 0x0010 0x001b 0x0039
+message_len: 1882
+-- QUIC Initial: packets
+datagram 1: len=1250 packet_len=1250 version=0x00000001 dcid_len=8 scid_len=0 token_len=0 pn=1 frames=PING,PING,PING,PING,PING,PADDING x97,CRYPTO off=1407 len=102,CRYPTO off=1629 len=17,CRYPTO off=1661 len=221,PADDING x70,PING,CRYPTO off=1646 len=15,PING,CRYPTO off=0 len=69,CRYPTO off=1619 len=10,CRYPTO off=1012 len=32,CRYPTO off=1599 len=6,CRYPTO off=1044 len=363,PING,PADDING x15,CRYPTO off=1605 len=14,CRYPTO off=1509 len=90,PADDING x37,PING
+datagram 2: len=1250 packet_len=1250 version=0x00000001 dcid_len=8 scid_len=0 token_len=0 pn=2 frames=PING,PADDING x48,PING,CRYPTO off=754 len=8,PADDING x2,PING,PING,CRYPTO off=678 len=76,PING,PING,CRYPTO off=86 len=592,PADDING x1,CRYPTO off=69 len=17,CRYPTO off=762 len=250,PADDING x185,PING,PING,PADDING x4
+-- QUIC transport parameters, wire order (id name grease len value)
+extension 0x0039
+1	0xdfec69dcf154aea	GREASE	GREASE	len=11	a5159107af38959297e358
+2	0xf	initial_source_connection_id	-	len=0	
+3	0x9	initial_max_streams_uni	-	len=2	103
+4	0x5	initial_max_stream_data_bidi_local	-	len=4	6291456
+5	0x7	initial_max_stream_data_uni	-	len=4	6291456
+6	0x11	version_information	-	len=12	00000001000000014acafa8a
+7	0x3	max_udp_payload_size	-	len=2	1472
+8	0x8	initial_max_streams_bidi	-	len=2	100
+9	0x4	initial_max_data	-	len=4	15728640
+10	0x6	initial_max_stream_data_bidi_remote	-	len=4	6291456
+11	0x20	max_datagram_frame_size	-	len=4	65536
+12	0x1	max_idle_timeout	-	len=4	30000
+13	0x3128	unlabelled	-	len=4	4f524947
+-- server saw: QUIC connection
+alpn=h3 sni=localhost max_datagram_size=1170
+-- server saw: unidirectional streams, in arrival order of their log lines
+stream 6 type=qpack-decoder (0x3) bytes=2
+stream 10 type=qpack-encoder (0x2) bytes=410
+stream 2 type=control (0x0) bytes=69
+    setting 0x1 QPACK_MAX_TABLE_CAPACITY = 65536
+    setting 0x6 MAX_FIELD_SECTION_SIZE = 262144
+    setting 0x7 QPACK_BLOCKED_STREAMS = 100
+    setting 0x33 H3_DATAGRAM = 1
+    setting 0x1390d56b1d GREASE (GREASE) = 1563422464
+-- server saw: request HEADERS, field order (name: value [representation])
+request stream 0, frames: HEADERS
+    :method: GET   [indexed-static[17]]
+    :authority: localhost:4433   [literal-name-ref-static[0], huffman]
+    :scheme: https   [indexed-static[23]]
+    :path: /chrome-nav   [literal-name-ref-static[1], huffman]
+    sec-ch-ua: "Not:A-Brand";v="8", "Chromium";v="156", "Google Chrome";v="156"   [literal-literal-name-huffman-name, huffman]
+    sec-ch-ua-mobile: ?0   [literal-literal-name-huffman-name]
+    sec-ch-ua-platform: "macOS"   [literal-literal-name-huffman-name]
+    upgrade-insecure-requests: 1   [indexed-static[94]]
+    user-agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36   [literal-name-ref-static[95], huffman]
+    accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/jxl,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7   [literal-name-ref-static[29], huffman]
+    sec-fetch-site: none   [literal-literal-name-huffman-name, huffman]
+    sec-fetch-mode: navigate   [literal-literal-name-huffman-name, huffman]
+    sec-fetch-user: ?1   [literal-literal-name-huffman-name]
+    sec-fetch-dest: document   [literal-literal-name-huffman-name, huffman]
+    accept-encoding: gzip, deflate, br, zstd   [literal-name-ref-static[31], huffman]
+    accept-language: en-US,en;q=0.9   [literal-name-ref-static[72], huffman]
+    priority: u=0, i   [literal-literal-name-huffman-name, huffman]
+request stream 4, frames: HEADERS
+    :method: GET   [indexed-static[17]]
+    dynamic:13:    [indexed-dynamic[13]]
+    :scheme: https   [indexed-static[23]]
+    dynamic:12:    [indexed-dynamic[12]]
+    dynamic:11:    [indexed-dynamic[11]]
+    dynamic:10:    [indexed-dynamic[10]]
+    dynamic:9:    [indexed-dynamic[9]]
+    dynamic:8:    [indexed-dynamic[8]]
+    dynamic:7:    [indexed-dynamic[7]]
+    dynamic:6:    [indexed-dynamic[6]]
+    dynamic:5:    [indexed-dynamic[5]]
+    dynamic:4:    [indexed-dynamic[4]]
+    dynamic:3:    [indexed-dynamic[3]]
+    dynamic:2:    [indexed-dynamic[2]]
+    dynamic:1:    [indexed-dynamic[1]]
+    dynamic:0:    [indexed-dynamic[0]]
+-- server saw: TCP requests

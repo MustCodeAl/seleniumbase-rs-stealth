@@ -1,0 +1,52 @@
+== out/phantom-h3
+-- QUIC Initial: ClientHello
+cipher_suites (3): 0x1301 0x1302 0x1303
+extension_order: 0x0010 0x000d 0x001b 0x000a 0x0033 0x0039 0x002d 0x0000 0x44cd 0xca34 0xfe0d 0x002b
+message_len: 1881
+-- QUIC Initial: packets
+datagram 1: len=1200 packet_len=1200 version=0x00000001 dcid_len=20 scid_len=0 token_len=0 pn=0 frames=CRYPTO off=0 len=1149
+datagram 2: len=1200 packet_len=1200 version=0x00000001 dcid_len=20 scid_len=0 token_len=0 pn=1 frames=CRYPTO off=1149 len=732,PADDING x416
+-- QUIC transport parameters, wire order (id name grease len value)
+extension 0x0039
+1	0x20	max_datagram_frame_size	-	len=4	65536
+2	0x4	initial_max_data	-	len=4	15728640
+3	0xf	initial_source_connection_id	-	len=0	
+4	0x9	initial_max_streams_uni	-	len=2	103
+5	0x8	initial_max_streams_bidi	-	len=2	100
+6	0x3	max_udp_payload_size	-	len=2	1472
+7	0x11	version_information	-	len=12	000000011a4aea9a00000001
+8	0x3128	unlabelled	-	len=4	4f524947
+9	0x1	max_idle_timeout	-	len=4	30000
+10	0x7	initial_max_stream_data_uni	-	len=4	6291456
+11	0x5	initial_max_stream_data_bidi_local	-	len=4	6291456
+12	0x6	initial_max_stream_data_bidi_remote	-	len=4	6291456
+13	0x2e113c0cfc0518e7	GREASE	GREASE	len=10	7b1216e2b3ba8cbf4a23
+-- server saw: QUIC connection
+alpn=h3 sni=localhost max_datagram_size=1170
+-- server saw: unidirectional streams, in arrival order of their log lines
+stream 2 type=control (0x0) bytes=34
+    setting 0x1 QPACK_MAX_TABLE_CAPACITY = 65536
+    setting 0x6 MAX_FIELD_SECTION_SIZE = 262144
+    setting 0x7 QPACK_BLOCKED_STREAMS = 100
+    setting 0x33 H3_DATAGRAM = 1
+    setting 0x1cdd1a05c7 GREASE (GREASE) = 2128480966
+-- server saw: request HEADERS, field order (name: value [representation])
+request stream 0, frames: HEADERS
+    :method: GET   [indexed-static[17]]
+    :authority: localhost:4433   [literal-name-ref-static[0], huffman]
+    :scheme: https   [indexed-static[23]]
+    :path: /h3fetch   [literal-name-ref-static[1], huffman]
+    sec-ch-ua: "Not:A-Brand";v="8", "Chromium";v="156", "Google Chrome";v="156"   [literal-literal-name-huffman-name, huffman]
+    sec-ch-ua-mobile: ?0   [literal-literal-name-huffman-name, huffman]
+    sec-ch-ua-platform: "macOS"   [literal-literal-name-huffman-name, huffman]
+    upgrade-insecure-requests: 1   [indexed-static[94]]
+    user-agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36   [literal-name-ref-static[95], huffman]
+    accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/jxl,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7   [literal-name-ref-static[29], huffman]
+    sec-fetch-site: none   [literal-literal-name-huffman-name, huffman]
+    sec-fetch-mode: navigate   [literal-literal-name-huffman-name, huffman]
+    sec-fetch-user: ?1   [literal-literal-name-huffman-name, huffman]
+    sec-fetch-dest: document   [literal-literal-name-huffman-name, huffman]
+    accept-encoding: gzip, deflate, br, zstd   [literal-name-ref-static[31], huffman]
+    accept-language: en-US,en;q=0.9   [literal-name-ref-static[72], huffman]
+    priority: u=0, i   [literal-literal-name-huffman-name, huffman]
+-- server saw: TCP requests
