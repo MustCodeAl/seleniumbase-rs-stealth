@@ -1,0 +1,15 @@
+# Throwaway certificate for the loopback servers of the HTTP/3 spike: localhost and 127.0.0.1.
+# It is both the server's leaf and the one trust anchor the clients are given, so it says CA:TRUE.
+[req]
+distinguished_name = dn
+x509_extensions = ext
+prompt = no
+
+[dn]
+CN = localhost
+
+[ext]
+subjectAltName = DNS:localhost, IP:127.0.0.1
+basicConstraints = critical, CA:TRUE
+keyUsage = critical, digitalSignature, keyCertSign
+extendedKeyUsage = serverAuth

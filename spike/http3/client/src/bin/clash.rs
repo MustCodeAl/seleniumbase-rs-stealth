@@ -117,8 +117,8 @@ async fn main() -> ExitCode {
         outcome: via_wreq(port, &cert_der).await,
     });
     steps.push(Step {
-        label: "2 phantom (phantom-btls) over TCP h2".into(),
-        outcome: via_phantom(port, &cert_der, HttpProtocol::Http2).await,
+        label: "2 phantom (phantom-btls) over TCP h1 (h3srv offers no h2)".into(),
+        outcome: via_phantom(port, &cert_der, HttpProtocol::Http1).await,
     });
     steps.push(Step {
         label: "3 wreq again".into(),

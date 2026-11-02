@@ -1,4 +1,5 @@
 # Build output, throwaway certificates and keys, and capture output: never committed.
 /target
+/bin/
 /certs/
 /out/
