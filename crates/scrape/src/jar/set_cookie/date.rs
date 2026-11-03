@@ -81,23 +81,23 @@ struct DateFields {
 impl DateFields {
     /// Gives `token` to the first production that is still unset and matches it (step 2).
     fn take(&mut self, token: &[u8]) {
-        if self.time.is_none() {
-            if let Some(time) = parse_time(token) {
-                self.time = Some(time);
-                return;
-            }
+        if self.time.is_none()
+            && let Some(time) = parse_time(token)
+        {
+            self.time = Some(time);
+            return;
         }
-        if self.day.is_none() {
-            if let Some(day) = leading_number(token, DAY_DIGITS) {
-                self.day = Some(day);
-                return;
-            }
+        if self.day.is_none()
+            && let Some(day) = leading_number(token, DAY_DIGITS)
+        {
+            self.day = Some(day);
+            return;
         }
-        if self.month.is_none() {
-            if let Some(month) = parse_month(token) {
-                self.month = Some(month);
-                return;
-            }
+        if self.month.is_none()
+            && let Some(month) = parse_month(token)
+        {
+            self.month = Some(month);
+            return;
         }
         if self.year.is_none() {
             self.year = leading_number(token, YEAR_DIGITS);

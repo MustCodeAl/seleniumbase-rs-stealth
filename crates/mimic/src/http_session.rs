@@ -193,13 +193,13 @@ impl HttpSession {
         egress: Option<EgressRef>,
         options: HttpOptions,
     ) -> Result<Self, HttpError> {
-        if let Some(installed) = options.installed_major {
-            if installed != profile.major() {
-                return Err(HttpError::VersionMismatch {
-                    browser: installed,
-                    measured: profile.major(),
-                });
-            }
+        if let Some(installed) = options.installed_major
+            && installed != profile.major()
+        {
+            return Err(HttpError::VersionMismatch {
+                browser: installed,
+                measured: profile.major(),
+            });
         }
         let client = network::build_client(&profile, egress.as_ref(), &options)?;
         let limits = Limits {

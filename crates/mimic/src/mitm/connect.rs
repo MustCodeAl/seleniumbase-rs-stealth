@@ -6,7 +6,7 @@
 //! its browser connection, after hyper has handed the connection over.
 
 use std::convert::Infallible;
-use std::future::Future;
+
 use std::pin::pin;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};

@@ -265,14 +265,13 @@ pub fn check_emittable(spec: &TlsSpec) -> Result<(), ConvertError> {
     }
     let (min, max) = version_range(spec)?;
     check_extension_versions(spec, min, max)?;
-    if max < TLS_1_3 {
-        if let Some(&group) = spec
+    if max < TLS_1_3
+        && let Some(&group) = spec
             .supported_groups
             .iter()
             .find(|group| POST_QUANTUM_GROUPS.contains(group))
-        {
-            return Err(ConvertError::GroupNeedsTls13(group));
-        }
+    {
+        return Err(ConvertError::GroupNeedsTls13(group));
     }
     spec.cert_compression
         .iter()

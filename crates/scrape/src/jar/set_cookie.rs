@@ -242,10 +242,10 @@ fn check_pair(name: &str, value: &str) -> Result<(), SetCookieError> {
     if len > MAX_NAME_VALUE_BYTES {
         return Err(SetCookieError::TooLarge { len });
     }
-    if name.is_empty() {
-        if let Some(prefix) = CookiePrefix::of(value) {
-            return Err(SetCookieError::NamelessPrefix(prefix));
-        }
+    if name.is_empty()
+        && let Some(prefix) = CookiePrefix::of(value)
+    {
+        return Err(SetCookieError::NamelessPrefix(prefix));
     }
     Ok(())
 }

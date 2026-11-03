@@ -423,17 +423,16 @@ impl ImpersonationProfile {
             identity = identity.with_cookie(cookie);
         }
         let mut list = self.headers.render(shape, &identity)?;
-        if let Some(cookie) = cookie {
-            if !list
+        if let Some(cookie) = cookie
+            && !list
                 .iter()
                 .any(|(name, _)| name.eq_ignore_ascii_case(COOKIE_HEADER))
-            {
-                let after = list
-                    .iter()
-                    .position(|(name, _)| name.eq_ignore_ascii_case(ACCEPT_LANGUAGE))
-                    .map_or(list.len(), |index| index + 1);
-                list.insert(after, (COOKIE_HEADER.to_owned(), cookie.to_owned()));
-            }
+        {
+            let after = list
+                .iter()
+                .position(|(name, _)| name.eq_ignore_ascii_case(ACCEPT_LANGUAGE))
+                .map_or(list.len(), |index| index + 1);
+            list.insert(after, (COOKIE_HEADER.to_owned(), cookie.to_owned()));
         }
         if wire == WireProtocol::Http2 {
             let destination = list

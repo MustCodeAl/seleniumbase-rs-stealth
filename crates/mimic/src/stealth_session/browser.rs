@@ -75,14 +75,14 @@ impl BrowserLeg {
         measured: u32,
         now: u64,
     ) -> Result<Page, StealthError> {
-        if let Some(found) = browser_major(browser).await {
-            if found != measured {
-                return Err(ImpersonateError::VersionMismatch {
-                    browser: found,
-                    measured,
-                }
-                .into());
+        if let Some(found) = browser_major(browser).await
+            && found != measured
+        {
+            return Err(ImpersonateError::VersionMismatch {
+                browser: found,
+                measured,
             }
+            .into());
         }
         let page = browser.default_page().await?;
         cdp::import_cookies(&page, &identity.cookies, now).await?;
