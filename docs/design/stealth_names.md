@@ -1,7 +1,8 @@
-# Stealth names: the copied API, and every public item
+# Stealth names: what the stealth API should cover, build on and be called
 
-Status: proposal (phase 1, third round). No code changes yet; the work starts once the
-owner approves this list.
+Status: proposal (phase 1, fourth round). No code changes yet; the work starts once the
+owner approves this list. Nothing in it moves into core: every change is in this
+repository.
 
 ## What the stealth crate is for
 
@@ -19,67 +20,87 @@ In the user's words:
 > I knew stealthscraper-rs had low level spoofing features and those were the main
 > features integrated
 
-So the yardstick for every item: it either controls advanced stealth the SeleniumBase way,
-through core's entry points (the `sb` and `sb_cdp` fixtures, `BrowserConfig` and
-`LaunchOptions`, `StealthPolicy`, `Fingerprint`, settings and `SB_*` variables, `sbrs`
-flags, `BaseCase` and `Page` methods), or it brings in one of stealthscraper-rs's features
-(mainly the low-level spoofing: TLS/JA4 and HTTP/2 emulation, the MITM proxy, the
-impersonating HTTP client) under seleniumbase-rs's names and concepts. The features are
-all here already; what this note fixes is the API surface that was copied with them.
+> Its not about merging the stealth apis into main, its about making sure the stealth apis
+> covering ground the core project doesnt and adding onto them and making sure these apis
+> fit with the rest of the project names
+
+So every stealth item answers four questions:
+
+1. Does it cover ground core does not? Then it stays here.
+2. Does it duplicate a core concept? Then it builds on the core type (takes or extends
+   core's `Fingerprint`, `Session`, `Proxy`, `ProxyList`, `SolveOptions`, `Locale`, ...)
+   and adds only the stealth part on top.
+3. Does it only duplicate core and add nothing? Then it goes, in favour of the core item.
+4. Does its name fit the project's names and patterns? If not, it is renamed.
+
+The verdicts are therefore **keep**, **rename**, **build on core** (naming the core type)
+and **remove**. The low-level spoofing that stealthscraper-rs brought (TLS/JA4 and HTTP/2
+emulation, the MITM proxy, the impersonating HTTP client) is new ground and stays; what
+changes is the API that was copied with it.
 
 ## Duplicated concepts
 
-| Copied here | Core already has | Proposal |
+| Stealth item | Core concept it duplicates | Verdict |
 |---|---|---|
-| `StealthIdentity` (`export_identity`, `import_identity`, `restore`) | `sb_cdp::session_store::Session` and `SessionStore` (and `BrowserScraper` has both `export_identity` and `save_session`) | merge into `Session` |
-| `BrowserScraper` and `BrowserScraperBuilder` (their `CloudScraper`), and again `StealthSession` and `StealthSessionBuilder` | `sb_cdp::Browser`, `Page`, `LaunchOptionsBuilder` | merge: the options join the launch builder, the actions become `Page` methods |
-| `BrowserScraperBuilder::fingerprint`, `StealthSessionBuilder::fingerprint` | `LaunchOptionsBuilder::fingerprint` | remove the copies |
-| `ImpersonationProfile` (their `BrowserProfile`, `random()`) and codec `HeaderIdentity` | `Fingerprint` (User-Agent, Accept-Language, client hints) | keep only the wire part as `WireFormat`; the rest is read from the `Fingerprint` |
-| codec `BrowserKind` | `browser::config::Browser` | merge |
-| `ProxyPool`, `RotationStrategy` | `config::proxy_list::ProxyList` (`--proxy-list`, `SB_PROXY_LIST`) | merge into `ProxyList` |
-| `EgressRef`, `EgressKey`, `EgressSwitch`, `ContextProxySwitch` | `sb_cdp::ContextRoute`, `Proxy`, `ContextOptions::proxy`, `Browser::context_route` | merge into `ContextRoute`; "egress" becomes "proxy" in member names |
-| `MitigationPolicy` (`max_challenge_attempts`, `backoff`) | `sb_cdp::captcha::SolveOptions` (`attempts`, `backoff`), `RetryPolicy` | merge into one `ChallengePolicy` that holds them |
-| `Detection` and `Evidence`, `solve_challenge` | `sb_cdp::captcha::{Captcha, Evidence}`, `Page::solve_captcha` | merge into one `Challenge` beside `Captcha`; solving goes through `Page::solve_captcha` |
-| `rotate_profile` | `Page::apply_fingerprint` | merge |
-| `StateStore`, `InMemoryStateStore`, `JsonStateStore`, `DomainState` | `SessionStore` | merge; per-site records live in the `SessionStore` |
-| `ScraperEvent`, `EventSink`, `NoopEventSink`, `CollectingEventSink`, `TracingEventSink` | `tracing` (core logs with it) | remove the sinks; events become `tracing` events |
-| `CountryCode`, `LocaleExt` | `evasion::randomize::Locale`, `LocaleCode` | merge into `Locale` |
-| `Secret`, `RedactedUrl` | `Proxy` and `ContextRoute` keep passwords out of `Debug` | one `Secret` in core `common`; `RedactedUrl` private |
-| `per_site_rate`, `pacing` | `utilities::retry::RateLimiter` | one `rate_limit` option |
-| `BrowserLauncher`, `ChromeLauncher` | `Browser::launch_mocked`, `BrowserPool::with_launcher` | private test seams |
-| `CookieJar` | `Cookie`, `Cookies`, `Session` | private plumbing of the HTTP session |
-| `Clock` (twice) | `core::allure::Clock` | private test seams |
-| `BrowserFetch`, `StealthFetch`, `HttpFetched` | (one fetch) | one `FetchOutcome` |
+| `StealthIdentity` (its own cookie list beside core's `Fingerprint`) | `sb_cdp::session_store::Session`, `Fingerprint` | build on core: `Identity`, holding a core `Session` and `Fingerprint`, plus the wire measurement, proxy route and clearances |
+| `ImpersonationProfile` (User-Agent, Accept-Language, client hints, `random()`, `with_locale`) and the matching `CustomProfileBuilder` setters | `Fingerprint` (and its seeded randomization) | build on core: `WireFormat` reads those from the `Fingerprint` and keeps the TLS, HTTP/2 and header-order part; the copies go |
+| codec `HeaderIdentity` | `Fingerprint` | build on core: `ClientHeaders::from_fingerprint`, keeping the cookie and the overrides |
+| codec `BrowserKind` | `browser::config::Browser` | remove |
+| `ProxyPool` (its own list of proxies) | `config::proxy_list::ProxyList` (`--proxy-list`, `SB_PROXY_LIST`) | build on core: `ProxyPool::from_list(ProxyList, RotationStrategy)`; the strategies, quarantine and countries stay |
+| `EgressRef` and the "egress" word | `Proxy`, `ContextRoute` | build on core: `ProxyRoute` on core's `Proxy` and `ContextRoute`, plus the exit country; "egress" becomes "proxy" in member names |
+| `EgressSwitch`, `ContextProxySwitch` | `ContextOptions::proxy`, `Browser::new_context_with` | remove |
+| `MitigationPolicy.max_challenge_attempts`, `solve_timeout` | `sb_cdp::captcha::SolveOptions` (`attempts`, timeouts) | build on core: the policy holds a core `SolveOptions`; the copied field goes |
+| `BrowserScraper::solve_challenge` | `Page::solve_captcha` | build on core: detection and mitigation around core's solver |
+| `rotate_profile` | `Page::apply_fingerprint` | build on core: `rotate_fingerprint` through `apply_fingerprint` |
+| `fingerprint(...)` and `seed(...)` on `BrowserScraperBuilder` and `StealthSessionBuilder`; `BrowserScraper::seed` | `LaunchOptionsBuilder::fingerprint`, `Fingerprint::seed` | remove: the builders already take core's `LaunchOptionsBuilder` |
+| `BrowserLauncher`, `ChromeLauncher`, the builders' `launcher` | `Browser::launch`, `Browser::launch_mocked` | remove |
+| `GeoInfo.coordinates` (`(f64, f64)`) | `evasion::settings::Geolocation` | build on core |
+| mimic `Clock` | scrape's `Clock` (the same alias) | remove |
 
-What stays as this crate's own API: the codec formats (`Ja3`, `Ja4`, `Peetprint`,
-`Akamai`, `TlsSpec`, `H2Spec`, `HeaderSpec`, ...), the measured wire data
-(`WireMeasurement`), the wire format a client sends (`WireFormat` and its builder), the
-impersonating HTTP client (`HttpSession`, `HttpRequest`, `HttpResponse`), the escalation
-policy, the exit-country resolver and the errors. The MITM proxy and the raw wreq client
-builder become plumbing behind a launch option (decision 6).
+Names that clash with core items while covering new ground are renamed, not merged:
+`Emulation` → `WireMeasurement` (core `sb_cdp::state::Emulation`), `Evidence` →
+`ChallengeEvidence` (core `sb_cdp::captcha::Evidence`), `StateStore`/`DomainState` →
+`Ledger`/`SiteRecord` (core `sb_cdp::state`), `Transition` → `Escalation` (core
+`api::presentation::Transition`), `HttpOptions` → `HttpSessionOptions` (core
+`mcp::http::HttpOptions`).
+
+Already built on core, the shape the rest should follow: `LocaleExt` (extends core's
+`Locale`), `CookieJar` (`from_cdp`/`to_cdp` with core's `Cookie`), `MitigationPolicy.backoff`
+(core's `RetryPolicy`), `ChallengeEvidence.widget` (core's `Captcha`), `BrowserScraper` and
+`StealthSession` (hold core's `Browser` and `Page`, take a `LaunchOptionsBuilder`),
+`save_session`/`load_session` (core's `SessionStore`), `HttpSession::from_page` (core's
+`Page`), `MitmProxy::configure_launch` (core's `LaunchOptionsBuilder`). Nothing here
+duplicates `StealthPolicy` or `BrowserPool`.
 
 ## Counts
 
 | | Items | Of them copied |
 |---|---|---|
 | Reviewed | 1049 | 264 |
-| Keep | 601 (19 also need an export) | 42 |
-| Rename | 42 (5 also need an export) | 9 |
-| Merge into a core concept | 196 | 132 |
-| Make private (plumbing) | 170 | 57 |
-| Remove (core already does it) | 40 | 24 |
+| Keep | 891 (24 also need an export) | 183 |
+| Rename | 106 (9 also need an export) | 55 |
+| Build on core | 24 | 11 |
+| Remove | 28 | 15 |
 
-| Crate | Keep | Rename | Merge | Private | Remove |
-|---|---|---|---|---|---|
-| packages, features, facade | 10 | 3 | 0 | 0 | 1 |
-| codec | 367 | 12 | 16 | 0 | 1 |
-| scrape | 50 | 10 | 122 | 112 | 29 |
-| mimic | 174 | 17 | 58 | 58 | 9 |
+| Crate | Keep | Rename | Build on core | Remove |
+|---|---|---|---|---|
+| packages, features, facade | 10 | 3 | 0 | 1 |
+| codec | 372 | 12 | 9 | 3 |
+| scrape | 251 | 49 | 10 | 13 |
+| mimic | 258 | 42 | 5 | 11 |
 
-The second round kept 924 items. Re-checked for copied names and shapes, 323 of them now
-merge, go private or go away; most of the remaining keeps are codec's protocol terms and
-the HTTP client, which is the feature core lacks. "Copied" counts an item whose name or
-shape comes from stealthscraper-rs, with every member of such a type.
+"Copied" counts an item whose name or shape comes from stealthscraper-rs, with every member
+of such a type. Most copied items stay (keep or rename) because the feature is new ground;
+the 26 that build on core or go are where the copy repeated a core concept. "Export" means
+a public signature takes or returns the type but no path names it today (33 types).
+
+## What changed since the third round
+
+The third round proposed merging stealth items into core. The user's rule is the
+opposite: the stealth API stays in this repository, covers what core does not, and builds
+on core's types. So the "merge" and "private" verdicts are gone, and no item moves into
+core: the 196 merge rows became keep, rename, build on core or remove, and the plumbing that
+covers new ground (the cookie jar, the MITM proxy, the event sinks, the ledger) stays.
 
 ## How this list was made
 
@@ -96,86 +117,62 @@ shape comes from stealthscraper-rs, with every member of such a type.
   notes (their `CloudScraper` builder and its options, `StealthSession` and
   `StealthIdentity`, `ProxyPool` with `RotationStrategy`, `ScraperEvent` and `EventSink`,
   `StateStore` and `DomainState`, `MitigationPolicy` and `Action`, `impersonation_client`,
-  `BrowserProfile::random`, `BrowserKind`, `rotate_profile`, the `TlsSpoofingProxy`, and the
-  names in their plan such as `EgressRef`, `JsonStateStore`, `SessionPolicy`). The
+  `BrowserProfile::random`, `BrowserKind`, `rotate_profile`, the `TlsSpoofingProxy`, and
+  names from their plan such as `EgressRef`, `JsonStateStore`, `SessionPolicy`). The
   stealthscraper-rs crate itself was not read, as the standing rule says.
 - **Core.** The names of all 133 stealth types were compared with core's 986 public types
   (core at `41a2e3da`, main plus the mise removal, which changes no public type), and the
-  core items above were read: `Session` and `SessionStore`, `ContextRoute`, `SolveOptions`
-  and `Page::solve_captcha`, `Page::apply_fingerprint`, `ProxyList` with `SB_PROXY_LIST`,
-  `StealthPolicy`, `LaunchOptionsBuilder`, `RateLimiter`, `RetryPolicy`, `Locale`.
-
-## Core names the stealth items follow
-
-| Core item | Where | What it means here |
-|---|---|---|
-| `LaunchOptions`, `LaunchOptionsBuilder` (`fingerprint`, `proxy`, plain setters) | `sb_cdp::launch` | the scraper's options become launch options: `proxy_list`, `challenge_policy`, `geo_resolver`, `rate_limit`, `wire_format`, `session_store` |
-| `Page::solve_captcha`, `SolveOptions`, `Captcha`, `Evidence` | `sb_cdp::captcha` | `solve_challenge` goes through `solve_captcha`; `ChallengePolicy` holds a `SolveOptions`; `Challenge` sits beside `Captcha` |
-| `Page::apply_fingerprint`, `Fingerprint`, `Fingerprint::seed` | `sb_cdp::page`, `evasion::fingerprint` | `rotate_profile` becomes applying a new fingerprint; `WireFormat` reads the fingerprint's headers |
-| `Session`, `SessionStore` | `sb_cdp::session_store` | the saved identity and the per-site records |
-| `ContextRoute`, `Proxy`, `ContextOptions::proxy`, `Browser::context_route` | `sb_cdp::context`, `sb_cdp::launch` | the proxy route; "egress" becomes "proxy" |
-| `ProxyList`, `--proxy-list`, `SB_PROXY_LIST` | `config::proxy_list` | proxy rotation |
-| `StealthPolicy`, `RetryPolicy`, `RateLimiter` | `evasion::policy`, `utilities::retry` | the `<Thing>Policy` pattern; `rate_limit` |
-| `Locale`, `LocaleCode` | `evasion::randomize`, `browser::options::locale` | country lookups |
-| `Browser` (enum) | `browser::config` | the measured browser |
-| `tracing` | the whole crate | events |
+  core items named above were read in core's index: `Session` and `SessionStore`,
+  `ContextRoute`, `SolveOptions` and `Page::solve_captcha`, `Page::apply_fingerprint`,
+  `ProxyList` with `SB_PROXY_LIST`, `StealthPolicy`, `LaunchOptionsBuilder`, `RateLimiter`,
+  `RetryPolicy`, `Locale`.
 
 ## The new words in one place
 
 | Now | Proposed |
 |---|---|
-| stealth identity, `export_identity`/`import_identity`, `restore` | core `Session`, `save_session`/`load_session`, `HttpSession::from_session` |
-| browser scraper, stealth session (and their builders) | core `LaunchOptionsBuilder` options and `Page` methods; `HttpSession::from_page` for the handoff |
-| impersonation profile | wire format (`WireFormat`) |
+| stealth identity | `Identity` (on core `Session` and `Fingerprint`) |
+| impersonation profile, custom profile builder | `WireFormat`, `WireFormatBuilder` (on core `Fingerprint`) |
 | emulation (codec's measured data) | wire measurement (`WireMeasurement`) |
-| egress | proxy route (core `ContextRoute`) |
-| mitigation policy, detection, evidence | challenge policy (`ChallengePolicy`), challenge (`Challenge`) |
-| mode, transition, session policy | fetch kind (`FetchKind`), escalation (private), escalation policy (`EscalationPolicy`) |
-| state store, domain state | core `SessionStore`, site record (`SiteRecord`) |
-| profile rotation | `Page::apply_fingerprint` with a new fingerprint |
-| events and sinks | `tracing` events |
-| reply | response (`HttpResponse`) |
-| `per_site_rate`, `pacing` | `rate_limit` |
+| header identity | client headers (`ClientHeaders`, from core `Fingerprint`) |
+| egress, `EgressRef`, `EgressKey` | proxy route (`ProxyRoute`, `ProxyKey`), `rotate_proxy`, `swap_proxy` |
+| mode, transition, session policy | fetch kind (`FetchKind`), escalation (`Escalation`), escalation policy (`EscalationPolicy`) |
+| state store, domain state | ledger (`Ledger`), site record (`SiteRecord`) |
+| profile rotation | fingerprint rotation (`rotate_fingerprint`) |
+| scraper event | scrape event (`ScrapeEvent`) |
+| reply | response (`HttpResponse`, `ResponseHeaders`) |
+| `with_*` builder setters | plain setters, as core's builders |
+| `per_site_rate`, `pacing` | `rate_limit` (core's `RateLimiter`) |
+| aliases in `lib.rs` (`Fetched as HttpFetched`, `SpecError as H2SpecError`, ...) | the exported name becomes the source name |
 
 ## Decisions for the owner
 
-1. **The saved identity.** Merge `StealthIdentity` into core's `Session` (core's `Session`
-   gains the fingerprint, the wire measurement, the proxy route and the challenge
-   clearances, and `SessionStore` saves it), or keep a stealth type named `Identity`?
-2. **Where the browser-side features land.** `BrowserScraper` and `StealthSession` go away
-   as types. Their options need a home on core's launch path: an extension trait in this
-   crate on `LaunchOptionsBuilder` and `Page` (the code stays here, the calls read like
-   core's), or fields and methods in core itself (or a core plugin through
-   `ContextSettings`)? This also answers the `fingerprint(...)` question: the builders'
-   `fingerprint` is a copy of core's `LaunchOptionsBuilder::fingerprint` and goes away.
-3. **Moves into core** (`ProxyList` rotation, `Locale` countries, `Session` fields, one
-   `Secret`): in the same round as the renames, or one core PR each, later? `Secret` touches
-   security code that has its own owner.
-4. **The `mimic` crate.** Rename the package `seleniumbase-rs-wire` (feature and facade
+1. **`Identity`.** The saved identity becomes `Identity`, built on core's `Session` and
+   `Fingerprint`. Core's `sb_cdp::identity` module holds `StealthPlan` (there is no core
+   `Identity` type). Is the name `Identity` right for the stealth type?
+2. **`fingerprint(...)`.** The stealth builders' `fingerprint` and `seed` repeat core's
+   `LaunchOptionsBuilder::fingerprint` and `Fingerprint::seed`; this list removes them, so a
+   caller sets the fingerprint on the launch builder passed to `launch_options`. Agreed?
+3. **The `mimic` crate.** Rename the package `seleniumbase-rs-wire` (feature and facade
    path `wire`)?
-5. **Two wire words.** `WireMeasurement` (codec: measured data with provenance) and
-   `WireFormat` (mimic: what a client sends, built from a measurement and a fingerprint),
-   or one word for both?
-6. **The MITM proxy and the raw client builder.** Private plumbing behind a launch option
-   (`wire_format`), or public tools for people who drive a browser this crate does not
-   launch (then `MitmProxy` keeps its name and `impersonation_client` becomes
-   `wire_client`)?
-7. **Events.** Plain `tracing` events only, or also a typed `StealthEvent` that core's
-   plugin observer can receive?
+4. **Two wire words.** `WireMeasurement` (codec: measured data with provenance) and
+   `WireFormat` (mimic: what a client sends, built from a measurement and a core
+   `Fingerprint`), or one word for both?
+5. **Events.** Keep the typed `EventSink` with its `tracing` sink, or send stealth events
+   through `tracing` only?
 
 ## Phase 2 (after approval)
 
-Renames with `tokensave rename` (a dry run first), the merges as one core PR and one
-stealth PR (or per decision 3), every caller, the stealth API reference pages and the
-Stealth sections of the core docs, and the contract files (`mise run contracts`). Breaking
-changes, no shims.
+In this repository only: renames with `tokensave rename` (a dry run first), the
+build-on-core changes, the removals, every caller and test, the stealth API reference
+pages, and the contract files. Breaking changes, no shims. Core does not change.
 
 ## Every public item
 
 One row per item. "Copied" marks an item whose name or shape comes from stealthscraper-rs
-(with every member of such a type). Verdicts: keep, rename, merge (into the named core
-concept), private (plumbing), remove (core already does it); "export" when a public
-signature takes or returns the type but no path names it today.
+(with every member of such a type). Verdicts: keep, rename, build on core (the core type it
+should take or extend), remove (only duplicates core); "export" when a public signature
+takes or returns the type but no path names it today.
 
 ## Packages, features and the facade
 
@@ -186,7 +183,7 @@ signature takes or returns the type but no path names it today.
 | `seleniumbase-rs-stealth` (package) | package |  | keep |  | says what it adds to seleniumbase-rs |
 | `seleniumbase-rs-codec` (package) | package |  | keep |  | it encodes and decodes wire fingerprints |
 | `seleniumbase-rs-scrape` (package) | package |  | keep |  | the scraping runtime; the docs say scrape |
-| `seleniumbase-rs-mimic` (package) | package |  | rename | `seleniumbase-rs-wire` | "mimic" does not say what it holds: the HTTP client that sends a browser's wire format, the MITM proxy and the session that switches between them; the docs call this wire formats. Decision 4 |
+| `seleniumbase-rs-mimic` (package) | package |  | rename | `seleniumbase-rs-wire` | "mimic" does not say what it holds: the HTTP client that sends a browser's wire format, the MITM proxy and the session that switches between them; the docs call this wire formats. Decision 3 |
 
 ### (features)
 
@@ -195,7 +192,7 @@ signature takes or returns the type but no path names it today.
 | `default = ["scrape"]` | feature |  | keep |  |  |
 | `codec` | feature |  | keep |  | named after its crate |
 | `scrape` | feature |  | keep |  | named after its crate |
-| `mimic` | feature |  | rename | `wire` | follows the package. Decision 4 |
+| `mimic` | feature |  | rename | `wire` | follows the package. Decision 3 |
 | `test-fixtures` (codec) | feature |  | keep |  | says what it turns on |
 
 ### src/lib.rs
@@ -206,7 +203,7 @@ signature takes or returns the type but no path names it today.
 | `pub use seleniumbase_rs::evasion::*` | re-export |  | remove |  | gives every `evasion` item a second path at the root; core keeps them under `evasion::`, one path per item |
 | `codec` (`seleniumbase_rs_codec`) | re-export |  | keep |  |  |
 | `scrape` (`seleniumbase_rs_scrape`) | re-export |  | keep |  |  |
-| `mimic` (`seleniumbase_rs_mimic`) | re-export |  | rename | `wire` | follows the package. Decision 4 |
+| `mimic` (`seleniumbase_rs_mimic`) | re-export |  | rename | `wire` | follows the package. Decision 3 |
 
 ## codec (`seleniumbase_rs_stealth::codec`)
 
@@ -292,10 +289,10 @@ signature takes or returns the type but no path names it today.
 
 | Item | Kind | Copied | Verdict | Proposed | Why |
 |---|---|---|---|---|---|
-| `emulation_for_kind` | function | yes | rename | `wire_measurement_for` | **copied** (`for_kind`); follows `WireMeasurement` |
+| `emulation_for_kind` | function | yes | rename | `wire_measurement_for` | **copied** (`for_kind`); follows `WireMeasurement`, and takes core's `Browser` once `BrowserKind` goes |
 | `get_emulation` | function |  | rename | `wire_measurement` | follows `WireMeasurement`; no `get_` prefix (Rust API guidelines, C-GETTER) |
 | `measured_emulations` | function |  | rename | `wire_measurements` | follows `WireMeasurement` |
-| `Emulation` | struct | yes | rename | `WireMeasurement` | **copied** word (their identity's "emulation kind"); **clash** with core `sb_cdp::state::Emulation` (device emulation). It is one browser's measured TLS, HTTP/2 and header shape |
+| `Emulation` | struct | yes | rename | `WireMeasurement` | **copied** word (their identity's "emulation kind"); **clash** with core `sb_cdp::state::Emulation` (device emulation). It is one browser's measured TLS, HTTP/2 and header shape, which core does not have |
 | `Emulation.kind` | field | yes | keep |  | plain data name |
 | `Emulation.major` | field | yes | keep |  | plain data name |
 | `Emulation.full_version` | field | yes | keep |  | plain data name |
@@ -361,20 +358,20 @@ signature takes or returns the type but no path names it today.
 
 | Item | Kind | Copied | Verdict | Proposed | Why |
 |---|---|---|---|---|---|
-| `HeaderIdentity` | struct |  | merge | core `Fingerprint` (User-Agent, Accept-Language, client hints) | its values are the fingerprint's; a second copy drifts. The wire format reads them from the `Fingerprint` |
-| `HeaderIdentity.user_agent` | field |  | merge |  | goes with its type |
-| `HeaderIdentity.accept_language` | field |  | merge |  | goes with its type |
-| `HeaderIdentity.sec_ch_ua` | field |  | merge |  | goes with its type |
-| `HeaderIdentity.sec_ch_ua_mobile` | field |  | merge |  | goes with its type |
-| `HeaderIdentity.sec_ch_ua_platform` | field |  | merge |  | goes with its type |
-| `HeaderIdentity.cookie` | field |  | merge |  | goes with its type |
-| `HeaderIdentity.overrides` | field |  | merge |  | goes with its type |
-| `HeaderIdentity::new` | method |  | merge |  | goes with its type |
-| `HeaderIdentity::with_accept_language` | method |  | merge |  | goes with its type |
-| `HeaderIdentity::with_client_hints` | method |  | merge |  | goes with its type |
-| `HeaderIdentity::with_cookie` | method |  | merge |  | goes with its type |
-| `HeaderIdentity::with_override` | method |  | merge |  | goes with its type |
-| `HeaderIdentity::from_captured` | method |  | merge |  | goes with its type |
+| `HeaderIdentity` | struct |  | build on core | `ClientHeaders`, made from core `Fingerprint` (`from_fingerprint`); keeps the cookie and the overrides | User-Agent, Accept-Language and client hints are the fingerprint's claims; a parallel copy drifts from them |
+| `HeaderIdentity.user_agent` | field |  | build on core | read from core `Fingerprint` | the fingerprint's User-Agent |
+| `HeaderIdentity.accept_language` | field |  | build on core | read from core `Fingerprint` | the fingerprint's languages |
+| `HeaderIdentity.sec_ch_ua` | field |  | build on core | read from core `Fingerprint` | the fingerprint's client hints |
+| `HeaderIdentity.sec_ch_ua_mobile` | field |  | build on core | read from core `Fingerprint` | the fingerprint's client hints |
+| `HeaderIdentity.sec_ch_ua_platform` | field |  | build on core | read from core `Fingerprint` | the fingerprint's client hints |
+| `HeaderIdentity.cookie` | field |  | keep |  | plain data name |
+| `HeaderIdentity.overrides` | field |  | keep |  | plain data name |
+| `HeaderIdentity::new` | method |  | build on core | `from_fingerprint(&Fingerprint)` | the values come from core's `Fingerprint` |
+| `HeaderIdentity::with_accept_language` | method |  | build on core | set on core `Fingerprint` | the fingerprint's languages |
+| `HeaderIdentity::with_client_hints` | method |  | build on core | set on core `Fingerprint` | the fingerprint's client hints |
+| `HeaderIdentity::with_cookie` | method |  | keep |  | says what it does |
+| `HeaderIdentity::with_override` | method |  | keep |  | says what it does |
+| `HeaderIdentity::from_captured` | method |  | keep |  | says what it does |
 | `HeaderSpec` | struct |  | keep |  | a protocol or published-format term, not another library's API |
 | `HeaderSpec.document` | field |  | keep |  | plain data name |
 | `HeaderSpec.fetch` | field |  | keep |  | plain data name |
@@ -595,8 +592,8 @@ signature takes or returns the type but no path names it today.
 
 | Item | Kind | Copied | Verdict | Proposed | Why |
 |---|---|---|---|---|---|
-| `BrowserKind` | enum | yes | merge | core `browser::config::Browser` | **copied** (`BrowserKind` picks the JA4/HTTP/2 source); core's `Browser` enum already names browsers |
-| `BrowserKind::Chrome` | enum variant | yes | merge |  | goes with its type |
+| `BrowserKind` | enum | yes | remove | core `browser::config::Browser` | **copied** (`BrowserKind` picks the measured browser); it repeats core's `Browser` enum and adds nothing (one variant, `Chrome`) |
+| `BrowserKind::Chrome` | enum variant | yes | remove |  | goes with its type |
 
 ### `codec::h2_frames`
 
@@ -672,24 +669,24 @@ signature takes or returns the type but no path names it today.
 
 | Item | Kind | Copied | Verdict | Proposed | Why |
 |---|---|---|---|---|---|
-| `ChallengeKind` | enum | yes | keep |  | **copied** name, but no core type says what kind of block a page shows; becomes a field of `Challenge` |
+| `ChallengeKind` | enum | yes | keep |  | covers ground core does not: what kind of block a page or response shows |
 | `ChallengeKind::None` | enum variant | yes | rename | `Clear` | `ChallengeKind::None` reads like `Option::None`; `HttpVerdict::is_clear` already says clear |
 | `ChallengeKind::JsChallenge` | enum variant | yes | keep |  | names the case |
 | `ChallengeKind::Interactive` | enum variant | yes | keep |  | names the case |
 | `ChallengeKind::Blocked` | enum variant | yes | keep |  | names the case |
 | `ChallengeKind::RateLimited` | enum variant | yes | keep |  | names the case |
-| `Detection` | struct | yes | merge | `Challenge` (with `Evidence`) | **copied** (`detect`); with `Evidence` it repeats the result core's `sb_cdp::captcha` already gives (`Captcha`, `Evidence`). One `Challenge` type beside core's `Captcha` |
-| `Detection.kind` | field | yes | merge |  | goes with its type |
-| `Detection.evidence` | field | yes | merge |  | goes with its type |
-| `Evidence` | struct | yes | merge | `Challenge` | **clash** with core `sb_cdp::captcha::Evidence`; its fields join `Challenge` |
-| `Evidence.vendor` | field | yes | merge |  | goes with its type |
-| `Evidence.markers` | field | yes | merge |  | goes with its type |
-| `Evidence.widget` | field | yes | merge |  | goes with its type |
-| `ResponseView` | struct |  | private |  | plumbing that detection reads; callers ask `HttpResponse::challenge` or the page |
-| `ResponseView.url` | field |  | private |  | goes with its type (plumbing) |
-| `ResponseView.status` | field |  | private |  | goes with its type (plumbing) |
-| `ResponseView.headers` | field |  | private |  | goes with its type (plumbing) |
-| `ResponseView.body` | field |  | private |  | goes with its type (plumbing) |
+| `Detection` | struct | yes | keep |  | covers ground core does not: detection on HTTP responses as well as pages |
+| `Detection.kind` | field | yes | keep |  | plain data name |
+| `Detection.evidence` | field | yes | keep |  | plain data name |
+| `Evidence` | struct | yes | rename | `ChallengeEvidence` | **clash** with core `sb_cdp::captcha::Evidence`; its `widget` already builds on core's `Captcha` |
+| `Evidence.vendor` | field | yes | keep |  | plain data name |
+| `Evidence.markers` | field | yes | keep |  | plain data name |
+| `Evidence.widget` | field | yes | keep |  | already core's `Captcha` |
+| `ResponseView` | struct |  | keep |  | covers ground core does not |
+| `ResponseView.url` | field |  | keep |  | plain data name |
+| `ResponseView.status` | field |  | keep |  | plain data name |
+| `ResponseView.headers` | field |  | keep |  | plain data name |
+| `ResponseView.body` | field |  | keep |  | plain data name |
 | `Vendor` | enum |  | rename | `ProtectionVendor` | too generic as `scrape::Vendor`; these are bot-protection vendors, while the widget is core's `Captcha` (`Evidence.widget`) |
 | `Vendor::Cloudflare` | enum variant |  | keep |  | names the case |
 | `Vendor::DataDome` | enum variant |  | keep |  | names the case |
@@ -703,33 +700,33 @@ signature takes or returns the type but no path names it today.
 
 | Item | Kind | Copied | Verdict | Proposed | Why |
 |---|---|---|---|---|---|
-| `Action` | enum | yes | private | `Mitigation` | **copied**; the runtime acts on it, a SeleniumBase caller sets the policy and never matches on the step |
-| `Action::Proceed` | enum variant | yes | private |  | goes with its type (plumbing) |
-| `Action::Retry` | enum variant | yes | private |  | goes with its type (plumbing) |
-| `Action::Escalate` | enum variant | yes | private |  | goes with its type (plumbing) |
-| `Action::Solve` | enum variant | yes | private |  | goes with its type (plumbing) |
-| `Action::RotateEgress` | enum variant | yes | private |  | goes with its type (plumbing) |
-| `Action::RotateProfile` | enum variant | yes | private |  | goes with its type (plumbing) |
-| `Action::Cooldown` | enum variant | yes | private |  | goes with its type (plumbing) |
-| `Action::GiveUp` | enum variant | yes | private |  | goes with its type (plumbing) |
-| `AttemptContext` | struct |  | private |  | the input of `decide`, built by the runtime |
-| `AttemptContext.attempt` | field |  | private |  | goes with its type (plumbing) |
-| `AttemptContext.mode` | field |  | private |  | goes with its type (plumbing) |
-| `AttemptContext.consecutive_challenges` | field |  | private |  | goes with its type (plumbing) |
-| `AttemptContext.can_rotate_egress` | field |  | private |  | goes with its type (plumbing) |
-| `AttemptContext.can_escalate` | field |  | private |  | goes with its type (plumbing) |
-| `AttemptContext.now` | field |  | private |  | goes with its type (plumbing) |
+| `Action` | enum | yes | rename | `Mitigation` | too generic as a re-exported name; it is the step the `mitigation` module picks |
+| `Action::Proceed` | enum variant | yes | keep |  | names the case |
+| `Action::Retry` | enum variant | yes | keep |  | names the case |
+| `Action::Escalate` | enum variant | yes | keep |  | names the case |
+| `Action::Solve` | enum variant | yes | keep |  | names the case |
+| `Action::RotateEgress` | enum variant | yes | keep |  | names the case |
+| `Action::RotateProfile` | enum variant | yes | rename | `RotateFingerprint` | a profile in core is a browser profile (`profile_payloads`, the Browser profiles page); this draws a new fingerprint |
+| `Action::Cooldown` | enum variant | yes | keep |  | names the case |
+| `Action::GiveUp` | enum variant | yes | keep |  | names the case |
+| `AttemptContext` | struct |  | keep |  | covers ground core does not |
+| `AttemptContext.attempt` | field |  | keep |  | plain data name |
+| `AttemptContext.mode` | field |  | rename | `fetch_kind` | follows `Mode` → `FetchKind` |
+| `AttemptContext.consecutive_challenges` | field |  | keep |  | plain data name |
+| `AttemptContext.can_rotate_egress` | field |  | keep |  | plain data name |
+| `AttemptContext.can_escalate` | field |  | keep |  | plain data name |
+| `AttemptContext.now` | field |  | keep |  | plain data name |
 | `GiveUpReason` | enum |  | keep |  | says what it is; no core item of that name or concept |
 | `GiveUpReason::AttemptsExhausted` | enum variant |  | keep |  | names the case |
 | `GiveUpReason::Blocked` | enum variant |  | keep |  | names the case |
 | `GiveUpReason::NoEgressLeft` | enum variant |  | keep |  | names the case |
-| `MitigationPolicy` | struct | yes | merge | `ChallengePolicy` (holding core `SolveOptions` and `RetryPolicy`) | **copied**; repeats core's `SolveOptions` (`attempts`, `backoff`) and `RetryPolicy`. One `ChallengePolicy`, the `<Thing>Policy` pattern of `StealthPolicy`, with core's `SolveOptions` for the widget plus the rotate and cooldown rules |
-| `MitigationPolicy.max_challenge_attempts` | field | yes | merge | core `SolveOptions::attempts` | the same setting |
-| `MitigationPolicy.backoff` | field | yes | keep |  | already core's `RetryPolicy` |
-| `MitigationPolicy.rotate_egress_after` | field | yes | rename | `rotate_proxy_after` | egress becomes core's proxy route |
-| `MitigationPolicy.rotate_profile_after` | field | yes | rename | `rotate_fingerprint_after` | a profile in core is a browser profile |
-| `MitigationPolicy.block_cooldown_secs` | field | yes | keep |  | says what it does |
-| `MitigationPolicy::decide` | method | yes | private |  | the runtime calls it |
+| `MitigationPolicy` | struct | yes | build on core | hold a core `SolveOptions` (beside `backoff`, already core's `RetryPolicy`) | **copied**; covers ground core does not (rotate, escalate, cool down), but its attempt count repeats core `SolveOptions::attempts`. The name fits the `<Thing>Policy` pattern of `StealthPolicy` |
+| `MitigationPolicy.max_challenge_attempts` | field | yes | remove | core `SolveOptions::attempts` | the same setting, through the policy's `SolveOptions` |
+| `MitigationPolicy.backoff` | field | yes | keep |  | already builds on core's `RetryPolicy` |
+| `MitigationPolicy.rotate_egress_after` | field | yes | rename | `rotate_proxy_after` | core says proxy |
+| `MitigationPolicy.rotate_profile_after` | field | yes | rename | `rotate_fingerprint_after` | follows `RotateFingerprint` |
+| `MitigationPolicy.block_cooldown_secs` | field | yes | keep |  | plain data name |
+| `MitigationPolicy::decide` | method | yes | keep |  | covers ground core does not |
 | `Mode` | enum |  | rename | `FetchKind` | core says mode for engine modes (UC mode, CDP Mode, `DriverMode`); this says whether a request goes through the browser or over HTTP. `Route` is taken by `egress::route` |
 | `Mode::Browser` | enum variant |  | keep |  | names the case |
 | `Mode::Http` | enum variant |  | keep |  | names the case |
@@ -738,16 +735,16 @@ signature takes or returns the type but no path names it today.
 
 | Item | Kind | Copied | Verdict | Proposed | Why |
 |---|---|---|---|---|---|
-| `CountryCode` | struct | yes | merge | core `evasion::randomize` (the country of a `Locale`) | **copied** (`CountryCode` with a `Locale` table); core's `Locale` and `LocaleCode` already name locales |
-| `CountryCode::new` | method | yes | merge |  | goes with its type |
-| `CountryCode::as_str` | method | yes | merge |  | goes with its type |
-| `GeoResolver` | trait | yes | keep |  | **copied** port, but nothing in core finds a proxy's exit country; it becomes a launch option (decision 2: an extension trait here on core's `LaunchOptionsBuilder`, or a core field) |
+| `CountryCode` | struct | yes | keep |  | core's `LocaleCode` is a language tag; the ISO country of a proxy's exit is new ground |
+| `CountryCode::new` | method | yes | keep |  | says what it does |
+| `CountryCode::as_str` | method | yes | keep |  | says what it does |
+| `GeoResolver` | trait | yes | keep |  | **copied** port, but covers ground core does not: finding a proxy's exit country |
 | `GeoResolver::resolve` | method | yes | keep |  | says what it does |
-| `LocaleExt` | trait | yes | merge | inherent methods of core `Locale` | **copied** (the `Locale` table); an extension trait exists only because `Locale` lives in core |
-| `LocaleExt::for_country` | method | yes | merge | `Locale::for_country` | with the trait |
-| `LocaleExt::by_tag` | method | yes | merge | `Locale::by_tag` | with the trait |
-| `LocaleExt::localize` | method | yes | merge | `Locale::localize` | with the trait |
-| `StaticGeoResolver` | struct |  | private |  | the default resolver: a caller who wants it passes nothing |
+| `LocaleExt` | trait | yes | keep |  | already builds on core's `Locale`, the shape this note asks for |
+| `LocaleExt::for_country` | method | yes | keep |  | extends core's `Locale` |
+| `LocaleExt::by_tag` | method | yes | keep |  | extends core's `Locale` |
+| `LocaleExt::localize` | method | yes | keep |  | extends core's `Locale` and `Fingerprint` |
+| `StaticGeoResolver` | struct |  | keep |  | the built-in `GeoResolver` |
 | `GeoError` | enum |  | keep, export |  | keep the name and export it: a public signature takes or returns it, but callers cannot name it |
 | `GeoError::InvalidCountry` | enum variant |  | keep |  | names the case |
 | `GeoError::NoLocale` | enum variant |  | keep |  | names the case |
@@ -755,215 +752,215 @@ signature takes or returns the type but no path names it today.
 | `GeoInfo` | struct |  | keep, export |  | keep the name and export it: a public signature takes or returns it, but callers cannot name it |
 | `GeoInfo.country` | field |  | keep |  | plain data name |
 | `GeoInfo.timezone` | field |  | keep |  | plain data name |
-| `GeoInfo.coordinates` | field |  | keep |  | make its type core's `Geolocation` instead of `(f64, f64)` |
+| `GeoInfo.coordinates` | field |  | build on core | core `Geolocation` | core's type for a latitude and longitude, instead of `(f64, f64)` |
 
 ### `scrape::egress::pool`
 
 | Item | Kind | Copied | Verdict | Proposed | Why |
 |---|---|---|---|---|---|
-| `ProxyPool` | struct | yes | merge | core `config::proxy_list::ProxyList` | **copied** (`ProxyPool` with `RotationStrategy`); core already has `ProxyList`, `--proxy-list` and `SB_PROXY_LIST`, and picks from it |
-| `ProxyPool::new` | method | yes | merge |  | goes with its type |
-| `ProxyPool::with_geo_proxies` | method | yes | merge | `ProxyList::from_geo_proxies` | a constructor; core says `from_*` (`ProxyList::from_file`) |
-| `ProxyPool::quarantine` | method | yes | merge |  | goes with its type |
-| `ProxyPool::pick` | method | yes | merge |  | goes with its type |
-| `ProxyPool::pick_in` | method | yes | merge |  | goes with its type |
-| `ProxyPool::pick_other` | method | yes | merge |  | goes with its type |
-| `ProxyPool::report` | method | yes | merge |  | goes with its type |
-| `RotationStrategy` | enum | yes | merge | core `ProxyList` (its pick order) | **copied**; goes with `ProxyPool` |
-| `RotationStrategy::RoundRobin` | enum variant | yes | merge |  | goes with its type |
-| `RotationStrategy::Random` | enum variant | yes | merge |  | goes with its type |
-| `RotationStrategy::LeastFailures` | enum variant | yes | merge |  | goes with its type |
-| `RotationStrategy::StickyPerSite` | enum variant | yes | merge |  | goes with its type |
-| `EgressOutcome` | enum |  | merge | core `ProxyList` (what `report` records) | goes with `ProxyPool` |
-| `EgressOutcome::Success` | enum variant |  | merge |  | goes with its type |
-| `EgressOutcome::ConnectError` | enum variant |  | merge |  | goes with its type |
-| `EgressOutcome::Challenged` | enum variant |  | merge |  | goes with its type |
-| `EgressOutcome::Blocked` | enum variant |  | merge |  | goes with its type |
+| `ProxyPool` | struct | yes | build on core | built from core `ProxyList` (`ProxyPool::from_list`) | **copied** (`ProxyPool`); covers ground core does not (strategies, quarantine, per-site stickiness, countries), but its proxies should come from core's `ProxyList` (`--proxy-list`, `SB_PROXY_LIST`) instead of a parallel list. The name fits core's `BrowserPool` |
+| `ProxyPool::new` | method | yes | build on core | `from_list(ProxyList, RotationStrategy)` | takes core's list |
+| `ProxyPool::with_geo_proxies` | method | yes | rename | `from_geo_proxies` | a constructor; core says `from_*` (`ProxyList::from_file`) |
+| `ProxyPool::quarantine` | method | yes | keep |  | says what it does |
+| `ProxyPool::pick` | method | yes | keep |  | says what it does |
+| `ProxyPool::pick_in` | method | yes | keep |  | says what it does |
+| `ProxyPool::pick_other` | method | yes | keep |  | says what it does |
+| `ProxyPool::report` | method | yes | keep |  | says what it does |
+| `RotationStrategy` | enum | yes | keep |  | **copied** name, but covers ground core does not: core's `ProxyList` picks round-robin or at random only |
+| `RotationStrategy::RoundRobin` | enum variant | yes | keep |  | names the case |
+| `RotationStrategy::Random` | enum variant | yes | keep |  | names the case |
+| `RotationStrategy::LeastFailures` | enum variant | yes | keep |  | names the case |
+| `RotationStrategy::StickyPerSite` | enum variant | yes | keep |  | names the case |
+| `EgressOutcome` | enum |  | rename, export | `ProxyOutcome` | follows `ProxyRoute` |
+| `EgressOutcome::Success` | enum variant |  | keep |  | names the case |
+| `EgressOutcome::ConnectError` | enum variant |  | keep |  | names the case |
+| `EgressOutcome::Challenged` | enum variant |  | keep |  | names the case |
+| `EgressOutcome::Blocked` | enum variant |  | keep |  | names the case |
 
 ### `scrape::egress::redact`
 
 | Item | Kind | Copied | Verdict | Proposed | Why |
 |---|---|---|---|---|---|
-| `RedactedUrl` | struct | yes | private |  | **copied** (credential redaction); plumbing for log lines. Core's `Proxy` and `ContextRoute` already keep passwords out of `Debug` |
-| `RedactedUrl::new` | method | yes | private |  | goes with its type (plumbing) |
-| `RedactedUrl::placeholder` | method | yes | private |  | goes with its type (plumbing) |
-| `RedactedUrl::as_str` | method | yes | private |  | goes with its type (plumbing) |
-| `Secret` | struct | yes | merge | core `common` (one `Secret`) | **copied** (credential redaction); one `Secret` for every password the project holds. Core security code has its own owner |
-| `Secret::new` | method | yes | merge |  | goes with its type |
-| `Secret::expose` | method | yes | merge |  | goes with its type |
+| `RedactedUrl` | struct | yes | keep |  | covers ground core does not: core has no redacted URL type |
+| `RedactedUrl::new` | method | yes | keep |  | says what it does |
+| `RedactedUrl::placeholder` | method | yes | keep |  | says what it does |
+| `RedactedUrl::as_str` | method | yes | keep |  | says what it does |
+| `Secret` | struct | yes | keep |  | covers ground core does not: core's `Proxy` hides its password in its own `Debug`, with no secret type |
+| `Secret::new` | method | yes | keep |  | says what it does |
+| `Secret::expose` | method | yes | keep |  | says what it does |
 
 ### `scrape::egress::route`
 
 | Item | Kind | Copied | Verdict | Proposed | Why |
 |---|---|---|---|---|---|
-| `EgressKey` | struct |  | private |  | the pool's key for a proxy; once the pool is `ProxyList`, callers never build one |
-| `EgressKey.scheme` | field |  | private |  | goes with its type (plumbing) |
-| `EgressKey.host` | field |  | private |  | goes with its type (plumbing) |
-| `EgressKey.port` | field |  | private |  | goes with its type (plumbing) |
-| `EgressKey.country` | field |  | private |  | goes with its type (plumbing) |
-| `EgressRef` | struct | yes | merge | core `ContextRoute` (a `Proxy` and its bypass list) plus the exit country | **copied** (`EgressRef`); core's `ContextRoute` is the proxy a context routes its tabs through, kept so plain HTTP requests take the same route: the same concept |
-| `EgressRef::parse` | method | yes | merge |  | goes with its type |
-| `EgressRef::key` | method | yes | merge |  | goes with its type |
-| `EgressRef::proxy` | method | yes | merge | `ContextRoute.proxy` | goes with its type |
-| `EgressError` | enum |  | merge | the error of core `Proxy::parse` | parses the same proxy URL |
-| `EgressError::Scheme` | enum variant |  | merge |  | goes with its type |
-| `EgressError::Address` | enum variant |  | merge |  | goes with its type |
+| `EgressKey` | struct |  | rename | `ProxyKey` | core says proxy |
+| `EgressKey.scheme` | field |  | keep |  | plain data name |
+| `EgressKey.host` | field |  | keep |  | plain data name |
+| `EgressKey.port` | field |  | keep |  | plain data name |
+| `EgressKey.country` | field |  | keep |  | plain data name |
+| `EgressRef` | struct | yes | build on core | `ProxyRoute`, on core `Proxy` and `ContextRoute`, plus the exit country | **copied** (`EgressRef`); it already wraps core's `Proxy`, and core's `ContextRoute` is the same route kept for plain HTTP requests. The name should be core's word |
+| `EgressRef::parse` | method | yes | keep |  | says what it does |
+| `EgressRef::key` | method | yes | keep |  | says what it does |
+| `EgressRef::proxy` | method | yes | keep |  | says what it does |
+| `EgressError` | enum |  | rename, export | `ProxyRouteError` | follows `ProxyRoute` |
+| `EgressError::Scheme` | enum variant |  | keep |  | names the case |
+| `EgressError::Address` | enum variant |  | keep |  | names the case |
 
 ### `scrape::error`
 
 | Item | Kind | Copied | Verdict | Proposed | Why |
 |---|---|---|---|---|---|
 | `ScrapeError` | enum |  | keep |  | the crate's error, as core's `SeleniumBaseError` |
-| `ScrapeError::Egress` | enum variant |  | rename | `Proxy` | egress becomes core's proxy route |
+| `ScrapeError::Egress` | enum variant |  | rename | `Proxy` | core says proxy |
 | `ScrapeError::Geo` | enum variant |  | keep |  | names the case |
-| `ScrapeError::State` | enum variant |  | rename | `Session` | the store becomes core's `SessionStore` |
-| `ScrapeError::Identity` | enum variant |  | merge | `ScrapeError::Session` | the identity becomes core's `Session` |
+| `ScrapeError::State` | enum variant |  | rename | `Ledger` | follows `StateStore` → `Ledger` |
+| `ScrapeError::Identity` | enum variant |  | keep |  | names the case |
 | `ScrapeError::Fingerprint` | enum variant |  | keep |  | names the case |
 | `ScrapeError::Unsolved` | enum variant |  | keep |  | names the case |
 | `ScrapeError::GaveUp` | enum variant |  | keep |  | names the case |
 | `ScrapeError::CoolingDown` | enum variant |  | keep |  | names the case |
 | `ScrapeError::Navigation` | enum variant |  | keep |  | names the case |
-| `ScrapeError::NoEgressAvailable` | enum variant |  | rename | `NoProxyLeft` | same |
+| `ScrapeError::NoEgressAvailable` | enum variant |  | rename | `NoProxyLeft` | core says proxy |
 | `ScrapeError::Browser` | enum variant |  | keep |  | names the case |
 
 ### `scrape::jar::store`
 
 | Item | Kind | Copied | Verdict | Proposed | Why |
 |---|---|---|---|---|---|
-| `CookieJar` | struct | yes | private |  | **copied** (RFC 6265 jar); the HTTP session's plumbing. Callers see cookies as core `Cookie`s in a core `Session` |
-| `CookieJar::new` | method | yes | private |  | goes with its type (plumbing) |
-| `CookieJar::len` | method | yes | private |  | goes with its type (plumbing) |
-| `CookieJar::is_empty` | method | yes | private |  | goes with its type (plumbing) |
-| `CookieJar::cookies` | method | yes | private |  | goes with its type (plumbing) |
-| `CookieJar::store` | method | yes | private |  | goes with its type (plumbing) |
-| `CookieJar::header_for` | method | yes | private |  | goes with its type (plumbing) |
-| `CookieJar::from_cdp` | method | yes | private |  | goes with its type (plumbing) |
-| `CookieJar::to_cdp` | method | yes | private |  | goes with its type (plumbing) |
-| `CookieJar::expiry_of` | method | yes | private |  | goes with its type (plumbing) |
-| `CookieJar::remove_expired` | method | yes | private |  | goes with its type (plumbing) |
-| `StoredCookie` | struct |  | private |  | goes with `CookieJar` |
-| `StoredCookie.name` | field |  | private |  | goes with its type (plumbing) |
-| `StoredCookie.value` | field |  | private |  | goes with its type (plumbing) |
-| `StoredCookie.domain` | field |  | private |  | goes with its type (plumbing) |
-| `StoredCookie.host_only` | field |  | private |  | goes with its type (plumbing) |
-| `StoredCookie.path` | field |  | private |  | goes with its type (plumbing) |
-| `StoredCookie.expires` | field |  | private |  | goes with its type (plumbing) |
-| `StoredCookie.secure` | field |  | private |  | goes with its type (plumbing) |
-| `StoredCookie.http_only` | field |  | private |  | goes with its type (plumbing) |
-| `StoredCookie.same_site` | field |  | private |  | goes with its type (plumbing) |
-| `StoredCookie.created` | field |  | private |  | goes with its type (plumbing) |
-| `StoredCookie.last_access` | field |  | private |  | goes with its type (plumbing) |
-| `StoredCookie::is_expired` | method |  | private |  | goes with its type (plumbing) |
-| `StoredCookie::size_bytes` | method |  | private |  | goes with its type (plumbing) |
-| `StoredCookie::same_identity` | method |  | private |  | goes with its type (plumbing) |
-| `StoreOutcome` | enum |  | private |  | goes with `CookieJar` |
-| `StoreOutcome::Stored` | enum variant |  | private |  | goes with its type (plumbing) |
-| `StoreOutcome::Replaced` | enum variant |  | private |  | goes with its type (plumbing) |
-| `StoreOutcome::Deleted` | enum variant |  | private |  | goes with its type (plumbing) |
-| `StoreOutcome::Ignored` | enum variant |  | private |  | goes with its type (plumbing) |
-| `SiteContext` | enum |  | private |  | goes with `CookieJar` |
-| `SiteContext::SameSite` | enum variant |  | private |  | goes with its type (plumbing) |
-| `SiteContext::CrossSite` | enum variant |  | private |  | goes with its type (plumbing) |
-| `IgnoreReason` | enum |  | private |  | goes with `CookieJar` |
-| `IgnoreReason::Malformed` | enum variant |  | private |  | goes with its type (plumbing) |
-| `IgnoreReason::DomainMismatch` | enum variant |  | private |  | goes with its type (plumbing) |
-| `IgnoreReason::PublicSuffix` | enum variant |  | private |  | goes with its type (plumbing) |
-| `IgnoreReason::IpLiteralDomain` | enum variant |  | private |  | goes with its type (plumbing) |
-| `IgnoreReason::SecureFromInsecure` | enum variant |  | private |  | goes with its type (plumbing) |
-| `IgnoreReason::HostPrefix` | enum variant |  | private |  | goes with its type (plumbing) |
-| `IgnoreReason::SecurePrefix` | enum variant |  | private |  | goes with its type (plumbing) |
-| `IgnoreReason::TooLarge` | enum variant |  | private |  | goes with its type (plumbing) |
-| `IgnoreReason::SameSiteNoneInsecure` | enum variant |  | private |  | goes with its type (plumbing) |
-| `IgnoreReason::UnsupportedUrl` | enum variant |  | private |  | goes with its type (plumbing) |
+| `CookieJar` | struct | yes | keep |  | **copied** (RFC 6265 jar), but covers ground core does not (an HTTP cookie jar) and already builds on core's `Cookie` (`from_cdp`, `to_cdp`) |
+| `CookieJar::new` | method | yes | keep |  | says what it does |
+| `CookieJar::len` | method | yes | keep |  | says what it does |
+| `CookieJar::is_empty` | method | yes | keep |  | says what it does |
+| `CookieJar::cookies` | method | yes | keep |  | says what it does |
+| `CookieJar::store` | method | yes | rename | `apply_set_cookie` | store means a persistent store in core (`SessionStore`) and here (`StateStore`); this applies one Set-Cookie header |
+| `CookieJar::header_for` | method | yes | keep |  | says what it does |
+| `CookieJar::from_cdp` | method | yes | keep |  | says what it does |
+| `CookieJar::to_cdp` | method | yes | keep |  | says what it does |
+| `CookieJar::expiry_of` | method | yes | keep |  | says what it does |
+| `CookieJar::remove_expired` | method | yes | keep |  | says what it does |
+| `StoredCookie` | struct |  | keep, export |  | keep the name and export it: a public signature takes or returns it, but callers cannot name it |
+| `StoredCookie.name` | field |  | keep |  | plain data name |
+| `StoredCookie.value` | field |  | keep |  | plain data name |
+| `StoredCookie.domain` | field |  | keep |  | plain data name |
+| `StoredCookie.host_only` | field |  | keep |  | plain data name |
+| `StoredCookie.path` | field |  | keep |  | plain data name |
+| `StoredCookie.expires` | field |  | keep |  | plain data name |
+| `StoredCookie.secure` | field |  | keep |  | plain data name |
+| `StoredCookie.http_only` | field |  | keep |  | plain data name |
+| `StoredCookie.same_site` | field |  | keep |  | plain data name |
+| `StoredCookie.created` | field |  | keep |  | plain data name |
+| `StoredCookie.last_access` | field |  | keep |  | plain data name |
+| `StoredCookie::is_expired` | method |  | keep |  | says what it does |
+| `StoredCookie::size_bytes` | method |  | keep |  | says what it does |
+| `StoredCookie::same_identity` | method |  | keep |  | says what it does |
+| `StoreOutcome` | enum |  | rename, export | `SetCookieOutcome` | follows `apply_set_cookie` |
+| `StoreOutcome::Stored` | enum variant |  | keep |  | names the case |
+| `StoreOutcome::Replaced` | enum variant |  | keep |  | names the case |
+| `StoreOutcome::Deleted` | enum variant |  | keep |  | names the case |
+| `StoreOutcome::Ignored` | enum variant |  | keep |  | names the case |
+| `SiteContext` | enum |  | keep, export |  | keep the name and export it: a public signature takes or returns it, but callers cannot name it |
+| `SiteContext::SameSite` | enum variant |  | keep |  | names the case |
+| `SiteContext::CrossSite` | enum variant |  | keep |  | names the case |
+| `IgnoreReason` | enum |  | keep, export |  | keep the name and export it: a public signature takes or returns it, but callers cannot name it |
+| `IgnoreReason::Malformed` | enum variant |  | keep |  | names the case |
+| `IgnoreReason::DomainMismatch` | enum variant |  | keep |  | names the case |
+| `IgnoreReason::PublicSuffix` | enum variant |  | keep |  | names the case |
+| `IgnoreReason::IpLiteralDomain` | enum variant |  | keep |  | names the case |
+| `IgnoreReason::SecureFromInsecure` | enum variant |  | keep |  | names the case |
+| `IgnoreReason::HostPrefix` | enum variant |  | keep |  | names the case |
+| `IgnoreReason::SecurePrefix` | enum variant |  | keep |  | names the case |
+| `IgnoreReason::TooLarge` | enum variant |  | keep |  | names the case |
+| `IgnoreReason::SameSiteNoneInsecure` | enum variant |  | keep |  | names the case |
+| `IgnoreReason::UnsupportedUrl` | enum variant |  | keep |  | names the case |
 
 ### `scrape::ledger::events`
 
 | Item | Kind | Copied | Verdict | Proposed | Why |
 |---|---|---|---|---|---|
-| `CollectingEventSink` | struct |  | remove |  | a test subscriber collects `tracing` events |
-| `CollectingEventSink::new` | method |  | remove |  | goes with its type |
-| `CollectingEventSink::events` | method |  | remove |  | goes with its type |
-| `CollectingEventSink::take` | method |  | remove |  | goes with its type |
-| `CollectingEventSink::len` | method |  | remove |  | goes with its type |
-| `CollectingEventSink::is_empty` | method |  | remove |  | goes with its type |
-| `EventSink` | trait | yes | remove |  | **copied** (`EventSink`); core reports through `tracing`; a subscriber already does what a sink does |
-| `EventSink::emit` | method | yes | remove |  | goes with its type |
-| `NoopEventSink` | struct | yes | remove |  | **copied** (`NoopEventSink`); no subscriber is the no-op |
-| `ScraperEvent` | enum | yes | private | `StealthEvent`, sent as `tracing` events | **copied** (`ScraperEvent`); core reports through `tracing`; a subscriber already does what a sink does. Decision 7 |
-| `ScraperEvent::Request` | enum variant | yes | private |  | goes with its type (plumbing) |
-| `ScraperEvent::ChallengeDetected` | enum variant | yes | private |  | goes with its type (plumbing) |
-| `ScraperEvent::ChallengeSolved` | enum variant | yes | private |  | goes with its type (plumbing) |
-| `ScraperEvent::ActionChosen` | enum variant | yes | private |  | goes with its type (plumbing) |
-| `ScraperEvent::ModeChanged` | enum variant | yes | private |  | goes with its type (plumbing) |
-| `ScraperEvent::EgressRotated` | enum variant | yes | private |  | goes with its type (plumbing) |
-| `ScraperEvent::ProfileRotated` | enum variant | yes | private |  | goes with its type (plumbing) |
-| `ScraperEvent::ClearanceExpiring` | enum variant | yes | private |  | goes with its type (plumbing) |
-| `ScraperEvent::CooldownStarted` | enum variant | yes | private |  | goes with its type (plumbing) |
-| `ScraperEvent::IdentityExported` | enum variant | yes | private |  | goes with its type (plumbing) |
-| `ScraperEvent::IdentityRestored` | enum variant | yes | private |  | goes with its type (plumbing) |
-| `ScraperEvent::name` | method | yes | private |  | goes with its type (plumbing) |
+| `CollectingEventSink` | struct |  | keep |  | follows `EventSink` |
+| `CollectingEventSink::new` | method |  | keep |  | says what it does |
+| `CollectingEventSink::events` | method |  | keep |  | says what it does |
+| `CollectingEventSink::take` | method |  | keep |  | says what it does |
+| `CollectingEventSink::len` | method |  | keep |  | says what it does |
+| `CollectingEventSink::is_empty` | method |  | keep |  | says what it does |
+| `EventSink` | trait | yes | keep |  | **copied** name, but covers ground core does not: a typed stream of stealth events. Decision 5 |
+| `EventSink::emit` | method | yes | keep |  | says what it does |
+| `NoopEventSink` | struct | yes | keep |  | follows `EventSink` |
+| `ScraperEvent` | enum | yes | rename | `ScrapeEvent` | the crate and its docs say scrape, not scraper |
+| `ScraperEvent::Request` | enum variant | yes | keep |  | names the case |
+| `ScraperEvent::ChallengeDetected` | enum variant | yes | keep |  | names the case |
+| `ScraperEvent::ChallengeSolved` | enum variant | yes | keep |  | names the case |
+| `ScraperEvent::ActionChosen` | enum variant | yes | keep |  | names the case |
+| `ScraperEvent::ModeChanged` | enum variant | yes | rename | `FetchKindChanged` | follows `FetchKind` |
+| `ScraperEvent::EgressRotated` | enum variant | yes | rename | `ProxyRotated` | core says proxy |
+| `ScraperEvent::ProfileRotated` | enum variant | yes | rename | `FingerprintRotated` | follows `RotateFingerprint` |
+| `ScraperEvent::ClearanceExpiring` | enum variant | yes | keep |  | names the case |
+| `ScraperEvent::CooldownStarted` | enum variant | yes | keep |  | names the case |
+| `ScraperEvent::IdentityExported` | enum variant | yes | keep |  | names the case |
+| `ScraperEvent::IdentityRestored` | enum variant | yes | keep |  | names the case |
+| `ScraperEvent::name` | method | yes | keep |  | says what it does |
 
 ### `scrape::ledger::state`
 
 | Item | Kind | Copied | Verdict | Proposed | Why |
 |---|---|---|---|---|---|
-| `DomainState` | struct | yes | merge | `SiteRecord`, kept by core `SessionStore` | **copied** (`DomainState`); **clash** with core `sb_cdp::state`. One site's challenge history |
-| `DomainState.site` | field | yes | merge |  | goes with its type |
-| `DomainState.successes` | field | yes | merge |  | goes with its type |
-| `DomainState.challenges` | field | yes | merge |  | goes with its type |
-| `DomainState.blocks` | field | yes | merge |  | goes with its type |
-| `DomainState.consecutive_challenges` | field | yes | merge |  | goes with its type |
-| `DomainState.last_challenge` | field | yes | merge |  | goes with its type |
-| `DomainState.last_seen` | field | yes | merge |  | goes with its type |
-| `DomainState.cooldown_until` | field | yes | merge |  | goes with its type |
-| `DomainState.preferred_mode` | field | yes | merge |  | goes with its type |
-| `DomainState.last_egress` | field | yes | merge |  | goes with its type |
-| `DomainState::new` | method | yes | merge |  | goes with its type |
-| `DomainState::record` | method | yes | merge |  | goes with its type |
-| `DomainState::start_cooldown` | method | yes | merge |  | goes with its type |
-| `DomainState::in_cooldown` | method | yes | merge |  | goes with its type |
-| `InMemoryStateStore` | struct | yes | merge | core `SessionStore` | **copied**; `SessionStore` is the in-memory store |
-| `InMemoryStateStore::new` | method | yes | merge |  | goes with its type |
-| `StateStore` | trait | yes | merge | core `SessionStore` | **copied** (`StateStore` port); core's `SessionStore` already keeps a run's saved state by name (`save`, `load`, `prune_expired`) |
-| `StateStore::get` | method | yes | merge |  | goes with its type |
-| `StateStore::put` | method | yes | merge |  | goes with its type |
-| `StateStore::remove` | method | yes | merge |  | goes with its type |
-| `StateStore::sites` | method | yes | merge |  | goes with its type |
-| `StateError` | enum |  | merge | `ScrapeError::Session` | goes with the store |
-| `StateError::Io` | enum variant |  | merge |  | goes with its type |
-| `StateError::Corrupt` | enum variant |  | merge |  | goes with its type |
-| `StateError::Schema` | enum variant |  | merge |  | goes with its type |
-| `StateError::TooLarge` | enum variant |  | merge |  | goes with its type |
+| `DomainState` | struct | yes | rename | `SiteRecord` | **clash**: core `sb_cdp::state` is a page's cookies and storage; this is one site's challenge history, which the module calls the ledger |
+| `DomainState.site` | field | yes | keep |  | plain data name |
+| `DomainState.successes` | field | yes | keep |  | plain data name |
+| `DomainState.challenges` | field | yes | keep |  | plain data name |
+| `DomainState.blocks` | field | yes | keep |  | plain data name |
+| `DomainState.consecutive_challenges` | field | yes | keep |  | plain data name |
+| `DomainState.last_challenge` | field | yes | keep |  | plain data name |
+| `DomainState.last_seen` | field | yes | keep |  | plain data name |
+| `DomainState.cooldown_until` | field | yes | keep |  | plain data name |
+| `DomainState.preferred_mode` | field | yes | rename | `preferred_kind` | follows `FetchKind` |
+| `DomainState.last_egress` | field | yes | rename | `last_proxy` | core says proxy |
+| `DomainState::new` | method | yes | keep |  | says what it does |
+| `DomainState::record` | method | yes | keep |  | says what it does |
+| `DomainState::start_cooldown` | method | yes | keep |  | says what it does |
+| `DomainState::in_cooldown` | method | yes | keep |  | says what it does |
+| `InMemoryStateStore` | struct | yes | rename | `InMemoryLedger` | follows `Ledger` |
+| `InMemoryStateStore::new` | method | yes | keep |  | says what it does |
+| `StateStore` | trait | yes | rename | `Ledger` | **clash** with core `sb_cdp::state` (see `DomainState`); the module is already `ledger` |
+| `StateStore::get` | method | yes | keep |  | says what it does |
+| `StateStore::put` | method | yes | keep |  | says what it does |
+| `StateStore::remove` | method | yes | keep |  | says what it does |
+| `StateStore::sites` | method | yes | keep |  | says what it does |
+| `StateError` | enum |  | rename, export | `LedgerError` | follows `Ledger` |
+| `StateError::Io` | enum variant |  | keep |  | names the case |
+| `StateError::Corrupt` | enum variant |  | keep |  | names the case |
+| `StateError::Schema` | enum variant |  | keep |  | names the case |
+| `StateError::TooLarge` | enum variant |  | keep |  | names the case |
 
 ### `scrape::passport::identity`
 
 | Item | Kind | Copied | Verdict | Proposed | Why |
 |---|---|---|---|---|---|
-| `EmulationRef` | struct |  | rename | `WireMeasurementRef` | follows codec `WireMeasurement`; becomes a field of the `Session` |
+| `EmulationRef` | struct |  | rename | `WireMeasurementRef` | follows codec `WireMeasurement` |
 | `EmulationRef.kind` | field |  | keep |  | plain data name |
 | `EmulationRef.major` | field |  | keep |  | plain data name |
 | `EmulationRef.os` | field |  | keep |  | plain data name |
-| `IdentityError` | enum |  | merge | `ScrapeError::Session` | the identity becomes core's `Session` |
-| `IdentityError::EgressMismatch` | enum variant |  | merge |  | goes with its type |
-| `IdentityError::Schema` | enum variant |  | merge |  | goes with its type |
-| `IdentityError::Incoherent` | enum variant |  | merge |  | goes with its type |
-| `IdentityError::EmulationMismatch` | enum variant |  | merge |  | goes with its type |
-| `StealthIdentity` | struct | yes | merge | core `Session` (plus fingerprint, wire measurement, route and clearances) | **copied** (`StealthIdentity`); core's `Session` is a browser's login state (cookies, storage) and `SessionStore` saves it, and `BrowserScraper` already has both `export_identity` and `save_session`. One concept: the saved `Session`. Decision 1 |
-| `StealthIdentity.schema` | field | yes | merge |  | goes with its type |
-| `StealthIdentity.fingerprint` | field | yes | merge |  | goes with its type |
-| `StealthIdentity.emulation` | field | yes | merge |  | goes with its type |
-| `StealthIdentity.cookies` | field | yes | merge |  | goes with its type |
-| `StealthIdentity.accept_ch` | field | yes | merge |  | goes with its type |
-| `StealthIdentity.egress` | field | yes | merge |  | goes with its type |
-| `StealthIdentity.clearances` | field | yes | merge |  | goes with its type |
-| `StealthIdentity.created_at` | field | yes | merge |  | goes with its type |
-| `StealthIdentity::new` | method | yes | merge |  | goes with its type |
-| `StealthIdentity::verify` | method | yes | merge |  | goes with its type |
-| `StealthIdentity::refresh_clearances` | method | yes | merge |  | goes with its type |
-| `StealthIdentity::clearance_for` | method | yes | merge |  | goes with its type |
-| `StealthIdentity::check_egress` | method | yes | merge |  | goes with its type |
-| `StealthIdentity::check_emulation` | method | yes | merge |  | goes with its type |
-| `Clearance` | struct |  | keep, export |  | becomes part of the `Session`; nothing in core holds a challenge clearance |
+| `IdentityError` | enum |  | keep |  | follows `Identity` |
+| `IdentityError::EgressMismatch` | enum variant |  | rename | `ProxyMismatch` | core says proxy |
+| `IdentityError::Schema` | enum variant |  | keep |  | names the case |
+| `IdentityError::Incoherent` | enum variant |  | keep |  | names the case |
+| `IdentityError::EmulationMismatch` | enum variant |  | rename | `WireMeasurementMismatch` | follows `WireMeasurement` |
+| `StealthIdentity` | struct | yes | build on core | `Identity`, holding core `Session` (cookies, storage) and `Fingerprint`, plus the wire measurement, proxy route and clearances | **copied** (`StealthIdentity`); core's `Session` is a browser's login state and core's `Fingerprint` its claims. The identity should be made of them and add only what is stealth's. Decision 1 |
+| `StealthIdentity.schema` | field | yes | keep |  | plain data name |
+| `StealthIdentity.fingerprint` | field | yes | keep |  | already core's `Fingerprint` |
+| `StealthIdentity.emulation` | field | yes | rename | `wire_measurement` | follows `WireMeasurementRef` |
+| `StealthIdentity.cookies` | field | yes | build on core | core `Session` | cookies (and storage) as core keeps them |
+| `StealthIdentity.accept_ch` | field | yes | keep |  | plain data name |
+| `StealthIdentity.egress` | field | yes | rename | `proxy_route` | follows `ProxyRoute` |
+| `StealthIdentity.clearances` | field | yes | keep |  | plain data name |
+| `StealthIdentity.created_at` | field | yes | keep |  | plain data name |
+| `StealthIdentity::new` | method | yes | keep |  | says what it does |
+| `StealthIdentity::verify` | method | yes | rename | `validate` | core `Fingerprint::validate`; `HeaderSpec`, `ImpersonationProfile` and `HttpOptions` here say validate too |
+| `StealthIdentity::refresh_clearances` | method | yes | keep |  | says what it does |
+| `StealthIdentity::clearance_for` | method | yes | keep |  | says what it does |
+| `StealthIdentity::check_egress` | method | yes | rename | `check_proxy` | core says proxy |
+| `StealthIdentity::check_emulation` | method | yes | rename | `check_wire_measurement` | follows `WireMeasurement` |
+| `Clearance` | struct |  | keep, export |  | covers ground core does not: a challenge clearance |
 | `Clearance.site` | field |  | keep |  | plain data name |
 | `Clearance.vendor` | field |  | keep |  | plain data name |
 | `Clearance.cookie` | field |  | keep |  | plain data name |
@@ -973,108 +970,108 @@ signature takes or returns the type but no path names it today.
 
 | Item | Kind | Copied | Verdict | Proposed | Why |
 |---|---|---|---|---|---|
-| `SessionPolicy` | struct | yes | rename | `EscalationPolicy` | **copied** (`SessionPolicy`, same fields); nothing in core decides HTTP or browser, so it keeps a SeleniumBase-shaped name and becomes a field of `HttpSessionOptions` |
+| `SessionPolicy` | struct | yes | rename | `EscalationPolicy` | **copied** (`SessionPolicy`, same fields); covers ground core does not (when to move between HTTP and the browser), and a session in core is a saved `Session` |
 | `SessionPolicy.require_clearance_for_http` | field | yes | keep |  | plain data name |
 | `SessionPolicy.clearance_margin` | field | yes | keep |  | plain data name |
 | `SessionPolicy.demote_after_solve` | field | yes | keep |  | plain data name |
-| `SessionPolicy.prefer` | field | yes | keep |  | says what it does |
-| `SessionPolicy::before_fetch` | method | yes | private |  | the runtime calls it |
-| `SessionPolicy::after_fetch` | method | yes | private |  | the runtime calls it |
-| `Transition` | enum |  | private | `Escalation` | **clash** with core `api::presentation::Transition`; only the runtime reads it once `preflight` and `HttpVerdict` are private |
-| `Transition::Stay` | enum variant |  | private |  | goes with its type (plumbing) |
-| `Transition::Escalate` | enum variant |  | private |  | goes with its type (plumbing) |
-| `Transition::Demote` | enum variant |  | private |  | goes with its type (plumbing) |
-| `Transition::resulting_mode` | method |  | private |  | goes with its type (plumbing) |
-| `EscalateReason` | enum |  | private |  | goes with `Transition` |
-| `EscalateReason::Challenge` | enum variant |  | private |  | goes with its type (plumbing) |
-| `EscalateReason::ClearanceExpiring` | enum variant |  | private |  | goes with its type (plumbing) |
-| `EscalateReason::NoClearance` | enum variant |  | private |  | goes with its type (plumbing) |
-| `EscalateReason::SiteNeedsBrowser` | enum variant |  | private |  | goes with its type (plumbing) |
-| `EscalateReason::Manual` | enum variant |  | private |  | goes with its type (plumbing) |
-| `DemoteReason` | enum |  | private |  | goes with `Transition` |
-| `DemoteReason::ChallengeSolved` | enum variant |  | private |  | goes with its type (plumbing) |
-| `DemoteReason::Manual` | enum variant |  | private |  | goes with its type (plumbing) |
+| `SessionPolicy.prefer` | field | yes | keep |  | plain data name |
+| `SessionPolicy::before_fetch` | method | yes | keep |  | says what it does |
+| `SessionPolicy::after_fetch` | method | yes | keep |  | says what it does |
+| `Transition` | enum |  | rename | `Escalation` | **clash**: core `api::presentation::Transition` is a slide transition |
+| `Transition::Stay` | enum variant |  | keep |  | names the case |
+| `Transition::Escalate` | enum variant |  | keep |  | names the case |
+| `Transition::Demote` | enum variant |  | keep |  | names the case |
+| `Transition::resulting_mode` | method |  | rename | `resulting_kind` | follows `FetchKind` |
+| `EscalateReason` | enum |  | keep, export |  | keep the name and export it: a public signature takes or returns it, but callers cannot name it |
+| `EscalateReason::Challenge` | enum variant |  | keep |  | names the case |
+| `EscalateReason::ClearanceExpiring` | enum variant |  | keep |  | names the case |
+| `EscalateReason::NoClearance` | enum variant |  | keep |  | names the case |
+| `EscalateReason::SiteNeedsBrowser` | enum variant |  | keep |  | names the case |
+| `EscalateReason::Manual` | enum variant |  | keep |  | names the case |
+| `DemoteReason` | enum |  | keep, export |  | keep the name and export it: a public signature takes or returns it, but callers cannot name it |
+| `DemoteReason::ChallengeSolved` | enum variant |  | keep |  | names the case |
+| `DemoteReason::Manual` | enum variant |  | keep |  | names the case |
 
 ### `scrape::runtime::browser_scraper`
 
 | Item | Kind | Copied | Verdict | Proposed | Why |
 |---|---|---|---|---|---|
-| `BrowserFetch` | struct |  | merge | `FetchOutcome` | three result types for one fetch (`BrowserFetch`, `StealthFetch`, `HttpFetched`) |
-| `BrowserFetch.url` | field |  | merge |  | goes with its type |
-| `BrowserFetch.status` | field |  | merge |  | goes with its type |
-| `BrowserFetch.headers` | field |  | merge |  | goes with its type |
-| `BrowserFetch.body` | field |  | merge |  | goes with its type |
-| `BrowserFetch.detection` | field |  | merge |  | goes with its type |
-| `BrowserFetch.attempts` | field |  | merge |  | goes with its type |
-| `BrowserFetch.solved` | field |  | merge |  | goes with its type |
-| `BrowserFetch.egress` | field |  | merge |  | goes with its type |
-| `BrowserLauncher` | trait |  | private |  | a test seam; core's `Browser::launch_mocked` and `BrowserPool::with_launcher` already cover launching |
-| `BrowserLauncher::launch` | method |  | private |  | goes with its type (plumbing) |
-| `BrowserScraper` | struct | yes | merge | core `sb_cdp::Browser` and `Page`, through launch options and page methods | **copied** (their `CloudScraper`: the same builder options, `solve_challenge`, `rotate_profile`); it wraps core's `Browser` and `Page` and repeats their jobs. A SeleniumBase caller launches with `LaunchOptions` or the `sb_cdp` fixture and calls methods on `Page`. Decision 2 |
-| `BrowserScraper::builder` | method | yes | merge | `LaunchOptions::builder()` and `Browser::launch` | the launch builder is the entry point |
-| `BrowserScraper::page` | method | yes | remove |  | the caller holds the core `Page` |
-| `BrowserScraper::browser` | method | yes | remove |  | the caller holds the core `Browser` |
-| `BrowserScraper::fingerprint` | method | yes | remove |  | the caller passed it to core `LaunchOptionsBuilder::fingerprint`; `Page::capture_fingerprint` reads it back |
-| `BrowserScraper::seed` | method | yes | remove |  | core `Fingerprint::seed` |
-| `BrowserScraper::egress` | method | yes | remove |  | core `Browser::context_route` returns it |
-| `BrowserScraper::sessions` | method | yes | remove |  | the caller's core `SessionStore` |
-| `BrowserScraper::close` | method | yes | remove |  | core `Browser::close` |
-| `BrowserScraper::fetch` | method | yes | merge | a `Page` method (open a URL through challenges) | the page is the entry point |
-| `BrowserScraper::solve_challenge` | method | yes | merge | core `Page::solve_captcha` | **copied**; core already solves the widget on a page, and the policy adds the rotate and cooldown steps |
-| `BrowserScraper::rotate_egress` | method | yes | merge | a `Page` method `rotate_proxy` | a new context with the next `ProxyList` proxy (core `Browser::new_context_with`) |
-| `BrowserScraper::rotate_profile` | method | yes | merge | core `Page::apply_fingerprint` with a new `Fingerprint` | **copied** (`rotate_profile`); core already applies a fingerprint to a page |
-| `BrowserScraper::export_identity` | method | yes | remove |  | repeats `save_session` on the same type |
-| `BrowserScraper::import_identity` | method | yes | remove |  | repeats `load_session` on the same type |
-| `BrowserScraper::save_session` | method | yes | merge | a `Page` method over core `SessionStore` | keeps the name |
-| `BrowserScraper::load_session` | method | yes | merge | a `Page` method over core `SessionStore` | keeps the name |
-| `BrowserScraperBuilder` | struct | yes | merge | core `LaunchOptionsBuilder` | **copied** (their `CloudScraper` builder); it wraps `LaunchOptionsBuilder` (`launch_options`) and adds stealth options, which join the launch builder. Decision 2 |
-| `BrowserScraperBuilder::launch_options` | method | yes | remove |  | it is the launch builder |
-| `BrowserScraperBuilder::with_geo_proxies` | method | yes | merge | `LaunchOptionsBuilder::proxy_list(ProxyList)` (core `--proxy-list`) | **copied** |
-| `BrowserScraperBuilder::proxy_strategy` | method | yes | merge | `ProxyList`'s pick order | **copied** |
-| `BrowserScraperBuilder::with_max_challenge_attempts` | method | yes | merge | core `SolveOptions::attempts` in `ChallengePolicy` | **copied** |
-| `BrowserScraperBuilder::mitigation` | method | yes | merge | `LaunchOptionsBuilder::challenge_policy` | a launch option (decision 2: an extension trait here on core's `LaunchOptionsBuilder`, or a core field) |
-| `BrowserScraperBuilder::with_state_store` | method | yes | merge | core `SessionStore` | **copied** |
-| `BrowserScraperBuilder::with_event_sink` | method | yes | remove |  | **copied**; events go to `tracing` |
-| `BrowserScraperBuilder::geo_resolver` | method | yes | merge | `LaunchOptionsBuilder::geo_resolver` | a launch option (decision 2: an extension trait here on core's `LaunchOptionsBuilder`, or a core field) |
-| `BrowserScraperBuilder::per_site_rate` | method | yes | merge | `LaunchOptionsBuilder::rate_limit` (core `RateLimiter`) | core `RateLimiter::new(max_calls, window)` is the same setting |
-| `BrowserScraperBuilder::seed` | method | yes | remove |  | pass a seeded core `Fingerprint` |
-| `BrowserScraperBuilder::fingerprint` | method | yes | remove |  | core `LaunchOptionsBuilder::fingerprint` already exists; this is a second copy of it |
-| `BrowserScraperBuilder::egress_switch` | method | yes | remove |  | core contexts carry their proxy (`ContextOptions::proxy`) |
-| `BrowserScraperBuilder::launcher` | method | yes | private |  | a test seam; core's `Browser::launch_mocked` and `BrowserPool::with_launcher` already cover launching |
-| `BrowserScraperBuilder::session_store` | method | yes | merge | `LaunchOptionsBuilder::session_store` | a launch option (decision 2: an extension trait here on core's `LaunchOptionsBuilder`, or a core field) |
-| `BrowserScraperBuilder::solve_timeout` | method | yes | merge | core `SolveOptions` timeouts | the same kind of setting |
-| `BrowserScraperBuilder::clock` | method | yes | private |  | a test seam |
-| `BrowserScraperBuilder::build` | method | yes | remove |  | core `LaunchOptionsBuilder::build` and `Browser::launch` |
-| `ChromeLauncher` | struct |  | private |  | a test seam; core's `Browser::launch_mocked` and `BrowserPool::with_launcher` already cover launching |
+| `BrowserFetch` | struct |  | keep |  | one fetch's result; matches `StealthFetch` and `HttpFetch` |
+| `BrowserFetch.url` | field |  | keep |  | plain data name |
+| `BrowserFetch.status` | field |  | keep |  | plain data name |
+| `BrowserFetch.headers` | field |  | keep |  | plain data name |
+| `BrowserFetch.body` | field |  | keep |  | plain data name |
+| `BrowserFetch.detection` | field |  | keep |  | plain data name |
+| `BrowserFetch.attempts` | field |  | keep |  | plain data name |
+| `BrowserFetch.solved` | field |  | keep |  | plain data name |
+| `BrowserFetch.egress` | field |  | rename | `proxy_route` | follows `ProxyRoute` |
+| `BrowserLauncher` | trait |  | remove | core `Browser::launch`, `Browser::launch_mocked` | a launch seam; core launches, and `launch_mocked` is core's test seam |
+| `BrowserLauncher::launch` | method |  | remove |  | goes with its type |
+| `BrowserScraper` | struct | yes | keep |  | **copied** shape (their `CloudScraper`), but covers ground core does not (the challenge loop, proxy rotation, the ledger) and it already builds on core's `Browser` and `Page`; its members drop what repeats core |
+| `BrowserScraper::builder` | method | yes | keep |  | says what it does |
+| `BrowserScraper::page` | method | yes | keep |  | says what it does |
+| `BrowserScraper::browser` | method | yes | keep |  | says what it does |
+| `BrowserScraper::fingerprint` | method | yes | keep |  | returns the core `Fingerprint` in use |
+| `BrowserScraper::seed` | method | yes | remove | core `Fingerprint::seed` | the fingerprint it returns already says it |
+| `BrowserScraper::egress` | method | yes | rename | `proxy_route` | follows `ProxyRoute` |
+| `BrowserScraper::sessions` | method | yes | rename | `session_store` | returns core's `SessionStore`; the builder method is already `session_store` |
+| `BrowserScraper::close` | method | yes | keep |  | says what it does |
+| `BrowserScraper::fetch` | method | yes | keep |  | says what it does |
+| `BrowserScraper::solve_challenge` | method | yes | build on core | core `Page::solve_captcha` with the policy's `SolveOptions` | **copied**; core already solves the widget, this adds detection and mitigation around it |
+| `BrowserScraper::rotate_egress` | method | yes | rename | `rotate_proxy` | core says proxy |
+| `BrowserScraper::rotate_profile` | method | yes | build on core | `rotate_fingerprint`, through core `Page::apply_fingerprint` | **copied** (`rotate_profile`); core already applies a fingerprint to a page, and a profile in core is a browser profile |
+| `BrowserScraper::export_identity` | method | yes | keep |  | says what it does |
+| `BrowserScraper::import_identity` | method | yes | keep |  | says what it does |
+| `BrowserScraper::save_session` | method | yes | keep |  | builds on core's `SessionStore` |
+| `BrowserScraper::load_session` | method | yes | keep |  | builds on core's `SessionStore` |
+| `BrowserScraperBuilder` | struct | yes | keep |  | **copied** shape (their `CloudScraper` builder), but it already builds on core's `LaunchOptionsBuilder` (`launch_options`); its members drop what repeats core |
+| `BrowserScraperBuilder::launch_options` | method | yes | keep |  | says what it does |
+| `BrowserScraperBuilder::with_geo_proxies` | method | yes | rename | `geo_proxies` | core builders use plain setter names (`LaunchOptionsBuilder`, `PoolOptionsBuilder`); this builder mixes `with_*` and plain names |
+| `BrowserScraperBuilder::proxy_strategy` | method | yes | keep |  | says what it does |
+| `BrowserScraperBuilder::with_max_challenge_attempts` | method | yes | rename | `max_challenge_attempts` | core builders use plain setter names (`LaunchOptionsBuilder`, `PoolOptionsBuilder`); this builder mixes `with_*` and plain names |
+| `BrowserScraperBuilder::mitigation` | method | yes | keep |  | says what it does |
+| `BrowserScraperBuilder::with_state_store` | method | yes | rename | `ledger` | core builders use plain setter names (`LaunchOptionsBuilder`, `PoolOptionsBuilder`); this builder mixes `with_*` and plain names; follows `Ledger` |
+| `BrowserScraperBuilder::with_event_sink` | method | yes | rename | `event_sink` | core builders use plain setter names (`LaunchOptionsBuilder`, `PoolOptionsBuilder`); this builder mixes `with_*` and plain names; `HttpOptions::event_sink` already says it so |
+| `BrowserScraperBuilder::geo_resolver` | method | yes | keep |  | says what it does |
+| `BrowserScraperBuilder::per_site_rate` | method | yes | rename | `rate_limit` | core `RateLimiter::new(max_calls, window)`; `HttpOptions::pacing` is the same setting under a third name |
+| `BrowserScraperBuilder::seed` | method | yes | remove | core `Fingerprint::seed` | pass a seeded core `Fingerprint` |
+| `BrowserScraperBuilder::fingerprint` | method | yes | remove | core `LaunchOptionsBuilder::fingerprint` | a second copy of core's option; set it on the launch builder passed to `launch_options` |
+| `BrowserScraperBuilder::egress_switch` | method | yes | remove | core `ContextOptions::proxy` | goes with `EgressSwitch` |
+| `BrowserScraperBuilder::launcher` | method | yes | remove | core `Browser::launch_mocked` | goes with `BrowserLauncher` |
+| `BrowserScraperBuilder::session_store` | method | yes | keep |  | says what it does |
+| `BrowserScraperBuilder::solve_timeout` | method | yes | build on core | core `SolveOptions` timeouts | through the policy's `SolveOptions` |
+| `BrowserScraperBuilder::clock` | method | yes | keep |  | says what it does |
+| `BrowserScraperBuilder::build` | method | yes | keep |  | says what it does |
+| `ChromeLauncher` | struct |  | remove | core `Browser::launch` | the built-in `BrowserLauncher`; goes with it |
 
 ### `scrape::runtime::egress_switch`
 
 | Item | Kind | Copied | Verdict | Proposed | Why |
 |---|---|---|---|---|---|
-| `ContextProxySwitch` | struct |  | remove |  | core's `Browser::new_context_with(ContextOptions::proxy)` already switches a context's proxy |
+| `ContextProxySwitch` | struct |  | remove | core `Browser::new_context_with(ContextOptions::proxy)` | it only calls core's context proxy |
 | `ContextProxySwitch::new` | method |  | remove |  | goes with its type |
-| `EgressSwitch` | trait |  | remove |  | same: core contexts carry their proxy |
+| `EgressSwitch` | trait |  | remove | core `ContextOptions::proxy` | a seam over core's context proxy; adds nothing |
 | `EgressSwitch::switch` | method |  | remove |  | goes with its type |
 
 ### `scrape::runtime::json_store`
 
 | Item | Kind | Copied | Verdict | Proposed | Why |
 |---|---|---|---|---|---|
-| `JsonStateStore` | struct | yes | merge | a file form of core `SessionStore` | **copied**; one store, written to a file, instead of a second store type |
-| `JsonStateStore::open` | method | yes | merge |  | goes with its type |
-| `JsonStateStore::path` | method | yes | merge |  | goes with its type |
+| `JsonStateStore` | struct | yes | rename | `JsonLedger` | follows `Ledger` |
+| `JsonStateStore::open` | method | yes | keep |  | says what it does |
+| `JsonStateStore::path` | method | yes | keep |  | says what it does |
 
 ### `scrape::runtime::tracing_sink`
 
 | Item | Kind | Copied | Verdict | Proposed | Why |
 |---|---|---|---|---|---|
-| `TracingEventSink` | struct | yes | remove |  | **copied** (their `LogEventSink`); the events go to `tracing` directly |
+| `TracingEventSink` | struct | yes | keep |  | builds on `tracing`, as core logs |
 
 ### `scrape::runtime::browser_scraper::builder`
 
 | Item | Kind | Copied | Verdict | Proposed | Why |
 |---|---|---|---|---|---|
-| `Clock` | type alias |  | private |  | a test seam; core has another `Clock` (`core::allure`) |
+| `Clock` | type alias |  | keep |  | a test seam for time; core's `core::allure::Clock` belongs to the report |
 
 ## mimic (`seleniumbase_rs_stealth::mimic`)
 
@@ -1082,7 +1079,7 @@ signature takes or returns the type but no path names it today.
 
 | Item | Kind | Copied | Verdict | Proposed | Why |
 |---|---|---|---|---|---|
-| `impersonation_client` | function | yes | private |  | **copied** (`impersonation_client`, same name and shape); `HttpSession` is the entry point. If it stays public, `wire_client`. Decision 6 |
+| `impersonation_client` | function | yes | rename | `wire_client` | "impersonate" is curl_cffi's word (`impersonate="chrome"`), and core dropped its `impersonate` feature in 0.3.0 |
 | `CustomProfileBuilder` | struct |  | rename | `WireFormatBuilder` | follows `WireFormat`; profile means a browser profile in core |
 | `CustomProfileBuilder::new` | method |  | keep |  | says what it does |
 | `CustomProfileBuilder::base` | method |  | keep |  | says what it does |
@@ -1095,9 +1092,9 @@ signature takes or returns the type but no path names it today.
 | `CustomProfileBuilder::grease` | method |  | keep |  | says what it does |
 | `CustomProfileBuilder::permute_extensions` | method |  | keep |  | says what it does |
 | `CustomProfileBuilder::akamai` | method |  | keep |  | says what it does |
-| `CustomProfileBuilder::user_agent` | method |  | merge | core `Fingerprint` | set it on the fingerprint; the custom input stays, in one place |
-| `CustomProfileBuilder::accept_language` | method |  | merge | core `Fingerprint` | same |
-| `CustomProfileBuilder::client_hints` | method |  | merge | core `Fingerprint` | same |
+| `CustomProfileBuilder::user_agent` | method |  | build on core | core `Fingerprint` (the builder takes one) | the custom input stays, set where core keeps it |
+| `CustomProfileBuilder::accept_language` | method |  | build on core | core `Fingerprint` | same |
+| `CustomProfileBuilder::client_hints` | method |  | build on core | core `Fingerprint` | same |
 | `CustomProfileBuilder::header` | method |  | keep |  | says what it does |
 | `CustomProfileBuilder::without_header` | method |  | keep |  | says what it does |
 | `CustomProfileBuilder::header_order` | method |  | keep |  | says what it does |
@@ -1119,25 +1116,25 @@ signature takes or returns the type but no path names it today.
 | `ImpersonateError::Fingerprint` | enum variant |  | keep |  | names the case |
 | `ImpersonateError::UnknownHeader` | enum variant |  | keep |  | names the case |
 | `ImpersonateError::Build` | enum variant |  | keep |  | names the case |
-| `ImpersonationProfile` | struct | yes | rename | `WireFormat` | **copied** (their `BrowserProfile`, `random()`); its User-Agent, Accept-Language and client hints repeat core's `Fingerprint`. Keep the TLS, HTTP/2 and header-order part and read the rest from the `Fingerprint` |
+| `ImpersonationProfile` | struct | yes | build on core | `WireFormat`, built on core `Fingerprint` (User-Agent, Accept-Language and client hints come from it) | **copied** (their `BrowserProfile`, `random()`); the TLS, HTTP/2 and header-order part is new ground, the header values repeat core's `Fingerprint` |
 | `ImpersonationProfile::measured` | method | yes | keep |  | says what it does |
 | `ImpersonationProfile::for_system` | method | yes | keep |  | says what it does |
 | `ImpersonationProfile::from_measured` | method | yes | keep |  | says what it does |
-| `ImpersonationProfile::random` | method | yes | remove |  | **copied** (`BrowserProfile::random`); draw a seeded core `Fingerprint` and call `from_fingerprint` |
-| `ImpersonationProfile::from_fingerprint` | method | yes | keep |  | says what it does |
-| `ImpersonationProfile::with_locale` | method | yes | remove |  | core `Fingerprint`'s locale |
+| `ImpersonationProfile::random` | method | yes | remove | core `Fingerprint` (seeded) and `from_fingerprint` | **copied** (`BrowserProfile::random`); core already draws a seeded fingerprint |
+| `ImpersonationProfile::from_fingerprint` | method | yes | keep |  | builds on core's `Fingerprint` |
+| `ImpersonationProfile::with_locale` | method | yes | remove | core `Fingerprint` | the fingerprint's locale |
 | `ImpersonationProfile::custom` | method | yes | rename | `builder` | builders start from `builder()` (core `LaunchOptions::builder`) |
 | `ImpersonationProfile::validate` | method | yes | keep |  | says what it does |
 | `ImpersonationProfile::source` | method | yes | keep |  | says what it does |
 | `ImpersonationProfile::kind` | method | yes | keep |  | says what it does |
 | `ImpersonationProfile::os` | method | yes | keep |  | says what it does |
 | `ImpersonationProfile::major` | method | yes | keep |  | says what it does |
-| `ImpersonationProfile::user_agent` | method | yes | remove |  | core `Fingerprint` holds it |
-| `ImpersonationProfile::accept_language` | method | yes | remove |  | core `Fingerprint` holds it |
+| `ImpersonationProfile::user_agent` | method | yes | remove | core `Fingerprint` | the fingerprint's User-Agent |
+| `ImpersonationProfile::accept_language` | method | yes | remove | core `Fingerprint` | the fingerprint's languages |
 | `ImpersonationProfile::tls_spec` | method | yes | keep |  | says what it does |
 | `ImpersonationProfile::http2_spec` | method | yes | rename | `h2_spec` | the type is `H2Spec` |
 | `ImpersonationProfile::header_spec` | method | yes | keep |  | says what it does |
-| `ImpersonationProfile::identity` | method | yes | remove |  | the client headers merge into `Fingerprint` |
+| `ImpersonationProfile::identity` | method | yes | rename | `client_headers` | follows codec `ClientHeaders` |
 | `ImpersonationProfile::known_gaps` | method | yes | keep |  | says what it does |
 | `ImpersonationProfile::dropped_settings` | method | yes | keep |  | says what it does |
 | `ImpersonationProfile::headers_for` | method | yes | keep |  | says what it does |
@@ -1150,14 +1147,14 @@ signature takes or returns the type but no path names it today.
 
 | Item | Kind | Copied | Verdict | Proposed | Why |
 |---|---|---|---|---|---|
-| `HttpAttempt` | struct |  | private |  | the input of `assess`, which becomes private |
-| `HttpAttempt.number` | field |  | private |  | goes with its type (plumbing) |
-| `HttpAttempt.previous_challenges` | field |  | private |  | goes with its type (plumbing) |
-| `HttpAttempt.can_rotate_egress` | field |  | private |  | goes with its type (plumbing) |
-| `HttpAttempt.can_escalate` | field |  | private |  | goes with its type (plumbing) |
-| `HttpFetched` | struct |  | merge | `FetchOutcome` | three result types for one fetch (`BrowserFetch`, `StealthFetch`, `HttpFetched`) |
-| `HttpFetched.reply` | field |  | merge |  | goes with its type |
-| `HttpFetched.verdict` | field |  | merge |  | goes with its type |
+| `HttpAttempt` | struct |  | rename | `HttpAttempt` (source name) | make it the real name: the source calls it `Attempt` and `lib.rs` renames it; one spelling per item |
+| `HttpAttempt.number` | field |  | keep |  | plain data name |
+| `HttpAttempt.previous_challenges` | field |  | keep |  | plain data name |
+| `HttpAttempt.can_rotate_egress` | field |  | keep |  | plain data name |
+| `HttpAttempt.can_escalate` | field |  | keep |  | plain data name |
+| `HttpFetched` | struct |  | rename | `HttpFetch` | matches `BrowserFetch` and `StealthFetch`; the source calls it `Fetched` |
+| `HttpFetched.reply` | field |  | keep |  | plain data name |
+| `HttpFetched.verdict` | field |  | keep |  | plain data name |
 | `ReplyHeaders` | struct |  | rename | `ResponseHeaders` | follows `HttpResponse`; the source calls it `Headers` |
 | `ReplyHeaders::get` | method |  | keep |  | says what it does |
 | `ReplyHeaders::get_all` | method |  | keep |  | says what it does |
@@ -1168,7 +1165,7 @@ signature takes or returns the type but no path names it today.
 | `HttpError` | enum |  | keep |  | follows `HttpSession` |
 | `HttpError::Impersonate` | enum variant |  | rename | `WireFormat` | follows `WireFormat` |
 | `HttpError::VersionMismatch` | enum variant |  | keep |  | names the case |
-| `HttpError::Identity` | enum variant |  | rename | `Session` | the identity becomes core's `Session` |
+| `HttpError::Identity` | enum variant |  | keep |  | names the case |
 | `HttpError::BrowserProxy` | enum variant |  | keep |  | names the case |
 | `HttpError::ReservedHeader` | enum variant |  | keep |  | names the case |
 | `HttpError::InvalidHeader` | enum variant |  | keep |  | names the case |
@@ -1193,13 +1190,13 @@ signature takes or returns the type but no path names it today.
 | `HttpOptions::max_redirects` | method |  | keep |  | says what it does |
 | `HttpOptions::follow_redirects` | method |  | keep |  | says what it does |
 | `HttpOptions::pacing` | method |  | rename | `rate_limit` | core `RateLimiter`; the builders' `per_site_rate` is the same setting |
-| `HttpOptions::event_sink` | method |  | remove |  | events go to `tracing` |
+| `HttpOptions::event_sink` | method |  | keep |  | says what it does |
 | `HttpOptions::trust` | method |  | keep |  | says what it does |
 | `HttpOptions::resolve` | method |  | keep |  | says what it does |
-| `HttpOptions::bypass` | method |  | merge | core `ContextRoute.bypass` | the same list |
+| `HttpOptions::bypass` | method |  | keep |  | the same list as core's `ContextRoute.bypass`; keep the name |
 | `HttpOptions::browser_proxy_exits_directly` | method |  | keep |  | says what it does |
 | `HttpOptions::installed_chrome_major` | method |  | keep |  | says what it does |
-| `HttpOptions::clock` | method |  | private |  | a test seam |
+| `HttpOptions::clock` | method |  | keep |  | says what it does |
 | `HttpOptions::validate` | method |  | keep |  | says what it does |
 | `HttpReply` | struct |  | rename | `HttpResponse` | HTTP's word, and core's (`sb_cdp::intercept::Response`, `HarResponse`) |
 | `HttpReply::status` | method |  | keep |  | says what it does |
@@ -1213,7 +1210,7 @@ signature takes or returns the type but no path names it today.
 | `HttpReply::protocol` | method |  | keep |  | says what it does |
 | `HttpReply::redirects` | method |  | keep |  | says what it does |
 | `HttpReply::elapsed` | method |  | keep |  | says what it does |
-| `HttpReply::detect` | method |  | rename | `challenge` | returns the merged `Challenge` |
+| `HttpReply::detect` | method |  | keep |  | says what it does |
 | `HttpRequest` | struct |  | keep |  | the `Http` prefix keeps it apart from core's `sb_cdp::intercept::Request` |
 | `HttpRequest::shape` | method |  | keep |  | says what it does |
 | `HttpRequest::header` | method |  | keep |  | says what it does |
@@ -1223,30 +1220,30 @@ signature takes or returns the type but no path names it today.
 | `HttpRequest::timeout` | method |  | keep |  | says what it does |
 | `HttpRequest::send` | method |  | keep |  | says what it does |
 | `HttpSession` | struct |  | keep |  | a live HTTP session, as core's `BrowserSession` is a live WebDriver one |
-| `HttpSession::from_identity` | method |  | rename | `from_session` | takes a core `Session` |
+| `HttpSession::from_identity` | method |  | keep |  | says what it does |
 | `HttpSession::request` | method |  | keep |  | says what it does |
 | `HttpSession::get` | method |  | keep |  | says what it does |
 | `HttpSession::profile` | method |  | rename | `wire_format` | follows `WireFormat` |
-| `HttpSession::egress` | method |  | rename | `route` | returns a core `ContextRoute` |
+| `HttpSession::egress` | method |  | rename | `proxy_route` | follows `ProxyRoute` |
 | `HttpSession::cookie_count` | method |  | keep |  | says what it does |
-| `HttpSession::assess` | method |  | private |  | the copied domain layer's port leaks here; the session calls it itself |
+| `HttpSession::assess` | method |  | keep |  | says what it does |
 | `HttpSession::fetch` | method |  | keep |  | says what it does |
-| `HttpSession::preflight` | method |  | private |  | same |
-| `HttpSession::export_identity` | method |  | rename | `session` | returns a core `Session` |
+| `HttpSession::preflight` | method |  | keep |  | says what it does |
+| `HttpSession::export_identity` | method |  | keep |  | says what it does |
 | `HttpSession::from_page` | method |  | keep |  | says what it does |
 | `HttpSession::sync_cookies_back` | method |  | keep |  | says what it does |
 | `Method` | re-export |  | keep |  | re-export of `wreq::Method`, so callers import no wreq (the pattern of core's `drivers` and `json` re-exports) |
 | `ReplyProtocol` | enum |  | remove | use `WireProtocol` | the same two values (HTTP/1.1, HTTP/2) as `WireProtocol` |
 | `ReplyProtocol::Http2` | enum variant |  | remove |  | goes with its type |
 | `ReplyProtocol::Http1` | enum variant |  | remove |  | goes with its type |
-| `HttpRules` | struct |  | private |  | the input of `assess` and `preflight`; `HttpSessionOptions` holds the policies |
-| `HttpRules.mitigation` | field |  | private |  | goes with its type (plumbing) |
-| `HttpRules.session` | field |  | private |  | goes with its type (plumbing) |
-| `HttpVerdict` | struct |  | private |  | the output of `assess` |
-| `HttpVerdict.detection` | field |  | private |  | goes with its type (plumbing) |
-| `HttpVerdict.action` | field |  | private |  | goes with its type (plumbing) |
-| `HttpVerdict.transition` | field |  | private |  | goes with its type (plumbing) |
-| `HttpVerdict::is_clear` | method |  | private |  | goes with its type (plumbing) |
+| `HttpRules` | struct |  | rename | `HttpRules` (source name) | make it the real name: the source calls it `Rules` and `lib.rs` renames it; one spelling per item |
+| `HttpRules.mitigation` | field |  | keep |  | plain data name |
+| `HttpRules.session` | field |  | rename | `escalation` | its type becomes `EscalationPolicy` |
+| `HttpVerdict` | struct |  | rename | `HttpVerdict` (source name) | make it the real name: the source calls it `Verdict` and `lib.rs` renames it; one spelling per item |
+| `HttpVerdict.detection` | field |  | keep |  | plain data name |
+| `HttpVerdict.action` | field |  | keep |  | plain data name |
+| `HttpVerdict.transition` | field |  | rename | `escalation` | follows `Escalation` |
+| `HttpVerdict::is_clear` | method |  | keep |  | says what it does |
 
 ### `mimic::mitm`
 
@@ -1268,7 +1265,7 @@ signature takes or returns the type but no path names it today.
 | `MitmError::BodyTooLarge` | enum variant |  | keep |  | names the case |
 | `MitmError::VersionMismatch` | enum variant |  | keep |  | names the case |
 | `MitmError::UpstreamRequest` | enum variant |  | keep |  | names the case |
-| `MitmOptions` | struct |  | keep |  | its limits stay settable through the launch option |
+| `MitmOptions` | struct |  | keep |  | options named after their owner, as core's `PoolOptions` |
 | `MitmOptions::max_connections` | method |  | keep |  | says what it does |
 | `MitmOptions::max_header_bytes` | method |  | keep |  | says what it does |
 | `MitmOptions::max_headers` | method |  | keep |  | says what it does |
@@ -1283,85 +1280,85 @@ signature takes or returns the type but no path names it today.
 | `MitmOptions::resolve` | method |  | keep |  | says what it does |
 | `MitmOptions::allow_private_destinations` | method |  | keep |  | says what it does |
 | `MitmOptions::ca` | method |  | keep |  | says what it does |
-| `MitmProxy` | struct | yes | private |  | **copied** (their `TlsSpoofingProxy` with a hot-swappable upstream); plumbing behind a launch option (decision 2: an extension trait here on core's `LaunchOptionsBuilder`, or a core field), as core keeps proxy passwords inside the launch (`sb_cdp::proxy_auth`). Decision 6 |
-| `MitmProxy::start` | method | yes | private |  | goes with its type (plumbing) |
-| `MitmProxy::prime_url` | method | yes | private |  | goes with its type (plumbing) |
-| `MitmProxy::port` | method | yes | private |  | goes with its type (plumbing) |
-| `MitmProxy::local_addr` | method | yes | private |  | goes with its type (plumbing) |
-| `MitmProxy::proxy_spec` | method | yes | private |  | goes with its type (plumbing) |
-| `MitmProxy::browser_proxy` | method | yes | private |  | goes with its type (plumbing) |
-| `MitmProxy::chrome_args` | method | yes | private |  | goes with its type (plumbing) |
-| `MitmProxy::configure_launch` | method | yes | private |  | goes with its type (plumbing) |
-| `MitmProxy::stats` | method | yes | private |  | goes with its type (plumbing) |
-| `MitmProxy::egress` | method | yes | private |  | goes with its type (plumbing) |
-| `MitmProxy::swap_upstream` | method | yes | private |  | goes with its type (plumbing) |
-| `MitmProxy::swap_profile` | method | yes | private |  | goes with its type (plumbing) |
-| `MitmProxy::shutdown` | method | yes | private |  | goes with its type (plumbing) |
-| `MitmStats` | struct |  | private |  | goes with `MitmProxy` |
-| `MitmStats.connections` | field |  | private |  | goes with its type (plumbing) |
-| `MitmStats.tunnels` | field |  | private |  | goes with its type (plumbing) |
-| `MitmStats.unauthorized` | field |  | private |  | goes with its type (plumbing) |
-| `MitmStats.refused` | field |  | private |  | goes with its type (plumbing) |
-| `MitmStats.forwarded` | field |  | private |  | goes with its type (plumbing) |
-| `MitmStats.upstream_errors` | field |  | private |  | goes with its type (plumbing) |
-| `MitmStats.websockets` | field |  | private |  | goes with its type (plumbing) |
-| `MitmStats.primed` | field |  | private |  | goes with its type (plumbing) |
+| `MitmProxy` | struct | yes | keep |  | **copied** shape (their `TlsSpoofingProxy`), but covers ground core does not; `configure_launch` already builds on core's `LaunchOptionsBuilder` |
+| `MitmProxy::start` | method | yes | keep |  | says what it does |
+| `MitmProxy::prime_url` | method | yes | keep |  | says what it does |
+| `MitmProxy::port` | method | yes | keep |  | says what it does |
+| `MitmProxy::local_addr` | method | yes | keep |  | says what it does |
+| `MitmProxy::proxy_spec` | method | yes | rename | `proxy_url` | it is the proxy URL with its password, as a `Secret` |
+| `MitmProxy::browser_proxy` | method | yes | keep |  | says what it does |
+| `MitmProxy::chrome_args` | method | yes | rename | `launch_args` | core's `evasion::evasions::launch_args` returns the same kind of list |
+| `MitmProxy::configure_launch` | method | yes | keep |  | says what it does |
+| `MitmProxy::stats` | method | yes | keep |  | says what it does |
+| `MitmProxy::egress` | method | yes | rename | `proxy_route` | follows `ProxyRoute` |
+| `MitmProxy::swap_upstream` | method | yes | rename | `swap_proxy` | it takes the proxy route; core says proxy |
+| `MitmProxy::swap_profile` | method | yes | rename | `swap_wire_format` | follows `WireFormat` |
+| `MitmProxy::shutdown` | method | yes | keep |  | says what it does |
+| `MitmStats` | struct |  | keep |  | as core's `PoolStats` |
+| `MitmStats.connections` | field |  | keep |  | plain data name |
+| `MitmStats.tunnels` | field |  | keep |  | plain data name |
+| `MitmStats.unauthorized` | field |  | keep |  | plain data name |
+| `MitmStats.refused` | field |  | keep |  | plain data name |
+| `MitmStats.forwarded` | field |  | keep |  | plain data name |
+| `MitmStats.upstream_errors` | field |  | keep |  | plain data name |
+| `MitmStats.websockets` | field |  | keep |  | plain data name |
+| `MitmStats.primed` | field |  | keep |  | plain data name |
 
 ### `mimic::stealth_session`
 
 | Item | Kind | Copied | Verdict | Proposed | Why |
 |---|---|---|---|---|---|
-| `StealthError` | enum |  | merge | `HttpError` | goes with `StealthSession` |
-| `StealthError::Scrape` | enum variant |  | merge |  | goes with its type |
-| `StealthError::Http` | enum variant |  | merge |  | goes with its type |
-| `StealthError::Mitm` | enum variant |  | merge |  | goes with its type |
-| `StealthError::Impersonate` | enum variant |  | merge |  | goes with its type |
-| `StealthFetch` | struct |  | merge | `FetchOutcome` | three result types for one fetch (`BrowserFetch`, `StealthFetch`, `HttpFetched`) |
-| `StealthFetch.url` | field |  | merge |  | goes with its type |
-| `StealthFetch.status` | field |  | merge |  | goes with its type |
-| `StealthFetch.headers` | field |  | merge |  | goes with its type |
-| `StealthFetch.body` | field |  | merge |  | goes with its type |
-| `StealthFetch.detection` | field |  | merge |  | goes with its type |
-| `StealthFetch.mode` | field |  | merge |  | goes with its type |
-| `StealthFetch.attempts` | field |  | merge |  | goes with its type |
-| `StealthFetch.solved` | field |  | merge |  | goes with its type |
-| `StealthFetch.egress` | field |  | merge |  | goes with its type |
-| `StealthSession` | struct | yes | merge | `HttpSession` made from a `Page` (`HttpSession::from_page`), which escalates back to that page | **copied** (`StealthSession`, dual mode); it holds a core `Page` and an `HttpSession` and repeats `BrowserScraper`'s options. The handoff already exists as `HttpSession::from_page` and `sync_cookies_back`. Decision 2 |
-| `StealthSession::builder` | method | yes | merge |  | goes with its type |
-| `StealthSession::mode` | method | yes | merge |  | goes with its type |
-| `StealthSession::identity` | method | yes | merge |  | goes with its type |
-| `StealthSession::egress` | method | yes | merge |  | goes with its type |
-| `StealthSession::seed` | method | yes | merge |  | goes with its type |
-| `StealthSession::http` | method | yes | merge |  | goes with its type |
-| `StealthSession::page` | method | yes | merge |  | goes with its type |
-| `StealthSession::close` | method | yes | merge |  | goes with its type |
-| `StealthSession::fetch` | method | yes | merge |  | goes with its type |
-| `StealthSession::rotate_profile` | method | yes | merge |  | goes with its type |
-| `StealthSession::rotate_egress` | method | yes | merge |  | goes with its type |
-| `StealthSession::export_identity` | method | yes | merge |  | goes with its type |
-| `StealthSession::import_identity` | method | yes | merge |  | goes with its type |
-| `StealthSession::escalate` | method | yes | merge |  | goes with its type |
-| `StealthSession::demote` | method | yes | merge |  | goes with its type |
-| `StealthSessionBuilder` | struct | yes | merge | core `LaunchOptionsBuilder` plus `HttpSessionOptions` | **copied** (`restore()` and the `CloudScraper` options a second time) |
-| `StealthSessionBuilder::launch_options` | method | yes | merge |  | goes with its type |
-| `StealthSessionBuilder::launcher` | method | yes | merge |  | goes with its type |
-| `StealthSessionBuilder::with_geo_proxies` | method | yes | merge |  | goes with its type |
-| `StealthSessionBuilder::proxy_strategy` | method | yes | merge |  | goes with its type |
-| `StealthSessionBuilder::with_max_challenge_attempts` | method | yes | merge |  | goes with its type |
-| `StealthSessionBuilder::mitigation` | method | yes | merge |  | goes with its type |
-| `StealthSessionBuilder::policy` | method | yes | merge |  | goes with its type |
-| `StealthSessionBuilder::with_state_store` | method | yes | merge |  | goes with its type |
-| `StealthSessionBuilder::with_event_sink` | method | yes | merge |  | goes with its type |
-| `StealthSessionBuilder::geo_resolver` | method | yes | merge |  | goes with its type |
-| `StealthSessionBuilder::per_site_rate` | method | yes | merge |  | goes with its type |
-| `StealthSessionBuilder::seed` | method | yes | merge |  | goes with its type |
-| `StealthSessionBuilder::fingerprint` | method | yes | merge |  | goes with its type |
-| `StealthSessionBuilder::restore` | method | yes | merge | `HttpSession::from_session` | **copied** (`restore()`) |
-| `StealthSessionBuilder::http_options` | method | yes | merge |  | goes with its type |
-| `StealthSessionBuilder::mitm_options` | method | yes | merge |  | goes with its type |
-| `StealthSessionBuilder::solve_timeout` | method | yes | merge |  | goes with its type |
-| `StealthSessionBuilder::clock` | method | yes | merge |  | goes with its type |
-| `StealthSessionBuilder::build` | method | yes | merge |  | goes with its type |
+| `StealthError` | enum |  | keep |  | follows `StealthSession` |
+| `StealthError::Scrape` | enum variant |  | keep |  | names the case |
+| `StealthError::Http` | enum variant |  | keep |  | names the case |
+| `StealthError::Mitm` | enum variant |  | keep |  | names the case |
+| `StealthError::Impersonate` | enum variant |  | rename | `WireFormat` | follows `WireFormat` |
+| `StealthFetch` | struct |  | keep |  | matches `BrowserFetch` and `HttpFetch` |
+| `StealthFetch.url` | field |  | keep |  | plain data name |
+| `StealthFetch.status` | field |  | keep |  | plain data name |
+| `StealthFetch.headers` | field |  | keep |  | plain data name |
+| `StealthFetch.body` | field |  | keep |  | plain data name |
+| `StealthFetch.detection` | field |  | keep |  | plain data name |
+| `StealthFetch.mode` | field |  | rename | `fetch_kind` | follows `FetchKind` |
+| `StealthFetch.attempts` | field |  | keep |  | plain data name |
+| `StealthFetch.solved` | field |  | keep |  | plain data name |
+| `StealthFetch.egress` | field |  | rename | `proxy_route` | follows `ProxyRoute` |
+| `StealthSession` | struct | yes | keep |  | **copied** name, but covers ground core does not (moving between HTTP and the browser); it builds on core's `Page` |
+| `StealthSession::builder` | method | yes | keep |  | says what it does |
+| `StealthSession::mode` | method | yes | rename | `fetch_kind` | follows `FetchKind` |
+| `StealthSession::identity` | method | yes | keep |  | says what it does |
+| `StealthSession::egress` | method | yes | rename | `proxy_route` | follows `ProxyRoute` |
+| `StealthSession::seed` | method | yes | keep |  | says what it does |
+| `StealthSession::http` | method | yes | rename | `http_session` | it returns the `HttpSession`; `http` alone could be a client or a protocol |
+| `StealthSession::page` | method | yes | keep |  | says what it does |
+| `StealthSession::close` | method | yes | keep |  | says what it does |
+| `StealthSession::fetch` | method | yes | keep |  | says what it does |
+| `StealthSession::rotate_profile` | method | yes | rename | `rotate_fingerprint` | follows `RotateFingerprint` |
+| `StealthSession::rotate_egress` | method | yes | keep |  | says what it does |
+| `StealthSession::export_identity` | method | yes | keep |  | says what it does |
+| `StealthSession::import_identity` | method | yes | keep |  | says what it does |
+| `StealthSession::escalate` | method | yes | keep |  | says what it does |
+| `StealthSession::demote` | method | yes | keep |  | says what it does |
+| `StealthSessionBuilder` | struct | yes | keep |  | builds on core's `LaunchOptionsBuilder` (`launch_options`); its members drop what repeats core |
+| `StealthSessionBuilder::launch_options` | method | yes | keep |  | says what it does |
+| `StealthSessionBuilder::launcher` | method | yes | remove | core `Browser::launch_mocked` | goes with `BrowserLauncher` |
+| `StealthSessionBuilder::with_geo_proxies` | method | yes | rename | `geo_proxies` | core builders use plain setter names (`LaunchOptionsBuilder`, `PoolOptionsBuilder`); this builder mixes `with_*` and plain names |
+| `StealthSessionBuilder::proxy_strategy` | method | yes | keep |  | says what it does |
+| `StealthSessionBuilder::with_max_challenge_attempts` | method | yes | rename | `max_challenge_attempts` | core builders use plain setter names (`LaunchOptionsBuilder`, `PoolOptionsBuilder`); this builder mixes `with_*` and plain names |
+| `StealthSessionBuilder::mitigation` | method | yes | keep |  | says what it does |
+| `StealthSessionBuilder::policy` | method | yes | rename | `escalation_policy` | `policy` alone could be the `MitigationPolicy` or core's `StealthPolicy` |
+| `StealthSessionBuilder::with_state_store` | method | yes | rename | `ledger` | core builders use plain setter names (`LaunchOptionsBuilder`, `PoolOptionsBuilder`); this builder mixes `with_*` and plain names; follows `Ledger` |
+| `StealthSessionBuilder::with_event_sink` | method | yes | rename | `event_sink` | core builders use plain setter names (`LaunchOptionsBuilder`, `PoolOptionsBuilder`); this builder mixes `with_*` and plain names |
+| `StealthSessionBuilder::geo_resolver` | method | yes | keep |  | says what it does |
+| `StealthSessionBuilder::per_site_rate` | method | yes | rename | `rate_limit` | core `RateLimiter`; one name with `HttpOptions::pacing` |
+| `StealthSessionBuilder::seed` | method | yes | remove | core `Fingerprint::seed` | pass a seeded core `Fingerprint` |
+| `StealthSessionBuilder::fingerprint` | method | yes | remove | core `LaunchOptionsBuilder::fingerprint` | a second copy of core's option |
+| `StealthSessionBuilder::restore` | method | yes | rename | `identity` | it takes a saved `Identity`; the session's own method is `import_identity` |
+| `StealthSessionBuilder::http_options` | method | yes | rename | `http_session_options` | follows `HttpSessionOptions` |
+| `StealthSessionBuilder::mitm_options` | method | yes | keep |  | says what it does |
+| `StealthSessionBuilder::solve_timeout` | method | yes | build on core | core `SolveOptions` timeouts | through the policy's `SolveOptions` |
+| `StealthSessionBuilder::clock` | method | yes | keep |  | says what it does |
+| `StealthSessionBuilder::build` | method | yes | keep |  | says what it does |
 
 ### `mimic::tls_server`
 
@@ -1372,23 +1369,23 @@ signature takes or returns the type but no path names it today.
 | `CaOptions.leaf_validity` | field |  | keep |  | plain data name |
 | `CaOptions.leaf_renew_margin` | field |  | keep |  | plain data name |
 | `CaOptions.leaf_capacity` | field |  | keep |  | plain data name |
-| `EphemeralCa` | struct |  | private |  | the MITM proxy's plumbing |
-| `EphemeralCa::generate` | method |  | private |  | goes with its type (plumbing) |
-| `EphemeralCa::generate_at` | method |  | private |  | goes with its type (plumbing) |
-| `EphemeralCa::spki_pins` | method |  | private |  | goes with its type (plumbing) |
-| `EphemeralCa::chrome_spki_arg` | method |  | private |  | goes with its type (plumbing) |
-| `EphemeralCa::leaf_spki_pin` | method |  | private |  | goes with its type (plumbing) |
-| `EphemeralCa::certificate` | method |  | private |  | goes with its type (plumbing) |
-| `EphemeralCa::options` | method |  | private |  | goes with its type (plumbing) |
-| `EphemeralCa::not_after_unix` | method |  | private |  | goes with its type (plumbing) |
-| `EphemeralCa::cached_leaves` | method |  | private |  | goes with its type (plumbing) |
-| `EphemeralCa::leaf_for` | method |  | private |  | goes with its type (plumbing) |
-| `Leaf` | struct |  | private |  | the MITM proxy's plumbing |
-| `Leaf::certificate` | method |  | private |  | goes with its type (plumbing) |
-| `Leaf::issuer` | method |  | private |  | goes with its type (plumbing) |
-| `Leaf::host` | method |  | private |  | goes with its type (plumbing) |
-| `Leaf::not_before_unix` | method |  | private |  | goes with its type (plumbing) |
-| `Leaf::not_after_unix` | method |  | private |  | goes with its type (plumbing) |
+| `EphemeralCa` | struct |  | keep |  | says what it is (a certificate authority that lives for one run) |
+| `EphemeralCa::generate` | method |  | keep |  | says what it does |
+| `EphemeralCa::generate_at` | method |  | keep |  | says what it does |
+| `EphemeralCa::spki_pins` | method |  | keep |  | says what it does |
+| `EphemeralCa::chrome_spki_arg` | method |  | rename | `spki_launch_arg` | follows `launch_args` |
+| `EphemeralCa::leaf_spki_pin` | method |  | keep |  | says what it does |
+| `EphemeralCa::certificate` | method |  | keep |  | says what it does |
+| `EphemeralCa::options` | method |  | keep |  | says what it does |
+| `EphemeralCa::not_after_unix` | method |  | keep |  | says what it does |
+| `EphemeralCa::cached_leaves` | method |  | keep |  | says what it does |
+| `EphemeralCa::leaf_for` | method |  | keep |  | says what it does |
+| `Leaf` | struct |  | rename | `LeafCert` | `Leaf` alone does not say it is a certificate |
+| `Leaf::certificate` | method |  | keep |  | says what it does |
+| `Leaf::issuer` | method |  | keep |  | says what it does |
+| `Leaf::host` | method |  | keep |  | says what it does |
+| `Leaf::not_before_unix` | method |  | keep |  | says what it does |
+| `Leaf::not_after_unix` | method |  | keep |  | says what it does |
 | `TlsServerError` | enum |  | keep |  | follows the `tls_server` module |
 | `TlsServerError::Ssl` | enum variant |  | keep |  | names the case |
 | `TlsServerError::Handshake` | enum variant |  | keep |  | names the case |
@@ -1427,5 +1424,5 @@ signature takes or returns the type but no path names it today.
 
 | Item | Kind | Copied | Verdict | Proposed | Why |
 |---|---|---|---|---|---|
-| `Clock` | type alias |  | private |  | a test seam; core has another `Clock` |
+| `Clock` | type alias |  | remove | scrape's `Clock` | the same alias defined twice in this repository |
 
