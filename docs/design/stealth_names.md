@@ -1,7 +1,7 @@
 # Stealth names: what the stealth API should cover, build on, add to core and be called
 
-Status: proposal (phase 1, sixth round). No code changes yet; the work starts once the
-owner approves this list.
+Status: phase 1 note, sixth round. Phase 2 started on the user's word, with the decisions
+marked **Taken** below; the owner can change any of them.
 
 ## What the stealth crate is for
 
