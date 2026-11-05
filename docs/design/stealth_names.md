@@ -212,6 +212,10 @@ and whatever someone using the library would prefer". The answers:
 2. **`fingerprint(...)`.** Yes: the stealth builders read the first fingerprint from the
    `LaunchOptionsBuilder` given to `launch_options` (core's `fingerprint` option), and their
    own setter goes.
+   Update (2026-11-05, lane `launch-options`): the stealth builders hold built `LaunchOptions`,
+   not builders (`docs/design/bon_builders.md` in seleniumbase-rs, Decision 4), so the read is
+   core's `LaunchOptions::fingerprint()` on the options given to `launch_options`. Their own
+   `fingerprint` setter has not gone yet.
 3. **Where the challenge strategies go.** On core's `SolveOptions`, with the interstitial
    wait in `Page::solve_captcha`: per-call control for the user, and it stays out of
    `src/sb_cdp/launch.rs`, which is the owner's.
