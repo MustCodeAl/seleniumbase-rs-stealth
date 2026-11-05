@@ -1,14 +1,14 @@
 //! The builder that layers caller-supplied inputs over a measured base.
 
 use super::identity::with_hints;
-use super::{WireFormatError, WireFormat};
+use super::{WireFormat, WireFormatError};
 use crate::convert;
 use seleniumbase_rs::evasion::fingerprint::{ClientHints, OsType};
 use seleniumbase_rs_codec::akamai::Akamai;
-use seleniumbase_rs_codec::header_spec::{HeaderSpec, HeaderSource, RequestShape};
+use seleniumbase_rs_codec::header_spec::{HeaderSource, HeaderSpec, RequestShape};
 use seleniumbase_rs_codec::ja3::{Ja3, Peetprint};
 use seleniumbase_rs_codec::ja4::{Ja4Order, Ja4Raw};
-use seleniumbase_rs_codec::tls_spec::{TlsSpecError, TlsSpec};
+use seleniumbase_rs_codec::tls_spec::{TlsSpec, TlsSpecError};
 use seleniumbase_rs_codec::BrowserKind;
 
 /// One change to the header lists, applied in the order it was asked for.

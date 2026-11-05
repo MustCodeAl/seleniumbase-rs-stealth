@@ -2,17 +2,14 @@
 //!
 //! Re-exports all of [`seleniumbase_rs`] (including `sb_cdp` and `evasion`)
 //! alongside `codec` (feature `codec`), `scrape` (enabled by default), and
-//! `wire` (when the `wire` feature is enabled). Use
-//! `fingerprint::{CanvasNoise, Fingerprint, StealthPolicy}` for the core
-//! fingerprint types through this facade.
+//! `wire` (when the `wire` feature is enabled). The core paths stay as they
+//! are in `seleniumbase-rs`: `evasion::fingerprint::{CanvasNoise, Fingerprint,
+//! StealthPolicy}`, `sb_cdp`, and so on.
 
 #![forbid(unsafe_code)]
 
 #[doc(inline)]
 pub use seleniumbase_rs::*;
-
-#[doc(inline)]
-pub use seleniumbase_rs::evasion::*;
 
 #[cfg(feature = "codec")]
 #[doc(inline)]

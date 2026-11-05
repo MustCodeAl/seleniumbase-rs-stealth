@@ -14,26 +14,26 @@
 
 pub mod akamai;
 pub mod client_hello;
-pub mod measurement;
 pub mod h2_frames;
 pub mod h2_spec;
 pub mod header_spec;
 pub mod ids;
 pub mod ja3;
 pub mod ja4;
+pub mod measurement;
 pub mod tls_spec;
 
 pub use akamai::{Akamai, AkamaiError};
 pub use client_hello::{ClientHello, ClientHelloError};
-pub use measurement::{
-    for_kind as wire_measurement_for, get as wire_measurement, measured as wire_measurements,
-    WireMeasurement, WireMeasurementError,
-};
 pub use h2_spec::{H2Spec, H2SpecError};
 pub use header_spec::{ClientHeaders, HeaderSpec, HeaderSpecError, RequestShape};
 pub use ja3::{Ja3, Ja3Error, Peetprint, PeetprintError};
 pub use ja4::{Ja4, Ja4Error, Ja4Raw};
-pub use tls_spec::{KnownGap, TlsSpecError, TlsSpec};
+pub use measurement::{
+    for_kind as wire_measurement_for, get as wire_measurement, measured as wire_measurements,
+    WireMeasurement, WireMeasurementError,
+};
+pub use tls_spec::{KnownGap, TlsSpec, TlsSpecError};
 
 /// A browser whose wire behaviour the measured tables describe.
 #[non_exhaustive]

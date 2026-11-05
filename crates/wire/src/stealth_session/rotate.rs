@@ -9,7 +9,7 @@ use seleniumbase_rs_scrape::challenge::mitigation::FetchKind;
 use seleniumbase_rs_scrape::egress::route::{ProxyKey, ProxyRoute};
 use seleniumbase_rs_scrape::error::ScrapeError;
 use seleniumbase_rs_scrape::ledger::events::ScrapeEvent;
-use seleniumbase_rs_scrape::passport::identity::{WireMeasurementRef, Identity};
+use seleniumbase_rs_scrape::passport::identity::{Identity, WireMeasurementRef};
 use seleniumbase_rs_scrape::runtime::cdp::ProxyLocale;
 
 /// A fresh persona for `os` and `seed` that claims the Chrome `major`, in the locale of `placed`
@@ -167,10 +167,7 @@ impl StealthSession {
     /// measured, and the errors of [`escalate`](Self::escalate) in browser mode. On an error the
     /// session is as it was.
     #[tracing::instrument(skip_all)]
-    pub async fn import_identity(
-        &mut self,
-        identity: &Identity,
-    ) -> Result<(), StealthError> {
+    pub async fn import_identity(&mut self, identity: &Identity) -> Result<(), StealthError> {
         check_identity(identity, self.egress_key())?;
         let mode = self.fetch_kind();
         self.enter(mode, identity.clone()).await?;
@@ -192,20 +189,14 @@ impl StealthSession {
     /// The locale of the egress in use, when there is an egress.
     async fn placed(&self) -> Result<Option<ProxyLocale>, StealthError> {
         match &self.egress.current {
-            Some(egress) => Ok(Some(
-                ProxyLocale::resolve(&*self.wiring.geo, egress).await?,
-            )),
+            Some(egress) => Ok(Some(ProxyLocale::resolve(&*self.wiring.geo, egress).await?)),
             None => Ok(None),
         }
     }
 
     /// The egress to move to: not the one in use, and in rotation.
     fn next_egress(&self) -> Result<ProxyRoute, StealthError> {
-        let pool = self
-            .egress
-            .pool
-            .as_ref()
-            .ok_or(ScrapeError::NoProxyLeft)?;
+        let pool = self.egress.pool.as_ref().ok_or(ScrapeError::NoProxyLeft)?;
         let site = self.egress.site.as_deref();
         let picked = match self.egress_key() {
             Some(current) => pool.pick_other(current, site, self.now()),

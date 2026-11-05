@@ -22,9 +22,7 @@ use std::error::Error;
 use std::process::ExitCode;
 
 use seleniumbase_rs_codec::BrowserKind;
-use seleniumbase_rs_wire::{
-    wire_client, WireFormatBuilder, WireFormatError, WireFormat,
-};
+use seleniumbase_rs_wire::{wire_client, WireFormat, WireFormatBuilder, WireFormatError};
 
 /// An Akamai HTTP/2 fingerprint other than Chrome's: its own SETTINGS, connection window,
 /// PRIORITY frames and pseudo-header order.

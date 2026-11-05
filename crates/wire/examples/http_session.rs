@@ -29,9 +29,9 @@ use std::process::ExitCode;
 use seleniumbase_rs::Fingerprint;
 use seleniumbase_rs_codec::measurement;
 use seleniumbase_rs_codec::BrowserKind;
-use seleniumbase_rs_wire::HttpSession;
-use seleniumbase_rs_scrape::WireMeasurementRef;
 use seleniumbase_rs_scrape::Identity;
+use seleniumbase_rs_scrape::WireMeasurementRef;
+use seleniumbase_rs_wire::HttpSession;
 use stealth_support::shop::Shop;
 
 /// The seed of the made-up identity. The same seed gives the same identity.

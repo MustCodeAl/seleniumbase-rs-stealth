@@ -7,12 +7,12 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use seleniumbase_rs::evasion::fingerprint::{Fingerprint, OsType};
 use seleniumbase_rs_codec::{measurement, BrowserKind};
-use seleniumbase_rs_wire::stealth_session::{StealthSession, StealthSessionBuilder};
 use seleniumbase_rs_scrape::challenge::mitigation::FetchKind;
 use seleniumbase_rs_scrape::egress::geo::CountryCode;
 use seleniumbase_rs_scrape::ledger::events::{CollectingEventSink, ScrapeEvent};
 use seleniumbase_rs_scrape::ledger::state::InMemoryLedger;
 use seleniumbase_rs_scrape::passport::policy::Escalation;
+use seleniumbase_rs_wire::stealth_session::{StealthSession, StealthSessionBuilder};
 
 use crate::browser::ScriptedLauncher;
 use crate::site::ChallengeSite;

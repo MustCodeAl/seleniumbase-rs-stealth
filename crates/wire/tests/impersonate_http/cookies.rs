@@ -4,8 +4,8 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
-use seleniumbase_rs_wire::http_session::{HttpError, HttpSession, Method};
 use seleniumbase_rs_scrape::ledger::events::{CollectingEventSink, ScrapeEvent};
+use seleniumbase_rs_wire::http_session::{HttpError, HttpSession, Method};
 use url::Url;
 
 use crate::site::{identity, now, Answer, Site};

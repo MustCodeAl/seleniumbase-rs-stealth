@@ -21,8 +21,12 @@ pub mod passport;
 pub mod runtime;
 mod sync;
 
-pub use challenge::detect::{ChallengeKind, Detection, ChallengeEvidence, ResponseView, ProtectionVendor};
-pub use challenge::mitigation::{Mitigation, AttemptContext, GiveUpReason, MitigationPolicy, FetchKind};
+pub use challenge::detect::{
+    ChallengeEvidence, ChallengeKind, Detection, ProtectionVendor, ResponseView,
+};
+pub use challenge::mitigation::{
+    AttemptContext, FetchKind, GiveUpReason, Mitigation, MitigationPolicy,
+};
 pub use egress::geo::{CountryCode, GeoResolver, LocaleExt, StaticGeoResolver};
 pub use egress::pool::{ProxyPool, RotationStrategy};
 pub use egress::redact::{RedactedUrl, Secret};
@@ -30,12 +34,12 @@ pub use egress::route::{ProxyKey, ProxyRoute};
 pub use error::ScrapeError;
 pub use jar::store::CookieJar;
 pub use ledger::events::{CollectingEventSink, EventSink, NoopEventSink, ScrapeEvent};
-pub use ledger::state::{SiteRecord, InMemoryLedger, Ledger};
-pub use passport::identity::{WireMeasurementRef, IdentityError, Identity};
-pub use passport::policy::{EscalationPolicy, Escalation};
+pub use ledger::state::{InMemoryLedger, Ledger, SiteRecord};
+pub use passport::identity::{Identity, IdentityError, WireMeasurementRef};
+pub use passport::policy::{Escalation, EscalationPolicy};
 pub use runtime::browser_scraper::{
     BrowserFetch, BrowserLauncher, BrowserScraper, BrowserScraperBuilder, ChromeLauncher,
 };
-pub use runtime::proxy_switch::{ContextProxySwitch, ProxySwitch};
 pub use runtime::json_store::JsonLedger;
+pub use runtime::proxy_switch::{ContextProxySwitch, ProxySwitch};
 pub use runtime::tracing_sink::TracingEventSink;

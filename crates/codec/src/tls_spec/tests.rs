@@ -1,6 +1,6 @@
 //! Tests of `TlsSpec`: building it from a hello, the reproducibility check and the three overlays.
 
-use super::{Alps, TlsSpecError, TlsSpec};
+use super::{Alps, TlsSpec, TlsSpecError};
 use crate::client_hello::fixtures::{
     HelloBuilder, CHROME_CIPHERS, CHROME_SIGALGS, JA4_EXAMPLE_EXTENSIONS,
 };

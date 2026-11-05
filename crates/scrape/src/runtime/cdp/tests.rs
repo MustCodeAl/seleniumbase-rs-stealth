@@ -266,7 +266,10 @@ async fn a_challenge_page_is_detected_from_its_status_headers_and_body() {
     let snapshot = detect_page(&page, &answer).await.expect("the page reads");
 
     assert_eq!(snapshot.detection.kind, ChallengeKind::JsChallenge);
-    assert_eq!(snapshot.detection.evidence.vendor, Some(ProtectionVendor::Cloudflare));
+    assert_eq!(
+        snapshot.detection.evidence.vendor,
+        Some(ProtectionVendor::Cloudflare)
+    );
     assert!(snapshot.body.contains("cloudflare") || snapshot.body.contains("challenge"));
 }
 
@@ -518,9 +521,14 @@ async fn the_cookie_from_before_the_solve_does_not_count_while_the_challenge_sho
         .await
         .expect("the navigation finishes");
 
-    let cleared = wait_for_clearance(&page, Some(ProtectionVendor::Cloudflare), Some("old"), BRIEF)
-        .await
-        .expect("the cookies read");
+    let cleared = wait_for_clearance(
+        &page,
+        Some(ProtectionVendor::Cloudflare),
+        Some("old"),
+        BRIEF,
+    )
+    .await
+    .expect("the cookies read");
 
     assert!(!cleared, "a stale clearance is not a solved challenge");
 }
@@ -565,9 +573,14 @@ async fn a_changed_cookie_value_counts_even_when_one_was_there() {
         &[cdp_cookie("cf_clearance", "new", ".shop.example", -1.0)],
     );
 
-    let cleared = wait_for_clearance(&page, Some(ProtectionVendor::Cloudflare), Some("old"), BRIEF)
-        .await
-        .expect("the cookies read");
+    let cleared = wait_for_clearance(
+        &page,
+        Some(ProtectionVendor::Cloudflare),
+        Some("old"),
+        BRIEF,
+    )
+    .await
+    .expect("the cookies read");
 
     assert!(cleared);
 }

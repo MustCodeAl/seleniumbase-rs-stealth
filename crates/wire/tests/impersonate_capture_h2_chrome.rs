@@ -20,8 +20,8 @@ use seleniumbase_rs::evasion::fingerprint::OsType;
 use seleniumbase_rs_codec::akamai::{Akamai, PseudoHeader};
 use seleniumbase_rs_codec::measurement::{self, WireMeasurement};
 use seleniumbase_rs_codec::BrowserKind;
-use seleniumbase_rs_wire::capture_h2::{derive, measure_and_write, MeasuredDoc, Passes, PROBES};
 use seleniumbase_rs_scrape::runtime::capture::args::ToolArgs;
+use seleniumbase_rs_wire::capture_h2::{derive, measure_and_write, MeasuredDoc, Passes, PROBES};
 
 fn root() -> &'static Path {
     Path::new(env!("CARGO_MANIFEST_DIR"))

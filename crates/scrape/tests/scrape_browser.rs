@@ -513,7 +513,10 @@ async fn no_flow_switches_on_a_domain_a_page_can_feel() {
 
     scraper.fetch(URL).await.expect("the challenge is passed");
     scraper.rotate_proxy().await.expect("the egress rotates");
-    scraper.rotate_fingerprint().await.expect("the profile rotates");
+    scraper
+        .rotate_fingerprint()
+        .await
+        .expect("the profile rotates");
     let identity = scraper
         .export_identity()
         .await

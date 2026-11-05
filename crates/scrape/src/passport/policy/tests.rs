@@ -115,7 +115,12 @@ fn a_site_that_needs_a_browser_escalates() {
     );
     let works_over_http = site_preferring(FetchKind::Http);
     assert_eq!(
-        before(&policy, FetchKind::Http, &identity(), Some(&works_over_http)),
+        before(
+            &policy,
+            FetchKind::Http,
+            &identity(),
+            Some(&works_over_http)
+        ),
         Escalation::Stay
     );
 }
@@ -158,7 +163,10 @@ fn a_valid_clearance_keeps_an_http_session_even_when_the_site_needs_a_browser() 
 fn the_real_clearance_of_a_jar_keeps_an_http_session() {
     let policy = EscalationPolicy::default();
     let made = identity_with_clearance();
-    assert_eq!(before(&policy, FetchKind::Http, &made, None), Escalation::Stay);
+    assert_eq!(
+        before(&policy, FetchKind::Http, &made, None),
+        Escalation::Stay
+    );
     // An hour from NOW the jar's cookie ends; 100 s before that it is expiring.
     assert_eq!(
         policy.before_fetch(FetchKind::Http, &made, "www.example.com", None, NOW + 3500),
@@ -169,7 +177,14 @@ fn the_real_clearance_of_a_jar_keeps_an_http_session() {
 #[test]
 fn the_margin_is_inclusive_at_120_seconds() {
     let policy = EscalationPolicy::default();
-    let at = |remaining: u64| before(&policy, FetchKind::Http, &cleared_until(NOW + remaining), None);
+    let at = |remaining: u64| {
+        before(
+            &policy,
+            FetchKind::Http,
+            &cleared_until(NOW + remaining),
+            None,
+        )
+    };
     assert_eq!(at(121), Escalation::Stay);
     assert_eq!(at(120), expiring(120));
     assert_eq!(at(119), expiring(119));
@@ -243,7 +258,13 @@ fn a_clearance_with_no_known_end_never_expires() {
         Escalation::Stay
     );
     assert_eq!(
-        policy.before_fetch(FetchKind::Http, &cleared_until(NO_EXPIRY), SITE, None, u64::MAX),
+        policy.before_fetch(
+            FetchKind::Http,
+            &cleared_until(NO_EXPIRY),
+            SITE,
+            None,
+            u64::MAX
+        ),
         expiring(0),
         "even a session cookie is spent at the end of time"
     );
@@ -294,7 +315,12 @@ fn a_challenge_escalates_an_http_session_with_the_kind_met() {
         ChallengeKind::Blocked,
     ] {
         assert_eq!(
-            policy.after_fetch(FetchKind::Http, &seen(kind), &Mitigation::Escalate, &identity()),
+            policy.after_fetch(
+                FetchKind::Http,
+                &seen(kind),
+                &Mitigation::Escalate,
+                &identity()
+            ),
             Escalation::Escalate(EscalateReason::Challenge(kind))
         );
     }
@@ -410,7 +436,10 @@ fn a_transition_names_the_mode_it_leads_to() {
     let demote = Escalation::Demote(DemoteReason::Manual);
     assert_eq!(escalate.resulting_kind(FetchKind::Http), FetchKind::Browser);
     assert_eq!(demote.resulting_kind(FetchKind::Browser), FetchKind::Http);
-    assert_eq!(Escalation::Stay.resulting_kind(FetchKind::Http), FetchKind::Http);
+    assert_eq!(
+        Escalation::Stay.resulting_kind(FetchKind::Http),
+        FetchKind::Http
+    );
     assert_eq!(
         Escalation::Stay.resulting_kind(FetchKind::Browser),
         FetchKind::Browser

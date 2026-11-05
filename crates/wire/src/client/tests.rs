@@ -2,13 +2,13 @@
 //! the proof that a profile reaches the wire is `tests/impersonate_wire.rs`.
 
 use super::identity::{quote, sec_ch_ua, user_agent_major};
-use super::{wire_client, WireFormatError, WireFormat, WireProtocol};
+use super::{wire_client, WireFormat, WireFormatError, WireProtocol};
 use crate::convert::ConvertError;
 use seleniumbase_rs::evasion::fingerprint::{BrandVersion, Fingerprint, OsType, Spoof};
 use seleniumbase_rs_codec::client_hello::ext_id;
-use seleniumbase_rs_codec::measurement::{self, WireMeasurement, WireMeasurementError, KnownGap};
 use seleniumbase_rs_codec::h2_spec::H2SpecError;
 use seleniumbase_rs_codec::header_spec::{HeaderSource, RequestShape};
+use seleniumbase_rs_codec::measurement::{self, KnownGap, WireMeasurement, WireMeasurementError};
 use seleniumbase_rs_codec::tls_spec::TlsSpecError;
 use seleniumbase_rs_codec::BrowserKind;
 use seleniumbase_rs_scrape::egress::geo::{Locale, LocaleExt};
@@ -17,8 +17,7 @@ use seleniumbase_rs_scrape::egress::geo::{Locale, LocaleExt};
 const CHROME_FILE: &str = include_str!("../../../codec/src/measured/chrome-155-macos.json");
 
 fn chrome() -> WireFormat {
-    WireFormat::for_system(BrowserKind::Chrome, OsType::Macos)
-        .expect("Chrome on macOS is measured")
+    WireFormat::for_system(BrowserKind::Chrome, OsType::Macos).expect("Chrome on macOS is measured")
 }
 
 /// The headers the browser sent in one probe of the HTTP/2 pass, pseudo-headers left out.
@@ -135,8 +134,8 @@ fn newest_measured_chrome_is_the_default() {
 #[test]
 fn an_unmeasured_system_is_refused_not_guessed() {
     for os in [OsType::Windows, OsType::Linux, OsType::Android, OsType::Ios] {
-        let error = WireFormat::for_system(BrowserKind::Chrome, os)
-            .expect_err("only macOS is measured");
+        let error =
+            WireFormat::for_system(BrowserKind::Chrome, os).expect_err("only macOS is measured");
         assert_eq!(
             error,
             WireFormatError::Measurement(WireMeasurementError::NotMeasured {
@@ -322,7 +321,10 @@ fn a_fingerprint_gives_its_identity_to_the_headers() {
         fingerprint.accept_languages().as_str()
     );
     let hints = fingerprint.client_hints().value().expect("Chrome hints");
-    assert_eq!(profile.client_headers().sec_ch_ua, Some(sec_ch_ua(&hints.brands)));
+    assert_eq!(
+        profile.client_headers().sec_ch_ua,
+        Some(sec_ch_ua(&hints.brands))
+    );
 }
 
 #[test]

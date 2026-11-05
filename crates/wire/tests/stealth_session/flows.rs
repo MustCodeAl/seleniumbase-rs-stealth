@@ -1,15 +1,15 @@
 //! The fetch loop and the changes of mode: every transition of the state machine, with the HTTP leg
 //! real (a session against a loopback TLS shop) and the browser leg scripted.
 
-use seleniumbase_rs_wire::stealth_session::StealthError;
 use seleniumbase_rs_scrape::challenge::detect::ChallengeKind;
 use seleniumbase_rs_scrape::challenge::mitigation::FetchKind;
 use seleniumbase_rs_scrape::error::ScrapeError;
 use seleniumbase_rs_scrape::ledger::events::ScrapeEvent;
 use seleniumbase_rs_scrape::ledger::state::Ledger;
 use seleniumbase_rs_scrape::passport::policy::{
-    DemoteReason, EscalateReason, EscalationPolicy, Escalation,
+    DemoteReason, EscalateReason, Escalation, EscalationPolicy,
 };
+use seleniumbase_rs_wire::stealth_session::StealthError;
 
 use crate::site::{CLEARANCE, HOST, REAL_MARKER};
 use crate::world::World;
@@ -74,7 +74,11 @@ async fn a_challenge_over_http_goes_to_the_browser_and_the_clearance_comes_back_
     assert!(fetched.body.contains(REAL_MARKER));
     assert_eq!(fetched.solved, Some(ChallengeKind::JsChallenge));
     assert_eq!((fetched.fetch_kind, fetched.attempts), (FetchKind::Http, 3));
-    assert_eq!(session.fetch_kind(), FetchKind::Http, "the session went back to HTTP");
+    assert_eq!(
+        session.fetch_kind(),
+        FetchKind::Http,
+        "the session went back to HTTP"
+    );
     assert_eq!(world.names(), FULL_FLOW);
     assert_eq!(
         world.changes(),
@@ -178,7 +182,10 @@ async fn a_session_that_prefers_the_browser_starts_in_it_and_stays_after_a_solve
 
     let fetched = session.fetch(&world.site.url("/")).await.expect("a page");
 
-    assert_eq!((fetched.fetch_kind, fetched.attempts), (FetchKind::Browser, 2));
+    assert_eq!(
+        (fetched.fetch_kind, fetched.attempts),
+        (FetchKind::Browser, 2)
+    );
     assert_eq!(fetched.solved, Some(ChallengeKind::JsChallenge));
     assert!(fetched.body.contains(REAL_MARKER));
     assert!(
@@ -200,7 +207,10 @@ async fn escalate_and_demote_by_hand_say_why_and_do_nothing_twice() {
 
     session.escalate().await.expect("escalates");
     session.escalate().await.expect("already there");
-    assert_eq!((session.fetch_kind(), world.launcher.count()), (FetchKind::Browser, 1));
+    assert_eq!(
+        (session.fetch_kind(), world.launcher.count()),
+        (FetchKind::Browser, 1)
+    );
     assert!(session.page().is_some() && session.http_session().is_none());
 
     session.demote().await.expect("demotes");
@@ -268,7 +278,10 @@ async fn a_clearance_near_its_end_sends_the_next_fetch_to_the_browser() {
     // 600 s of clearance, a margin of 120 s: still good at 200 s left.
     world.advance(400);
     let early = session.fetch(&world.site.url("/")).await.expect("a page");
-    assert_eq!((early.fetch_kind, world.launcher.count()), (FetchKind::Http, 1));
+    assert_eq!(
+        (early.fetch_kind, world.launcher.count()),
+        (FetchKind::Http, 1)
+    );
 
     // 115 s left: the policy does not wait for the site to refuse.
     world.advance(85);

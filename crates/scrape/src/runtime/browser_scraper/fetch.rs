@@ -4,7 +4,7 @@ use std::time::Instant;
 
 use super::{BrowserFetch, BrowserScraper};
 use crate::challenge::detect::{ChallengeKind, Detection};
-use crate::challenge::mitigation::{Mitigation, AttemptContext, GiveUpReason, FetchKind};
+use crate::challenge::mitigation::{AttemptContext, FetchKind, GiveUpReason, Mitigation};
 use crate::egress::pool::ProxyOutcome;
 use crate::egress::redact::RedactedUrl;
 use crate::error::ScrapeError;

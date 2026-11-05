@@ -38,7 +38,10 @@ fn growing_a_cookie_by_replacing_it_cannot_pass_the_site_bound() {
         let header = format!("c{i}={value}");
         let outcome = store_at(&mut jar, "https://example.com/", &header, at);
         assert!(
-            matches!(outcome, SetCookieOutcome::Replaced | SetCookieOutcome::Stored),
+            matches!(
+                outcome,
+                SetCookieOutcome::Replaced | SetCookieOutcome::Stored
+            ),
             "{outcome:?}"
         );
         assert!(held_by_jar(&jar) <= MAX_BYTES_PER_SITE, "after cookie {i}");

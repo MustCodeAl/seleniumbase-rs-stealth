@@ -92,7 +92,7 @@ pub use super::http_session::Clock;
 
 use self::browser::BrowserLeg;
 use self::pace::SiteLimits;
-use super::http_session::{HttpSessionOptions, HttpSession, HttpRules};
+use super::http_session::{HttpRules, HttpSession, HttpSessionOptions};
 use super::mitm::{MitmOptions, MitmProxy};
 use seleniumbase_rs::evasion::fingerprint::OsType;
 use seleniumbase_rs::sb_cdp::{LaunchOptionsBuilder, Page};

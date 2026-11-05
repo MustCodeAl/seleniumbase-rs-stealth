@@ -5,7 +5,7 @@ use std::fmt;
 use std::sync::Mutex;
 
 use super::geo::CountryCode;
-use super::route::{ProxyRouteError, ProxyKey, ProxyRoute};
+use super::route::{ProxyKey, ProxyRoute, ProxyRouteError};
 use crate::sync::locked;
 use seleniumbase_rs::evasion::humanize::Rng;
 
@@ -159,7 +159,10 @@ impl ProxyPool {
     /// # Errors
     ///
     /// Returns the first [`ProxyRouteError`] of the specs.
-    pub fn from_geo_proxies<I, S>(items: I, strategy: RotationStrategy) -> Result<Self, ProxyRouteError>
+    pub fn from_geo_proxies<I, S>(
+        items: I,
+        strategy: RotationStrategy,
+    ) -> Result<Self, ProxyRouteError>
     where
         I: IntoIterator<Item = (S, CountryCode)>,
         S: AsRef<str>,
@@ -189,7 +192,12 @@ impl ProxyPool {
 
     /// Like [`ProxyPool::pick`], limited to egresses in `country`.
     #[must_use]
-    pub fn pick_in(&self, country: CountryCode, site: Option<&str>, now: u64) -> Option<ProxyRoute> {
+    pub fn pick_in(
+        &self,
+        country: CountryCode,
+        site: Option<&str>,
+        now: u64,
+    ) -> Option<ProxyRoute> {
         self.choose(|key| key.country == Some(country), site, now)
     }
 

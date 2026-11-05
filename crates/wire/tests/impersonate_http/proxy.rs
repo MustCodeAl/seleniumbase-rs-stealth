@@ -3,8 +3,8 @@
 
 use seleniumbase_rs::evasion::fingerprint::OsType;
 use seleniumbase_rs_codec::BrowserKind;
-use seleniumbase_rs_wire::http_session::{HttpError, HttpSessionOptions, HttpSession};
 use seleniumbase_rs_scrape::passport::identity::WireMeasurementRef;
+use seleniumbase_rs_wire::http_session::{HttpError, HttpSession, HttpSessionOptions};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 

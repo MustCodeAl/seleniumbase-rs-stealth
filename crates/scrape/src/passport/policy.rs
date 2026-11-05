@@ -42,7 +42,7 @@ use serde::Serialize;
 
 use super::identity::Identity;
 use crate::challenge::detect::{ChallengeKind, Detection};
-use crate::challenge::mitigation::{Mitigation, FetchKind};
+use crate::challenge::mitigation::{FetchKind, Mitigation};
 use crate::ledger::state::SiteRecord;
 
 #[cfg(test)]

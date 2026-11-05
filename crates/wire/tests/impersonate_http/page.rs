@@ -8,10 +8,10 @@ use std::sync::Arc;
 
 use seleniumbase_rs::sb_cdp::{Browser, MockCtrl, Page};
 use seleniumbase_rs_codec::BrowserKind;
-use seleniumbase_rs_wire::client::WireFormat;
-use seleniumbase_rs_wire::http_session::{HttpError, HttpSessionOptions, HttpSession};
 use seleniumbase_rs_scrape::passport::identity::IdentityError;
 use seleniumbase_rs_scrape::runtime::proxy_switch::{ContextProxySwitch, ProxySwitch};
+use seleniumbase_rs_wire::client::WireFormat;
+use seleniumbase_rs_wire::http_session::{HttpError, HttpSession, HttpSessionOptions};
 use serde_json::{json, Value};
 
 use crate::site::{egress, measured_major, Answer, Site};

@@ -16,7 +16,7 @@ use std::sync::{Arc, Mutex};
 use serde::Serialize;
 
 use crate::challenge::detect::{ChallengeKind, ProtectionVendor};
-use crate::challenge::mitigation::{Mitigation, FetchKind};
+use crate::challenge::mitigation::{FetchKind, Mitigation};
 use crate::egress::redact::RedactedUrl;
 use crate::egress::route::ProxyKey;
 use crate::passport::policy::Escalation;

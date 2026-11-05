@@ -33,7 +33,10 @@ async fn rotating_the_profile_draws_another_one_for_the_same_machine_and_starts_
     scraper.fetch(URL).await.expect("the page is fetched");
     let before = scraper.fingerprint().clone();
 
-    scraper.rotate_fingerprint().await.expect("the profile rotates");
+    scraper
+        .rotate_fingerprint()
+        .await
+        .expect("the profile rotates");
 
     assert_eq!(scraper.seed(), Rng::new(SEED).next_u64());
     let after = scraper.fingerprint();
@@ -504,7 +507,10 @@ async fn no_flow_switches_on_a_domain_a_page_can_feel() {
 
     scraper.fetch(URL).await.expect("the challenge is passed");
     scraper.rotate_proxy().await.expect("the proxy rotates");
-    scraper.rotate_fingerprint().await.expect("the profile rotates");
+    scraper
+        .rotate_fingerprint()
+        .await
+        .expect("the profile rotates");
     let identity = scraper
         .export_identity()
         .await

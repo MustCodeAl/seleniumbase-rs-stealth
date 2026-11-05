@@ -11,8 +11,8 @@ use std::path::{Path, PathBuf};
 use seleniumbase_rs::evasion::fingerprint::OsType;
 use seleniumbase_rs_codec::measurement::{self, WireMeasurement};
 use seleniumbase_rs_codec::BrowserKind;
-use seleniumbase_rs_wire::capture_h2::{derive, H1Evidence, H2Evidence, PROBES};
 use seleniumbase_rs_scrape::runtime::capture::record::to_hex;
+use seleniumbase_rs_wire::capture_h2::{derive, H1Evidence, H2Evidence, PROBES};
 
 /// The codec crate, which holds the measured files and their raw fixtures.
 fn root() -> PathBuf {

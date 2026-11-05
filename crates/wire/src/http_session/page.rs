@@ -23,7 +23,7 @@ use super::cookies::Pending;
 use super::error::HttpError;
 use super::options::HttpSessionOptions;
 use super::HttpSession;
-use crate::client::{WireFormatError, WireFormat};
+use crate::client::{WireFormat, WireFormatError};
 use seleniumbase_rs::error::SeleniumBaseError;
 use seleniumbase_rs::evasion::fingerprint::OsType;
 use seleniumbase_rs::sb_cdp::{Page, Proxy};

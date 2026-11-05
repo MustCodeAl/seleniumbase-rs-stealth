@@ -4,10 +4,9 @@
 use std::sync::Arc;
 
 use seleniumbase_rs_codec::header_spec::RequestShape;
-use seleniumbase_rs_wire::http_session::{
-    HttpError, HttpSessionOptions, HttpSession, Method, ReplyProtocol,
-};
 use seleniumbase_rs_scrape::ledger::events::{CollectingEventSink, ScrapeEvent};
+use seleniumbase_rs_wire::http_session::{HttpError, HttpSession, HttpSessionOptions, Method};
+use seleniumbase_rs_wire::WireProtocol;
 
 use crate::site::{identity, Answer, Site};
 
@@ -27,7 +26,7 @@ async fn a_get_returns_the_status_the_headers_and_the_body() {
     assert!(reply.is_success());
     assert_eq!(reply.text().expect("text"), "hello");
     assert_eq!(reply.headers().get("X-N"), Some("1"));
-    assert_eq!(reply.protocol(), ReplyProtocol::Http1);
+    assert_eq!(reply.protocol(), WireProtocol::Http1);
     assert_eq!(reply.redirects().len(), 0, "no redirect was followed");
     assert_eq!(reply.url().path(), "/a");
     let seen = site.seen();
@@ -326,8 +325,8 @@ async fn a_plain_http_url_is_requested_with_the_headers_of_http1() {
         stream.write_all(answer).await.expect("answers");
         String::from_utf8_lossy(&head).to_ascii_lowercase()
     });
-    let session =
-        HttpSession::from_identity(&identity(), None, HttpSessionOptions::new()).expect("a session");
+    let session = HttpSession::from_identity(&identity(), None, HttpSessionOptions::new())
+        .expect("a session");
 
     let reply = session
         .get(&format!("http://127.0.0.1:{port}/plain"))
@@ -336,7 +335,7 @@ async fn a_plain_http_url_is_requested_with_the_headers_of_http1() {
     let head = server.await.expect("the server task");
 
     assert_eq!(reply.text().expect("text"), "ok");
-    assert_eq!(reply.protocol(), ReplyProtocol::Http1);
+    assert_eq!(reply.protocol(), WireProtocol::Http1);
     assert!(
         head.starts_with(&format!(
             "get /plain http/1.1\r\nhost: 127.0.0.1:{port}\r\n"
@@ -357,8 +356,8 @@ fn the_session_its_replies_and_its_futures_can_cross_threads() {
     send_sync::<HttpSessionOptions>();
     send_sync::<HttpError>();
     send_sync::<seleniumbase_rs_wire::http_session::HttpResponse>();
-    let session =
-        HttpSession::from_identity(&identity(), None, HttpSessionOptions::new()).expect("a session");
+    let session = HttpSession::from_identity(&identity(), None, HttpSessionOptions::new())
+        .expect("a session");
     let future = session.get("https://shop.test/");
     is_send(&future);
 }

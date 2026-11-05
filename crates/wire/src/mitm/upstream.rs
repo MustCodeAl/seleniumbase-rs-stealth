@@ -24,12 +24,12 @@ use super::destination::{self, PublicOnly};
 use super::forward::ProxyBody;
 use super::websocket::RelayIo;
 use super::{MitmError, MitmOptions};
-use crate::client::{wire_client, WireFormatError, WireFormat};
+use crate::client::{wire_client, WireFormat, WireFormatError};
 use crate::convert;
 use crate::sync::locked;
 use seleniumbase_rs_codec::client_hello::ext_id;
-use seleniumbase_rs_codec::measurement;
 use seleniumbase_rs_codec::header_spec::RequestShape;
+use seleniumbase_rs_codec::measurement;
 use seleniumbase_rs_codec::tls_spec::TlsSpec;
 use seleniumbase_rs_scrape::egress::route::{ProxyKey, ProxyRoute};
 

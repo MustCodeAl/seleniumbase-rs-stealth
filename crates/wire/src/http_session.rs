@@ -76,11 +76,12 @@ pub use wreq::Method;
 
 pub use self::error::HttpError;
 pub use self::options::{
-    Clock, HttpSessionOptions, DEFAULT_CONNECT_TIMEOUT, DEFAULT_MAX_BODY_BYTES, DEFAULT_MAX_REDIRECTS,
-    DEFAULT_MAX_REQUEST_BYTES, DEFAULT_TIMEOUT, MAX_BODY_LIMIT, MAX_REDIRECT_LIMIT, MAX_TIMEOUT,
+    Clock, HttpSessionOptions, DEFAULT_CONNECT_TIMEOUT, DEFAULT_MAX_BODY_BYTES,
+    DEFAULT_MAX_REDIRECTS, DEFAULT_MAX_REQUEST_BYTES, DEFAULT_TIMEOUT, MAX_BODY_LIMIT,
+    MAX_REDIRECT_LIMIT, MAX_TIMEOUT,
 };
 pub use self::outcome::{HttpAttempt, HttpFetch, HttpRules, HttpVerdict};
-pub use self::reply::{ResponseHeaders, HttpResponse, ReplyProtocol};
+pub use self::reply::{HttpResponse, ResponseHeaders};
 pub use self::request::HttpRequest;
 
 use self::cookies::SessionJar;
@@ -89,7 +90,7 @@ use crate::client::{WireFormat, WireProtocol};
 use seleniumbase_rs_scrape::egress::route::{ProxyKey, ProxyRoute};
 use seleniumbase_rs_scrape::jar::store::CookieJar;
 use seleniumbase_rs_scrape::ledger::events::{EventSink, ScrapeEvent};
-use seleniumbase_rs_scrape::passport::identity::{WireMeasurementRef, IdentityError, Identity};
+use seleniumbase_rs_scrape::passport::identity::{Identity, IdentityError, WireMeasurementRef};
 
 /// The most origins whose protocol is remembered. Past it the table starts over.
 const MAX_REMEMBERED_ORIGINS: usize = 1024;
@@ -142,10 +143,12 @@ impl fmt::Debug for HttpSession {
 /// Maps the mismatch of an identity's emulation to the session's version error.
 fn emulation_error(error: IdentityError) -> HttpError {
     match error {
-        IdentityError::WireMeasurementMismatch { identity, measured } => HttpError::VersionMismatch {
-            browser: identity,
-            measured,
-        },
+        IdentityError::WireMeasurementMismatch { identity, measured } => {
+            HttpError::VersionMismatch {
+                browser: identity,
+                measured,
+            }
+        }
         other => HttpError::Identity(other),
     }
 }
@@ -311,9 +314,13 @@ mod tests {
         let profile = WireFormat::measured(BrowserKind::Chrome).expect("measured");
         let egress =
             ProxyRoute::parse("http://alice:s3cret@proxy.example:8080", None).expect("a spec");
-        let session =
-            HttpSession::assemble(profile, CookieJar::new(), Some(egress), HttpSessionOptions::new())
-                .expect("a session");
+        let session = HttpSession::assemble(
+            profile,
+            CookieJar::new(),
+            Some(egress),
+            HttpSessionOptions::new(),
+        )
+        .expect("a session");
         let shown = format!("{session:?}");
         assert!(
             shown.contains("proxy.example") && shown.contains("cookies: 0"),

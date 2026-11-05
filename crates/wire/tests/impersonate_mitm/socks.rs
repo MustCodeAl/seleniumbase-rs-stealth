@@ -4,8 +4,8 @@
 use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::sync::{Arc, Mutex, PoisonError};
 
-use seleniumbase_rs_wire::mitm::MitmOptions;
 use seleniumbase_rs_scrape::egress::route::ProxyRoute;
+use seleniumbase_rs_wire::mitm::MitmOptions;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::task::JoinHandle;

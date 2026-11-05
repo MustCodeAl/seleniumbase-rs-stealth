@@ -189,7 +189,7 @@ use tokio::task::JoinHandle;
 
 use self::connect::ProxyCredentials;
 use self::upstream::{Upstream, UpstreamSlot};
-use super::client::{WireFormatError, WireFormat};
+use super::client::{WireFormat, WireFormatError};
 use super::tls_server::{self, EphemeralCa, TlsServerError, ALPN_HTTP1, DEFAULT_HANDSHAKE_TIMEOUT};
 use crate::sync::locked;
 use seleniumbase_rs::common::shutdown::{cleanup_within, spawn_cleanup, timeout_from_env};

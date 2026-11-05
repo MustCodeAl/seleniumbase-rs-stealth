@@ -24,9 +24,9 @@ use std::time::Duration;
 
 use seleniumbase_rs::sb_cdp::{Browser, LaunchOptions, Page};
 use seleniumbase_rs_codec::BrowserKind;
-use seleniumbase_rs_wire::client::WireFormat;
-use seleniumbase_rs_wire::http_session::{HttpError, HttpSessionOptions, HttpSession};
 use seleniumbase_rs_scrape::egress::route::ProxyRoute;
+use seleniumbase_rs_wire::client::WireFormat;
+use seleniumbase_rs_wire::http_session::{HttpError, HttpSession, HttpSessionOptions};
 use serde_json::json;
 
 #[allow(

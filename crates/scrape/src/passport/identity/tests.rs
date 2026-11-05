@@ -1,7 +1,7 @@
 //! Tests of the identity: construction, serde, clearances, and the proxy and wire_measurement checks.
 
 use super::fixtures::{
-    proxy, wire_measurement, fingerprint, identity, identity_with_clearance, set_cookie, MAJOR, NOW,
+    fingerprint, identity, identity_with_clearance, proxy, set_cookie, wire_measurement, MAJOR, NOW,
 };
 use super::*;
 use crate::egress::geo::CountryCode;

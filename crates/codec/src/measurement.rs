@@ -248,10 +248,11 @@ impl WireMeasurement {
                 name: name.to_owned(),
             });
         }
-        let file: FileIn = serde_json::from_str(json).map_err(|error| WireMeasurementError::Parse {
-            name: name.to_owned(),
-            reason: error.to_string(),
-        })?;
+        let file: FileIn =
+            serde_json::from_str(json).map_err(|error| WireMeasurementError::Parse {
+                name: name.to_owned(),
+                reason: error.to_string(),
+            })?;
         let entry = Self {
             kind: file.kind.into(),
             major: file.major,
@@ -393,7 +394,9 @@ pub fn try_measured() -> Result<&'static [WireMeasurement], &'static WireMeasure
 }
 
 /// The entry with the highest major version among `candidates`; the first of equals wins.
-fn highest_major<'a>(candidates: impl Iterator<Item = &'a WireMeasurement>) -> Option<&'a WireMeasurement> {
+fn highest_major<'a>(
+    candidates: impl Iterator<Item = &'a WireMeasurement>,
+) -> Option<&'a WireMeasurement> {
     candidates.fold(None, |best: Option<&WireMeasurement>, entry| match best {
         Some(known) if known.major >= entry.major => Some(known),
         _ => Some(entry),
@@ -408,7 +411,11 @@ pub fn newest(entries: &[WireMeasurement], kind: BrowserKind) -> Option<&WireMea
 
 /// The newest entry of `kind` on `os` in `entries`.
 #[must_use]
-pub fn newest_on(entries: &[WireMeasurement], kind: BrowserKind, os: OsType) -> Option<&WireMeasurement> {
+pub fn newest_on(
+    entries: &[WireMeasurement],
+    kind: BrowserKind,
+    os: OsType,
+) -> Option<&WireMeasurement> {
     highest_major(
         entries
             .iter()
@@ -435,7 +442,10 @@ pub fn for_kind(kind: BrowserKind) -> &'static WireMeasurement {
 /// # Errors
 ///
 /// Returns [`WireMeasurementError::NotMeasured`] when the pair has no capture.
-pub fn get(kind: BrowserKind, os: OsType) -> Result<&'static WireMeasurement, WireMeasurementError> {
+pub fn get(
+    kind: BrowserKind,
+    os: OsType,
+) -> Result<&'static WireMeasurement, WireMeasurementError> {
     newest_on(measured(), kind, os).ok_or(WireMeasurementError::NotMeasured { kind, os })
 }
 

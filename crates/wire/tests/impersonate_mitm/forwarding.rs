@@ -7,9 +7,9 @@ use base64::Engine as _;
 use futures_util::StreamExt as _;
 use seleniumbase_rs_codec::header_spec::RequestShape;
 use seleniumbase_rs_codec::ja4::Ja4;
+use seleniumbase_rs_scrape::ledger::events::{CollectingEventSink, ScrapeEvent};
 use seleniumbase_rs_wire::mitm::{MitmOptions, MitmProxy};
 use seleniumbase_rs_wire::tls_server::ALPN_HTTP1;
-use seleniumbase_rs_scrape::ledger::events::{CollectingEventSink, ScrapeEvent};
 use tokio::net::TcpStream;
 
 use crate::support::{
@@ -72,10 +72,7 @@ async fn a_forwarded_request_carries_the_measured_ja4_and_akamai_string() {
         profile.h2_spec().akamai(),
         "Akamai string"
     );
-    assert_eq!(
-        preface.headers_priority,
-        profile.h2_spec().headers_priority
-    );
+    assert_eq!(preface.headers_priority, profile.h2_spec().headers_priority);
     let authority = format!("{ORIGIN}:{port}");
     assert_eq!(preface.header(":authority"), Some(authority.as_str()));
     assert_eq!(preface.header(":path"), Some("/page?q=1"));

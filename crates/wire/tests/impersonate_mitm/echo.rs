@@ -19,11 +19,11 @@ use base64::Engine as _;
 use btls::ssl::SslAcceptor;
 use ring::digest::{digest, SHA1_FOR_LEGACY_USE_ONLY};
 use seleniumbase_rs_codec::client_hello::ClientHello;
-use seleniumbase_rs_wire::tls_server::{
-    accept, acceptor, EphemeralCa, ALPN_HTTP1, DEFAULT_HANDSHAKE_TIMEOUT,
-};
 use seleniumbase_rs_scrape::runtime::capture::stream::{
     http1_response, read_http1_request, Http1Request,
+};
+use seleniumbase_rs_wire::tls_server::{
+    accept, acceptor, EphemeralCa, ALPN_HTTP1, DEFAULT_HANDSHAKE_TIMEOUT,
 };
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};

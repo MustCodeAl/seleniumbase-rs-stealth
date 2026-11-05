@@ -682,7 +682,10 @@ mod tests {
     fn pseudo_helpers_agree_with_each_other() {
         for pseudo in PseudoHeader::ALL {
             assert_eq!(PseudoHeader::from_letter(pseudo.letter()), Some(pseudo));
-            assert_eq!(PseudoHeader::from_header_name(pseudo.header_name()), Some(pseudo));
+            assert_eq!(
+                PseudoHeader::from_header_name(pseudo.header_name()),
+                Some(pseudo)
+            );
             assert!(pseudo.header_name().starts_with(':'));
         }
         assert_eq!(PseudoHeader::from_letter('x'), None);

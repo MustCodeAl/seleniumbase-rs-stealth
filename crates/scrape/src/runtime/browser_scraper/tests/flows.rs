@@ -8,13 +8,13 @@ use async_trait::async_trait;
 use tokio::time::Instant;
 
 use super::rig::{block, country, real_page, script_challenge, widget_challenge, Rig, NOW};
-use crate::challenge::detect::{ChallengeKind, Detection, ChallengeEvidence};
-use crate::challenge::mitigation::{Mitigation, GiveUpReason};
+use crate::challenge::detect::{ChallengeEvidence, ChallengeKind, Detection};
+use crate::challenge::mitigation::{GiveUpReason, Mitigation};
 use crate::egress::pool::{ProxyOutcome, DEFAULT_QUARANTINE_AFTER};
 use crate::egress::route::ProxyRoute;
 use crate::error::ScrapeError;
 use crate::ledger::events::ScrapeEvent;
-use crate::ledger::state::{SiteRecord, LedgerError, Ledger};
+use crate::ledger::state::{Ledger, LedgerError, SiteRecord};
 use crate::runtime::browser_scraper::fetch::{give_up, Step, Target};
 use crate::runtime::cdp::testkit::Served;
 use crate::runtime::cdp::PageSnapshot;

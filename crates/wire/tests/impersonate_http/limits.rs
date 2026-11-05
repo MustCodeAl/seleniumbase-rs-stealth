@@ -4,7 +4,7 @@
 use std::io::Write as _;
 use std::time::{Duration, Instant};
 
-use seleniumbase_rs_wire::http_session::{HttpError, HttpSessionOptions, HttpSession, Method};
+use seleniumbase_rs_wire::http_session::{HttpError, HttpSession, HttpSessionOptions, Method};
 
 use crate::site::{egress, fingerprint, identity, identity_of, measured_major, Answer, Site};
 
@@ -239,7 +239,9 @@ async fn every_hop_of_a_redirect_counts_for_the_pace() {
         _ => Answer::ok(""),
     })
     .await;
-    let options = site.options(&[HOST]).rate_limit(1, Duration::from_millis(500));
+    let options = site
+        .options(&[HOST])
+        .rate_limit(1, Duration::from_millis(500));
     let session = HttpSession::from_identity(&identity(), None, options).expect("a session");
 
     let started = Instant::now();
@@ -278,8 +280,8 @@ async fn a_refused_connection_names_the_failure_and_redacts_the_url() {
     let closed = std::net::TcpListener::bind(("127.0.0.1", 0)).expect("binds");
     let port = closed.local_addr().expect("an address").port();
     drop(closed);
-    let session =
-        HttpSession::from_identity(&identity(), None, HttpSessionOptions::new()).expect("a session");
+    let session = HttpSession::from_identity(&identity(), None, HttpSessionOptions::new())
+        .expect("a session");
 
     let error = session
         .get(&format!("https://127.0.0.1:{port}/?token=hunter2&page=2"))
@@ -310,8 +312,8 @@ async fn a_proxy_that_cannot_be_reached_leaks_no_credentials() {
         },
         Some(proxy.key().clone()),
     );
-    let session =
-        HttpSession::from_identity(&base, Some(proxy), HttpSessionOptions::new()).expect("a session");
+    let session = HttpSession::from_identity(&base, Some(proxy), HttpSessionOptions::new())
+        .expect("a session");
 
     let error = session
         .get("https://shop.test/?token=hunter2")

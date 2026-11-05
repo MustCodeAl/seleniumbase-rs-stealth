@@ -15,10 +15,10 @@ use std::path::Path;
 use std::process::ExitCode;
 
 use seleniumbase_rs_codec::h2_spec::H2Spec;
+use seleniumbase_rs_scrape::runtime::capture::args::USAGE;
 use seleniumbase_rs_wire::capture_h2::{
     measure_and_write, parse_args, CaptureH2Error, Report, USAGE_PASSES,
 };
-use seleniumbase_rs_scrape::runtime::capture::args::USAGE;
 
 /// The name and version this tool writes into the provenance of the file.
 const TOOL: &str = concat!("capture_h2 ", env!("CARGO_PKG_VERSION"));

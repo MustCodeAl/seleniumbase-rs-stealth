@@ -586,7 +586,10 @@ pub mod peetprint {
     /// GREASE-collapsed slots of a list of wire ids.
     #[must_use]
     pub fn slots(values: &[u16]) -> Vec<PeetprintSlot> {
-        values.iter().map(|&id| PeetprintSlot::from_id(id)).collect()
+        values
+            .iter()
+            .map(|&id| PeetprintSlot::from_id(id))
+            .collect()
     }
 
     /// The concrete ids of a slot list, GREASE dropped.

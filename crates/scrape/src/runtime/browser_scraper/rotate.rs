@@ -5,7 +5,7 @@ use super::{BrowserScraper, Current};
 use crate::egress::route::ProxyRoute;
 use crate::error::ScrapeError;
 use crate::ledger::events::ScrapeEvent;
-use crate::passport::identity::{WireMeasurementRef, Identity};
+use crate::passport::identity::{Identity, WireMeasurementRef};
 use crate::runtime::cdp::{self, ProxyLocale};
 use seleniumbase_rs::evasion::fingerprint::Fingerprint;
 use seleniumbase_rs::evasion::humanize::Rng;
@@ -172,11 +172,7 @@ impl BrowserScraper {
 
     /// The proxy to move to: not the one in use, and in rotation.
     fn next_egress(&self) -> Result<ProxyRoute, ScrapeError> {
-        let pool = self
-            .proxy
-            .pool
-            .as_ref()
-            .ok_or(ScrapeError::NoProxyLeft)?;
+        let pool = self.proxy.pool.as_ref().ok_or(ScrapeError::NoProxyLeft)?;
         let site = self.proxy.site.as_deref();
         let picked = match self.proxy_route() {
             Some(current) => pool.pick_other(current, site, self.now()),

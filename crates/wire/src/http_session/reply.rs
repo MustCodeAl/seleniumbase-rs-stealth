@@ -12,6 +12,7 @@ use serde::de::DeserializeOwned;
 use url::Url;
 
 use super::error::HttpError;
+use crate::client::WireProtocol;
 use seleniumbase_rs_scrape::challenge::detect::{detect, Detection, ResponseView, MAX_SCAN_BYTES};
 use seleniumbase_rs_scrape::egress::redact::RedactedUrl;
 
@@ -93,16 +94,6 @@ impl fmt::Debug for ResponseHeaders {
     }
 }
 
-/// The protocol a reply travelled on.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[non_exhaustive]
-pub enum ReplyProtocol {
-    /// HTTP/2.
-    Http2,
-    /// HTTP/1.1 or older.
-    Http1,
-}
-
 /// One answer, with its whole body.
 ///
 /// ```no_run
@@ -123,7 +114,7 @@ pub struct HttpResponse {
     pub(super) url: Url,
     pub(super) headers: ResponseHeaders,
     pub(super) body: Bytes,
-    pub(super) protocol: ReplyProtocol,
+    pub(super) protocol: WireProtocol,
     pub(super) redirects: Vec<RedactedUrl>,
     pub(super) elapsed: Duration,
 }
@@ -204,7 +195,7 @@ impl HttpResponse {
 
     /// The protocol the reply travelled on.
     #[must_use]
-    pub fn protocol(&self) -> ReplyProtocol {
+    pub fn protocol(&self) -> WireProtocol {
         self.protocol
     }
 
@@ -266,7 +257,7 @@ mod tests {
                     .collect(),
             ),
             body: Bytes::copy_from_slice(body),
-            protocol: ReplyProtocol::Http1,
+            protocol: WireProtocol::Http1,
             redirects: Vec::new(),
             elapsed: Duration::from_millis(5),
         }

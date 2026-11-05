@@ -8,7 +8,9 @@ use super::{Leg, StealthError, StealthSession};
 use crate::http_session::{HttpAttempt, HttpFetch, HttpResponse, HttpSession};
 use seleniumbase_rs::utils::urls::normalize_page_url;
 use seleniumbase_rs_scrape::challenge::detect::{ChallengeKind, Detection};
-use seleniumbase_rs_scrape::challenge::mitigation::{Mitigation, AttemptContext, GiveUpReason, FetchKind};
+use seleniumbase_rs_scrape::challenge::mitigation::{
+    AttemptContext, FetchKind, GiveUpReason, Mitigation,
+};
 use seleniumbase_rs_scrape::egress::pool::ProxyOutcome;
 use seleniumbase_rs_scrape::egress::redact::RedactedUrl;
 use seleniumbase_rs_scrape::egress::route::ProxyKey;
@@ -227,11 +229,7 @@ impl StealthSession {
     }
 
     /// Asks the session policy, before the request, whether the browser should take it.
-    async fn preflight(
-        &mut self,
-        target: &Target,
-        state: &SiteRecord,
-    ) -> Result<(), StealthError> {
+    async fn preflight(&mut self, target: &Target, state: &SiteRecord) -> Result<(), StealthError> {
         let transition = match &self.leg {
             Leg::Http(http) => {
                 http.preflight(&target.url, &self.identity, Some(state), &self.wiring.rules)?

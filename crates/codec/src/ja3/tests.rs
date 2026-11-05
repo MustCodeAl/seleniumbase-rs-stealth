@@ -154,7 +154,11 @@ fn the_documented_peetprint_example_round_trips() {
     assert_eq!(parsed.to_string(), PEET_EXAMPLE);
     assert_eq!(
         parsed.versions,
-        vec![PeetprintSlot::Grease, PeetprintSlot::Id(772), PeetprintSlot::Id(771)]
+        vec![
+            PeetprintSlot::Grease,
+            PeetprintSlot::Id(772),
+            PeetprintSlot::Id(771)
+        ]
     );
     assert_eq!(parsed.alpn, vec!["h2".to_owned(), "http/1.1".to_owned()]);
     assert_eq!(parsed.psk_modes, vec![1]);
@@ -176,7 +180,10 @@ fn a_parsed_hello_yields_a_sorted_peetprint() {
 #[test]
 fn grease_written_as_a_number_collapses_to_the_word() {
     let parsed = Peetprint::parse("2570-772|2|||||4865|0").expect("parses");
-    assert_eq!(parsed.versions, vec![PeetprintSlot::Grease, PeetprintSlot::Id(772)]);
+    assert_eq!(
+        parsed.versions,
+        vec![PeetprintSlot::Grease, PeetprintSlot::Id(772)]
+    );
     assert!(parsed.groups.is_empty() && parsed.alpn == ["h2"]);
     assert_eq!(parsed.to_string(), "GREASE-772|2|||||4865|0");
 }

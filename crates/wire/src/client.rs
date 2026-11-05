@@ -53,14 +53,16 @@ use super::convert::{self, ConvertError};
 use seleniumbase_rs::evasion::fingerprint::{BrowserType, Fingerprint, OsType};
 use seleniumbase_rs_codec::akamai::AkamaiError;
 use seleniumbase_rs_codec::client_hello::ext_id;
-use seleniumbase_rs_codec::measurement::{self, WireMeasurement as Measured, WireMeasurementError, KnownGap};
 use seleniumbase_rs_codec::h2_spec::{H2Spec, H2SpecError};
 use seleniumbase_rs_codec::header_spec::{
     ClientHeaders, HeaderSpec, HeaderSpecError, RequestShape,
 };
 use seleniumbase_rs_codec::ja3::{Ja3Error, PeetprintError};
 use seleniumbase_rs_codec::ja4::Ja4Error;
-use seleniumbase_rs_codec::tls_spec::{TlsSpecError, TlsSpec};
+use seleniumbase_rs_codec::measurement::{
+    self, KnownGap, WireMeasurement as Measured, WireMeasurementError,
+};
+use seleniumbase_rs_codec::tls_spec::{TlsSpec, TlsSpecError};
 use seleniumbase_rs_codec::BrowserKind;
 use seleniumbase_rs_scrape::egress::geo::{Locale, LocaleExt};
 
@@ -485,9 +487,7 @@ impl WireFormat {
 /// Returns an [`WireFormatError`] when a spec cannot be sent by this client stack. That is the
 /// same check a custom profile passed at build time, so it only fails for a profile whose specs
 /// were changed afterwards.
-pub fn wire_client(
-    profile: &WireFormat,
-) -> Result<wreq::ClientBuilder, WireFormatError> {
+pub fn wire_client(profile: &WireFormat) -> Result<wreq::ClientBuilder, WireFormatError> {
     let tls = convert::tls_options(&profile.tls)?;
     let http2 = convert::http2_options(&profile.http2)?;
     let document = profile.headers_for(RequestShape::Document, None, WireProtocol::Http2)?;

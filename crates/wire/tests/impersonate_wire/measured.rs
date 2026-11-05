@@ -5,12 +5,12 @@
 
 use seleniumbase_rs::evasion::fingerprint::OsType;
 use seleniumbase_rs_codec::client_hello::{ext_id, is_grease, without_grease, ClientHello};
-use seleniumbase_rs_codec::measurement::{self, WireMeasurement, KnownGap};
 use seleniumbase_rs_codec::h2_spec::H2Spec;
 use seleniumbase_rs_codec::header_spec::RequestShape;
 use seleniumbase_rs_codec::ja3::peetprint::PeetprintSlot;
 use seleniumbase_rs_codec::ja3::Peetprint;
 use seleniumbase_rs_codec::ja4::{Ja4, Ja4AField};
+use seleniumbase_rs_codec::measurement::{self, KnownGap, WireMeasurement};
 use seleniumbase_rs_codec::tls_spec::TlsSpec;
 use seleniumbase_rs_codec::BrowserKind;
 use seleniumbase_rs_wire::client::{WireFormat, WireProtocol};
@@ -187,10 +187,15 @@ async fn the_peetprint_differs_from_the_measured_one_by_the_gaps_and_a_grease_si
         Some(&PeetprintSlot::Grease),
         "Chrome writes a GREASE signature algorithm first"
     );
+    expected.signature_algorithms.retain(|slot| {
+        !matches!(
+            slot,
+            PeetprintSlot::Grease | PeetprintSlot::Id(0x0904..=0x0906)
+        )
+    });
     expected
-        .signature_algorithms
-        .retain(|slot| !matches!(slot, PeetprintSlot::Grease | PeetprintSlot::Id(0x0904..=0x0906)));
-    expected.extensions.retain(|slot| *slot != PeetprintSlot::Id(0xCA34));
+        .extensions
+        .retain(|slot| *slot != PeetprintSlot::Id(0xCA34));
     assert_eq!(Peetprint::of(hello), expected.normalized());
 }
 

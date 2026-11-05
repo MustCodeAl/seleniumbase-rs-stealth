@@ -10,7 +10,7 @@ use super::pace::SiteLimits;
 use super::rotate::{check_identity, persona_fingerprint};
 use super::transition::open_leg;
 use super::{Clock, Egress, StealthError, StealthSession, Wiring};
-use crate::http_session::{HttpSessionOptions, HttpRules};
+use crate::http_session::{HttpRules, HttpSessionOptions};
 use crate::mitm::MitmOptions;
 use seleniumbase_rs::evasion::fingerprint::{Fingerprint, OsType};
 use seleniumbase_rs::sb_cdp::LaunchOptionsBuilder;
@@ -23,7 +23,7 @@ use seleniumbase_rs_scrape::egress::pool::{ProxyPool, RotationStrategy};
 use seleniumbase_rs_scrape::egress::route::ProxyRoute;
 use seleniumbase_rs_scrape::ledger::events::EventSink;
 use seleniumbase_rs_scrape::ledger::state::{InMemoryLedger, Ledger};
-use seleniumbase_rs_scrape::passport::identity::{WireMeasurementRef, Identity};
+use seleniumbase_rs_scrape::passport::identity::{Identity, WireMeasurementRef};
 use seleniumbase_rs_scrape::passport::policy::EscalationPolicy;
 use seleniumbase_rs_scrape::runtime::browser_scraper::{
     BrowserLauncher, ChromeLauncher, DEFAULT_SOLVE_TIMEOUT,

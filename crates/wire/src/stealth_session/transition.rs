@@ -90,8 +90,11 @@ impl StealthSession {
         if self.fetch_kind() == FetchKind::Browser {
             return Ok(());
         }
-        self.switch_to(FetchKind::Browser, Escalation::Escalate(EscalateReason::Manual))
-            .await
+        self.switch_to(
+            FetchKind::Browser,
+            Escalation::Escalate(EscalateReason::Manual),
+        )
+        .await
     }
 
     /// Goes back to plain HTTP now, with the cookies the browser holds, and closes the browser.

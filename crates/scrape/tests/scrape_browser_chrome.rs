@@ -318,7 +318,10 @@ async fn rotating_the_profile_starts_a_new_chrome_that_reports_the_new_profile()
         .expect("it reads");
     assert_eq!(cores_before, json!(before.hardware_concurrency().value()));
 
-    scraper.rotate_fingerprint().await.expect("the profile rotates");
+    scraper
+        .rotate_fingerprint()
+        .await
+        .expect("the profile rotates");
     scraper
         .fetch(&server.url("/plain"))
         .await

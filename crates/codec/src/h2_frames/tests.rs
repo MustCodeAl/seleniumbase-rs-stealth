@@ -489,17 +489,30 @@ fn pseudo_header_sets_that_are_not_a_permutation_are_named() {
         ]))
     };
     let missing = with(request_block(
-        &[PseudoHeader::Method, PseudoHeader::Path, PseudoHeader::Scheme],
+        &[
+            PseudoHeader::Method,
+            PseudoHeader::Path,
+            PseudoHeader::Scheme,
+        ],
         &[],
     ));
     assert_eq!(missing.pseudo_order(), Err(H2CaptureError::PseudoOrder));
     let twice = with(request_block(
-        &[PseudoHeader::Method, PseudoHeader::Method, PseudoHeader::Path, PseudoHeader::Scheme],
+        &[
+            PseudoHeader::Method,
+            PseudoHeader::Method,
+            PseudoHeader::Path,
+            PseudoHeader::Scheme,
+        ],
         &[],
     ));
     assert_eq!(twice.akamai(), Err(H2CaptureError::PseudoOrder));
     let mut late = request_block(
-        &[PseudoHeader::Method, PseudoHeader::Path, PseudoHeader::Scheme],
+        &[
+            PseudoHeader::Method,
+            PseudoHeader::Path,
+            PseudoHeader::Scheme,
+        ],
         &[("x-a", "1")],
     );
     late.extend(literal(":authority", "example.test", false));

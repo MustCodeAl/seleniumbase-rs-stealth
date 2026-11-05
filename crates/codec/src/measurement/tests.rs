@@ -2,7 +2,7 @@
 
 use super::{
     for_kind, get, get_version, measured, measured_systems, newest, newest_on, parse_all,
-    source_names, try_measured, WireMeasurement, WireMeasurementError, KnownGap,
+    source_names, try_measured, KnownGap, WireMeasurement, WireMeasurementError,
     MAX_MEASURED_JSON_BYTES, SOURCES,
 };
 use crate::tls_spec::KnownGap as TlsKnownGap;
@@ -241,7 +241,9 @@ fn the_raw_evidence_is_ignored_and_a_stray_key_is_not() {
 
     value["colour"] = serde_json::json!("blue");
     let error = parse_value(&value).expect_err("an unknown key");
-    assert!(matches!(&error, WireMeasurementError::Parse { reason, .. } if reason.contains("colour")));
+    assert!(
+        matches!(&error, WireMeasurementError::Parse { reason, .. } if reason.contains("colour"))
+    );
 }
 
 #[test]

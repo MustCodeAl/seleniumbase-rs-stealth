@@ -4,9 +4,9 @@
 
 use std::sync::{Arc, Mutex, PoisonError};
 
-use seleniumbase_rs_wire::stealth_session::StealthSession;
 use seleniumbase_rs_scrape::challenge::mitigation::FetchKind;
 use seleniumbase_rs_scrape::ledger::events::{CollectingEventSink, EventSink, ScrapeEvent};
+use seleniumbase_rs_wire::stealth_session::StealthSession;
 
 use crate::browser::ScriptedLauncher;
 use crate::world::{country, World};

@@ -77,7 +77,10 @@ async fn a_page_hands_over_its_cookies_its_agent_and_its_languages() {
         .expect("a session");
 
     assert_eq!(session.wire_format().user_agent(), agent);
-    assert_eq!(session.wire_format().accept_language(), Some("de-DE,de;q=0.9"));
+    assert_eq!(
+        session.wire_format().accept_language(),
+        Some("de-DE,de;q=0.9")
+    );
     assert_eq!(session.cookie_count(), 2);
     assert!(session.proxy_route().is_none());
 }

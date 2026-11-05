@@ -2,7 +2,7 @@
 
 use url::Url;
 
-use super::{WireMeasurementRef, Identity};
+use super::{Identity, WireMeasurementRef};
 use crate::egress::geo::CountryCode;
 use crate::egress::route::ProxyKey;
 use crate::jar::store::SetCookieOutcome;
@@ -41,8 +41,13 @@ pub(crate) fn proxy(host: &str) -> ProxyKey {
 
 /// A fresh identity behind `p1.example`, holding no cookie.
 pub(crate) fn identity() -> Identity {
-    Identity::new(fingerprint(), wire_measurement(), Some(proxy("p1.example")), NOW)
-        .expect("the sample fingerprint is coherent")
+    Identity::new(
+        fingerprint(),
+        wire_measurement(),
+        Some(proxy("p1.example")),
+        NOW,
+    )
+    .expect("the sample fingerprint is coherent")
 }
 
 /// Stores one `Set-Cookie` header received from `url` in the jar of `identity`, at [`NOW`].

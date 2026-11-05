@@ -30,13 +30,13 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use seleniumbase_rs::sb_cdp::LaunchOptions;
-use seleniumbase_rs_wire::stealth_session::{StealthSession, StealthSessionBuilder};
 use seleniumbase_rs_scrape::challenge::detect::ChallengeKind;
 use seleniumbase_rs_scrape::challenge::mitigation::FetchKind;
 use seleniumbase_rs_scrape::ledger::events::{CollectingEventSink, ScrapeEvent};
 use seleniumbase_rs_scrape::passport::policy::{
-    DemoteReason, EscalateReason, EscalationPolicy, Escalation,
+    DemoteReason, EscalateReason, Escalation, EscalationPolicy,
 };
+use seleniumbase_rs_wire::stealth_session::{StealthSession, StealthSessionBuilder};
 
 use site::{ChallengeSite, CLEARANCE, DEFAULT_TTL_SECS, REAL_MARKER};
 

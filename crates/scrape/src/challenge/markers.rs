@@ -95,7 +95,12 @@ pub(crate) struct Marker {
 }
 
 impl Marker {
-    const fn new(vendor: ProtectionVendor, text: &'static str, kind: ChallengeKind, gate: Gate) -> Self {
+    const fn new(
+        vendor: ProtectionVendor,
+        text: &'static str,
+        kind: ChallengeKind,
+        gate: Gate,
+    ) -> Self {
         Self {
             vendor,
             text,

@@ -310,7 +310,10 @@ mod tests {
         assert_eq!(decide(JS, &at(3, true)), Mitigation::RotateFingerprint);
         assert_eq!(decide(JS, &at(3, false)), Mitigation::RotateFingerprint);
         assert_eq!(decide(JS, &at(40, true)), Mitigation::RotateFingerprint);
-        assert_eq!(decide(JS, &at(u32::MAX, true)), Mitigation::RotateFingerprint);
+        assert_eq!(
+            decide(JS, &at(u32::MAX, true)),
+            Mitigation::RotateFingerprint
+        );
     }
 
     #[test]
@@ -510,9 +513,18 @@ mod tests {
             consecutive_challenges: streak,
             ..context(FetchKind::Browser)
         };
-        assert_eq!(policy.decide(&detection(JS), &at(1)), Mitigation::RotateProxy);
-        assert_eq!(policy.decide(&detection(JS), &at(4)), Mitigation::RotateProxy);
-        assert_eq!(policy.decide(&detection(JS), &at(5)), Mitigation::RotateFingerprint);
+        assert_eq!(
+            policy.decide(&detection(JS), &at(1)),
+            Mitigation::RotateProxy
+        );
+        assert_eq!(
+            policy.decide(&detection(JS), &at(4)),
+            Mitigation::RotateProxy
+        );
+        assert_eq!(
+            policy.decide(&detection(JS), &at(5)),
+            Mitigation::RotateFingerprint
+        );
         let stuck = AttemptContext {
             can_rotate_proxy: false,
             ..context(FetchKind::Browser)
@@ -622,7 +634,10 @@ mod tests {
         }
         for mode in [FetchKind::Browser, FetchKind::Http] {
             let json = serde_json::to_string(&mode).expect("serializes");
-            assert_eq!(serde_json::from_str::<FetchKind>(&json).expect("parses"), mode);
+            assert_eq!(
+                serde_json::from_str::<FetchKind>(&json).expect("parses"),
+                mode
+            );
         }
     }
 }

@@ -4,7 +4,7 @@ use super::overlay::versions_with_max;
 use super::tests::{
     chrome, duplicate, hello, ja3, refused, sigalg, CHROME_JA3, CHROME_JA3_HASH, CIPHERS,
 };
-use super::{KnownGap, TlsSpecError, TlsSpec};
+use super::{KnownGap, TlsSpec, TlsSpecError};
 use crate::client_hello::ext_id;
 use crate::client_hello::fixtures::{HelloBuilder, CHROME_CIPHERS, JA4_EXAMPLE_EXTENSIONS};
 use crate::ja3::peetprint::{PeetprintField, PeetprintSlot};
@@ -302,7 +302,11 @@ fn a_custom_peetprint_overlays_the_base_and_reproduces_exactly() {
     assert_eq!(base.with_peetprint(&base.peetprint()), Ok(base.clone()));
     let mut wanted = base.peetprint();
     wanted.ciphers.retain(|slot| *slot != PeetprintSlot::Id(53));
-    wanted.groups = vec![PeetprintSlot::Grease, PeetprintSlot::Id(29), PeetprintSlot::Id(23)];
+    wanted.groups = vec![
+        PeetprintSlot::Grease,
+        PeetprintSlot::Id(29),
+        PeetprintSlot::Id(23),
+    ];
     let spec = base.with_peetprint(&wanted).expect("reproducible");
     assert!(!spec.cipher_suites.contains(&0x0035));
     assert_eq!(spec.supported_groups, [29, 23]);
@@ -343,10 +347,15 @@ fn rejects_custom_peetprints_that_cannot_be_reproduced() {
         with(|p| p.extensions.push(PeetprintSlot::Id(0))),
         Err(TlsSpecError::DuplicateExtension(0))
     );
-    assert_eq!(with(|p| p.extensions.push(PeetprintSlot::Id(41))), Err(refused(41)));
+    assert_eq!(
+        with(|p| p.extensions.push(PeetprintSlot::Id(41))),
+        Err(refused(41))
+    );
     assert_eq!(
         with(|p| p.psk_modes.clear()),
-        Err(TlsSpecError::ExtensionContent(ext_id::PSK_KEY_EXCHANGE_MODES))
+        Err(TlsSpecError::ExtensionContent(
+            ext_id::PSK_KEY_EXCHANGE_MODES
+        ))
     );
     assert_eq!(
         with(|p| p

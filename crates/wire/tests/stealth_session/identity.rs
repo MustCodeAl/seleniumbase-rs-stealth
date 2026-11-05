@@ -1,12 +1,12 @@
 //! Identities, profiles and egresses: export and restore, rotating the profile and the egress in
 //! both modes, and that no credential reaches a `Debug`, an event or a saved identity.
 
-use seleniumbase_rs_wire::stealth_session::{StealthError, StealthSession};
 use seleniumbase_rs_scrape::challenge::mitigation::FetchKind;
 use seleniumbase_rs_scrape::error::ScrapeError;
 use seleniumbase_rs_scrape::ledger::events::ScrapeEvent;
 use seleniumbase_rs_scrape::ledger::state::Ledger;
-use seleniumbase_rs_scrape::passport::identity::{IdentityError, Identity};
+use seleniumbase_rs_scrape::passport::identity::{Identity, IdentityError};
+use seleniumbase_rs_wire::stealth_session::{StealthError, StealthSession};
 
 use crate::site::{CLEARANCE, HOST};
 use crate::world::{country, World};
@@ -133,7 +133,11 @@ async fn a_restored_identity_picks_its_egress_from_the_pool_whatever_the_order()
         .await
         .expect("a session");
 
-    assert_eq!(restored.proxy_route(), Some(&key), "not the first of the pool");
+    assert_eq!(
+        restored.proxy_route(),
+        Some(&key),
+        "not the first of the pool"
+    );
     let elsewhere = world
         .session()
         .geo_proxies([(US_PROXY, country("US"))])
@@ -352,7 +356,11 @@ async fn without_another_egress_there_is_nothing_to_rotate_to() {
         );
     }
 
-    assert_eq!(single.proxy_route().cloned(), before, "the session is as it was");
+    assert_eq!(
+        single.proxy_route().cloned(),
+        before,
+        "the session is as it was"
+    );
     assert_eq!(rotations(&world).len(), 0, "nothing rotated");
     direct.close().await.expect("closes");
     single.close().await.expect("closes");

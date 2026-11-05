@@ -6,7 +6,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 
 use super::rig::{country, real_page, script_challenge, Rig, SEED};
-use crate::challenge::detect::{ChallengeKind, Detection, ChallengeEvidence};
+use crate::challenge::detect::{ChallengeEvidence, ChallengeKind, Detection};
 use crate::challenge::mitigation::MitigationPolicy;
 use crate::egress::geo::{GeoError, GeoInfo, GeoResolver};
 use crate::egress::route::ProxyRoute;

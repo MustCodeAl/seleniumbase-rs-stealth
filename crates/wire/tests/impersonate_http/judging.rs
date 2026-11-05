@@ -4,12 +4,12 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
-use seleniumbase_rs_wire::http_session::{HttpAttempt, HttpError, HttpSession, HttpRules};
 use seleniumbase_rs_scrape::challenge::detect::{ChallengeKind, ProtectionVendor};
-use seleniumbase_rs_scrape::challenge::mitigation::{Mitigation, FetchKind};
+use seleniumbase_rs_scrape::challenge::mitigation::{FetchKind, Mitigation};
 use seleniumbase_rs_scrape::ledger::events::{CollectingEventSink, ScrapeEvent};
 use seleniumbase_rs_scrape::ledger::state::SiteRecord;
 use seleniumbase_rs_scrape::passport::policy::{EscalateReason, Escalation};
+use seleniumbase_rs_wire::http_session::{HttpAttempt, HttpError, HttpRules, HttpSession};
 use url::Url;
 
 use crate::site::{identity, now, Answer, Site};
@@ -262,7 +262,12 @@ async fn a_site_that_needs_a_browser_sends_the_session_there_before_the_request(
         )
         .expect("a verdict");
     let plain = session
-        .preflight(&site.url(HOST, "/"), &identity(), None, &HttpRules::default())
+        .preflight(
+            &site.url(HOST, "/"),
+            &identity(),
+            None,
+            &HttpRules::default(),
+        )
         .expect("a verdict");
 
     assert_eq!(

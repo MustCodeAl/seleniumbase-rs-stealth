@@ -17,12 +17,12 @@ use super::request::parse_url;
 use super::HttpSession;
 use seleniumbase_rs_scrape::challenge::detect::{ChallengeKind, Detection};
 use seleniumbase_rs_scrape::challenge::mitigation::{
-    Mitigation, AttemptContext, MitigationPolicy, FetchKind,
+    AttemptContext, FetchKind, Mitigation, MitigationPolicy,
 };
 use seleniumbase_rs_scrape::ledger::events::ScrapeEvent;
 use seleniumbase_rs_scrape::ledger::state::SiteRecord;
 use seleniumbase_rs_scrape::passport::identity::Identity;
-use seleniumbase_rs_scrape::passport::policy::{EscalateReason, EscalationPolicy, Escalation};
+use seleniumbase_rs_scrape::passport::policy::{EscalateReason, Escalation, EscalationPolicy};
 
 /// Where a fetch stands, as the mitigation policy needs to know it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -114,9 +114,10 @@ impl HttpSession {
             now: self.now(),
         };
         let action = rules.mitigation.decide(&detection, &context);
-        let transition = rules
-            .escalation
-            .after_fetch(FetchKind::Http, &detection, &action, identity);
+        let transition =
+            rules
+                .escalation
+                .after_fetch(FetchKind::Http, &detection, &action, identity);
         if challenged {
             self.emit(&ScrapeEvent::ChallengeDetected {
                 url: reply.redacted_url(),
@@ -175,9 +176,10 @@ impl HttpSession {
         let site = site_name(&url);
         let now = self.now();
         let current = self.identity_at(identity, now);
-        let transition = rules
-            .escalation
-            .before_fetch(FetchKind::Http, &current, &site, state, now);
+        let transition =
+            rules
+                .escalation
+                .before_fetch(FetchKind::Http, &current, &site, state, now);
         if let Escalation::Escalate(EscalateReason::ClearanceExpiring { remaining_secs }) =
             transition
         {

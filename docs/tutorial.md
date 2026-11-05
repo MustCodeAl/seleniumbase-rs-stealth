@@ -83,7 +83,7 @@ core or implementation-crate Git dependency is needed. With `wire` enabled:
 
 ```rust
 use seleniumbase_rs_stealth::{
-    fingerprint::{CanvasNoise, Fingerprint, StealthPolicy},
+    evasion::fingerprint::{CanvasNoise, Fingerprint, StealthPolicy},
     scrape::BrowserScraper,
     wire::{StealthSession, MitmProxy},
 };

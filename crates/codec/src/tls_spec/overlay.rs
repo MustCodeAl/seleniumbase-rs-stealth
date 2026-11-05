@@ -5,7 +5,7 @@
 
 use std::collections::BTreeSet;
 
-use super::{duplicate, first_duplicate, TlsSpecError, TlsSpec};
+use super::{duplicate, first_duplicate, TlsSpec, TlsSpecError};
 use crate::client_hello::ext_id;
 use crate::ids::{ALPN_H2, ALPN_HTTP_1_1, EC_POINT_UNCOMPRESSED};
 use crate::ja3::peetprint::{ids as slot_ids, PeetprintField, PeetprintSlot};
@@ -307,7 +307,10 @@ impl TlsSpec {
                 got.cert_compression == want.cert_compression,
             ),
             (PeetprintField::Ciphers, got.ciphers == want.ciphers),
-            (PeetprintField::Extensions, got.extensions == want.extensions),
+            (
+                PeetprintField::Extensions,
+                got.extensions == want.extensions,
+            ),
         ];
         match fields.into_iter().find(|&(_, same)| !same) {
             Some((field, _)) => Err(TlsSpecError::PeetprintMismatch(field)),

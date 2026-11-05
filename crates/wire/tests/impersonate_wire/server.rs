@@ -10,12 +10,12 @@ use std::time::{Duration, SystemTime};
 
 use seleniumbase_rs_codec::client_hello::{ClientHello, MAX_CLIENT_HELLO};
 use seleniumbase_rs_codec::h2_frames::H2Preface;
+use seleniumbase_rs_scrape::runtime::capture::stream::{
+    http1_response, read_h2c_preface, read_http1_request, Http1Request,
+};
 use seleniumbase_rs_wire::capture_h2::site::h2_reply;
 use seleniumbase_rs_wire::tls_server::{
     accept, acceptor, EphemeralCa, ALPN_HTTP1, DEFAULT_HANDSHAKE_TIMEOUT,
-};
-use seleniumbase_rs_scrape::runtime::capture::stream::{
-    http1_response, read_h2c_preface, read_http1_request, Http1Request,
 };
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};

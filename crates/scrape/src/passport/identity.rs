@@ -359,7 +359,10 @@ impl Identity {
     ///
     /// Returns [`IdentityError::WireMeasurementMismatch`] for another major version and
     /// [`IdentityError::Incoherent`] for another browser or operating system.
-    pub fn check_wire_measurement(&self, measured: &WireMeasurementRef) -> Result<(), IdentityError> {
+    pub fn check_wire_measurement(
+        &self,
+        measured: &WireMeasurementRef,
+    ) -> Result<(), IdentityError> {
         let own = &self.wire_measurement;
         if own.major != measured.major {
             return Err(IdentityError::WireMeasurementMismatch {

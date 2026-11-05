@@ -151,7 +151,9 @@ impl Shop {
     pub fn http_session_options(&self) -> Result<HttpSessionOptions, Box<dyn Error>> {
         let der = self.ca.certificate().to_der()?;
         let store = CertStore::from_der_certs([der.as_slice()])?;
-        Ok(HttpSessionOptions::new().trust(store).resolve(HOST, self.addr))
+        Ok(HttpSessionOptions::new()
+            .trust(store)
+            .resolve(HOST, self.addr))
     }
 
     /// The options of a MITM proxy whose upstream trusts the shop's authority and resolves the

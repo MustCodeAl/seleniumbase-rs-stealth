@@ -23,7 +23,7 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 
 use crate::ledger::state::{
-    insert_bounded, SiteRecord, LedgerError, Ledger, MAX_STATE_SITES, STATE_SCHEMA,
+    insert_bounded, Ledger, LedgerError, SiteRecord, MAX_STATE_SITES, STATE_SCHEMA,
 };
 
 /// The largest state file that is read. A state file this big holds far more sites than
@@ -277,7 +277,7 @@ fn sync_directory(directory: &Path) -> io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::challenge::detect::{ChallengeKind, Detection, ChallengeEvidence};
+    use crate::challenge::detect::{ChallengeEvidence, ChallengeKind, Detection};
     use crate::challenge::mitigation::FetchKind;
     use crate::egress::geo::CountryCode;
     use crate::egress::route::ProxyKey;

@@ -731,7 +731,10 @@ mod tests {
             "a".repeat(MAX_SCAN_BYTES - 6),
             "a".repeat(10)
         );
-        assert_eq!(detect_with(&straddling, 403, &[]).kind, ChallengeKind::Clear);
+        assert_eq!(
+            detect_with(&straddling, 403, &[]).kind,
+            ChallengeKind::Clear
+        );
     }
 
     #[test]

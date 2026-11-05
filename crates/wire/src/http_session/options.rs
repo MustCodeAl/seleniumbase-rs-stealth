@@ -33,10 +33,9 @@ pub const MAX_REDIRECT_LIMIT: usize = 30;
 /// The most paced sites kept at once; past it the table starts over.
 pub const MAX_PACED_SITES: usize = 4096;
 
-/// A source of the time in seconds since the Unix epoch.
-///
-/// The session reads the time through this, so a test can move it.
-pub type Clock = Arc<dyn Fn() -> u64 + Send + Sync>;
+/// The time source of the scrape layer, seconds since the Unix epoch; the session reads the time
+/// through it, so a test can move it.
+pub use seleniumbase_rs_scrape::runtime::browser_scraper::Clock;
 
 /// The system clock.
 pub(super) fn system_clock() -> Clock {
@@ -318,7 +317,8 @@ mod tests {
 
     #[test]
     fn the_debug_view_hides_the_resolver_addresses_and_the_store() {
-        let options = HttpSessionOptions::new().resolve("a.test", "127.0.0.1:8443".parse().expect("addr"));
+        let options =
+            HttpSessionOptions::new().resolve("a.test", "127.0.0.1:8443".parse().expect("addr"));
         let shown = format!("{options:?}");
         assert!(!shown.contains("127.0.0.1"), "{shown}");
         assert!(shown.contains("resolve: 1"), "{shown}");

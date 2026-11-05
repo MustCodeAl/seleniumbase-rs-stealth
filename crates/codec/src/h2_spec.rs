@@ -243,7 +243,10 @@ impl H2Spec {
         if let Some(priority) = self.headers_priority {
             check_headers_priority(priority)?;
         }
-        if !PseudoHeader::ALL.iter().all(|p| self.pseudo_order.contains(p)) {
+        if !PseudoHeader::ALL
+            .iter()
+            .all(|p| self.pseudo_order.contains(p))
+        {
             return Err(H2SpecError::PseudoOrder);
         }
         match self.initial_stream_id {

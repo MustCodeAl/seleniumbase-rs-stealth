@@ -144,7 +144,10 @@ fn an_overwrite_keeps_the_creation_time() {
     let mut jar = CookieJar::new();
     let at = "https://example.com/";
     assert_eq!(store_at(&mut jar, at, "a=1", NOW), SetCookieOutcome::Stored);
-    assert_eq!(store_at(&mut jar, at, "b=2", NOW + 5), SetCookieOutcome::Stored);
+    assert_eq!(
+        store_at(&mut jar, at, "b=2", NOW + 5),
+        SetCookieOutcome::Stored
+    );
     assert_eq!(
         store_at(&mut jar, at, "a=3; HttpOnly", NOW + 10),
         SetCookieOutcome::Replaced

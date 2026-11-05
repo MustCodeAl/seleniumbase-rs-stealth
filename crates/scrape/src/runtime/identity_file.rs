@@ -31,7 +31,7 @@ use std::sync::OnceLock;
 
 use serde::Deserialize;
 
-use crate::passport::identity::{json_failure, IdentityError, Identity, IDENTITY_SCHEMA};
+use crate::passport::identity::{json_failure, Identity, IdentityError, IDENTITY_SCHEMA};
 use crate::runtime::json_store::atomic_write;
 
 #[cfg(test)]
@@ -374,10 +374,7 @@ fn check_handle(path: &Path, file: &fs::File) -> Result<(), IdentityFileError> {
 ///
 /// As [`save_blocking`].
 #[tracing::instrument(skip_all, fields(path = %path.as_ref().display()))]
-pub async fn save(
-    path: impl AsRef<Path>,
-    identity: &Identity,
-) -> Result<(), IdentityFileError> {
+pub async fn save(path: impl AsRef<Path>, identity: &Identity) -> Result<(), IdentityFileError> {
     let path = path.as_ref().to_path_buf();
     let bytes = encode(&path, identity)?;
     let target = path.clone();

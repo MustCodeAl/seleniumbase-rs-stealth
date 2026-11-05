@@ -26,14 +26,10 @@ pub mod stealth_session;
 mod sync;
 pub mod tls_server;
 
-pub use client::{
-    wire_client, WireFormatBuilder, WireFormatError, WireFormat,
-    WireProtocol,
-};
+pub use client::{wire_client, WireFormat, WireFormatBuilder, WireFormatError, WireProtocol};
 pub use http_session::{
-    HttpAttempt, HttpFetch, ResponseHeaders, HttpError,
-    HttpSessionOptions, HttpResponse, HttpRequest, HttpSession, Method, ReplyProtocol, HttpRules,
-    HttpVerdict,
+    HttpAttempt, HttpError, HttpFetch, HttpRequest, HttpResponse, HttpRules, HttpSession,
+    HttpSessionOptions, HttpVerdict, Method, ResponseHeaders,
 };
 pub use mitm::{MitmError, MitmOptions, MitmProxy, MitmStats};
 pub use stealth_session::{StealthError, StealthFetch, StealthSession, StealthSessionBuilder};

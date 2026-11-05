@@ -43,7 +43,7 @@ services.
   lists of a local Chrome. They write
   `crates/codec/src/measured/chrome-155-macos.json` and keep the raw bytes as
   test fixtures.
-- Nothing is typed by hand. `seleniumbase_rs_stealth::codec::emulation` embeds that file.
+- Nothing is typed by hand. `seleniumbase_rs_stealth::codec::measurement` embeds that file.
   A system that was not measured gets `NotMeasured`, and a Chrome of another
   major version gets `VersionMismatch`; no other system's values are borrowed.
 - The round trip is capture, emulate, compare. The wire test builds a client from
@@ -252,7 +252,7 @@ feature enabled, the combined import is:
 
 ```rust
 use seleniumbase_rs_stealth::{
-    fingerprint::{CanvasNoise, Fingerprint, StealthPolicy},
+    evasion::fingerprint::{CanvasNoise, Fingerprint, StealthPolicy},
     scrape::BrowserScraper,
     wire::{StealthSession, MitmProxy},
 };

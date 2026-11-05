@@ -32,8 +32,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use seleniumbase_rs::sb_cdp::LaunchOptions;
-use seleniumbase_rs_wire::StealthSession;
 use seleniumbase_rs_scrape::{CollectingEventSink, ScrapeEvent};
+use seleniumbase_rs_wire::StealthSession;
 use stealth_support::shop::{Shop, REAL_MARKER};
 
 /// How long Chrome is given to run the challenge page's script.

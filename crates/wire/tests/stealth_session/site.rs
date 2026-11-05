@@ -142,7 +142,9 @@ impl ChallengeSite {
     pub fn http_session_options(&self) -> HttpSessionOptions {
         let der = self.ca.certificate().to_der().expect("the CA as DER");
         let store = CertStore::from_der_certs([der.as_slice()]).expect("a store");
-        HttpSessionOptions::new().trust(store).resolve(HOST, self.addr)
+        HttpSessionOptions::new()
+            .trust(store)
+            .resolve(HOST, self.addr)
     }
 
     /// The options of a MITM proxy whose upstream trusts this site's authority and resolves the

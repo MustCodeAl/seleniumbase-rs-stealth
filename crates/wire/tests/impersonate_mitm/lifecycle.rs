@@ -7,10 +7,10 @@ use std::time::Duration;
 
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine as _;
-use seleniumbase_rs_wire::mitm::MitmOptions;
-use seleniumbase_rs_wire::tls_server::ALPN_HTTP1;
 use seleniumbase_rs_scrape::egress::route::ProxyRoute;
 use seleniumbase_rs_scrape::ledger::events::ScrapeEvent;
+use seleniumbase_rs_wire::mitm::MitmOptions;
+use seleniumbase_rs_wire::tls_server::ALPN_HTTP1;
 use tokio::net::TcpStream;
 
 use crate::support::{
@@ -30,7 +30,8 @@ async fn swapping_the_egress_changes_the_route_between_requests_on_one_listener(
     let options = MitmOptions::default()
         .ca(Arc::clone(&ca))
         .trust_upstream_root(origin.root());
-    let egress = ProxyRoute::parse(&first.spec(Some(("alice", "s3cret"))), None).expect("an egress");
+    let egress =
+        ProxyRoute::parse(&first.spec(Some(("alice", "s3cret"))), None).expect("an egress");
     let (mitm, sink) = start_mitm(Some(egress), options).await;
     let port = mitm.port();
     let client = browser_client(&mitm, &der(&ca));

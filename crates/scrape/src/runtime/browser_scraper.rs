@@ -69,7 +69,7 @@ use crate::ledger::state::Ledger;
 use seleniumbase_rs::evasion::fingerprint::Fingerprint;
 use seleniumbase_rs::sb_cdp::{Browser, LaunchOptionsBuilder, Page, SessionStore};
 
-use super::cdp::{ProxyLocale, NavResponse};
+use super::cdp::{NavResponse, ProxyLocale};
 use super::proxy_switch::ProxySwitch;
 
 mod builder;

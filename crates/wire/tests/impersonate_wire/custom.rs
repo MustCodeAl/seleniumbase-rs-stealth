@@ -15,7 +15,7 @@ use seleniumbase_rs_codec::ja3::{Ja3, Peetprint};
 use seleniumbase_rs_codec::ja4::{Ja4, Ja4Order, Ja4Raw};
 use seleniumbase_rs_codec::tls_spec::TlsSpecError;
 use seleniumbase_rs_codec::BrowserKind;
-use seleniumbase_rs_wire::client::{WireFormatError, WireFormat, WireProtocol};
+use seleniumbase_rs_wire::client::{WireFormat, WireFormatError, WireProtocol};
 use seleniumbase_rs_wire::convert::ConvertError;
 
 use crate::exchange::{exchange, Via};

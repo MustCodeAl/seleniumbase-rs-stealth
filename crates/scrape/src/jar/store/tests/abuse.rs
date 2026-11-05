@@ -304,7 +304,10 @@ fn path_traversal_in_path_never_widens_the_scope() {
     ] {
         assert_eq!(header(&mut jar, to), None, "{to}");
     }
-    assert_eq!(store(&mut jar, at, "d=1; Path=admin"), SetCookieOutcome::Stored);
+    assert_eq!(
+        store(&mut jar, at, "d=1; Path=admin"),
+        SetCookieOutcome::Stored
+    );
     assert_eq!(
         jar.cookies()[3].path,
         "/app",

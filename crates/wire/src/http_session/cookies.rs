@@ -16,7 +16,7 @@ use wreq::Method;
 use crate::sync::locked;
 use seleniumbase_rs::sb_cdp::SameSite;
 use seleniumbase_rs_codec::header_spec::RequestShape;
-use seleniumbase_rs_scrape::jar::store::{CookieJar, SiteContext, SetCookieOutcome, StoredCookie};
+use seleniumbase_rs_scrape::jar::store::{CookieJar, SetCookieOutcome, SiteContext, StoredCookie};
 
 /// The most changes remembered for the next sync. Past it the oldest is forgotten.
 pub(super) const MAX_PENDING_CHANGES: usize = 4096;

@@ -3,9 +3,9 @@
 use std::sync::Arc;
 
 use seleniumbase_rs_codec::header_spec::RequestShape;
-use seleniumbase_rs_wire::client::WireProtocol;
-use seleniumbase_rs_wire::http_session::{HttpSession, ReplyProtocol};
 use seleniumbase_rs_scrape::ledger::events::CollectingEventSink;
+use seleniumbase_rs_wire::client::WireProtocol;
+use seleniumbase_rs_wire::http_session::HttpSession;
 use url::Url;
 
 use crate::site::{identity, now, H2Site};
@@ -28,7 +28,7 @@ async fn an_http2_origin_gets_the_http2_headers_and_the_reply_says_so() {
         .await
         .expect("a reply");
 
-    assert_eq!(reply.protocol(), ReplyProtocol::Http2);
+    assert_eq!(reply.protocol(), WireProtocol::Http2);
     assert_eq!(reply.text().expect("text"), BODY);
     let prefaces = site.prefaces();
     assert_eq!(prefaces.len(), 1);

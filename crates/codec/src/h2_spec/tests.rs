@@ -129,7 +129,10 @@ fn capture_errors_are_distinguished() {
     ));
     let two = [PseudoHeader::Method, PseudoHeader::Path];
     let missing = client_start(&[(4, 1)], 0, &[], &two, 1);
-    assert_eq!(H2Spec::from_capture(&missing), Err(H2SpecError::PseudoOrder));
+    assert_eq!(
+        H2Spec::from_capture(&missing),
+        Err(H2SpecError::PseudoOrder)
+    );
 }
 
 #[test]
@@ -217,7 +220,10 @@ fn a_repeated_setting_is_refused_not_dropped() {
         settings: vec![(4, 1), (1, 2), (4, 3)],
         ..akamai(STANDARD)
     };
-    assert_eq!(H2Spec::from_akamai(&a), Err(H2SpecError::DuplicateSetting(4)));
+    assert_eq!(
+        H2Spec::from_akamai(&a),
+        Err(H2SpecError::DuplicateSetting(4))
+    );
 }
 
 #[test]
@@ -419,7 +425,12 @@ fn headers_priority_must_be_in_range() {
 #[test]
 fn the_pseudo_order_must_be_a_permutation() {
     let mut s = spec(STANDARD);
-    s.pseudo_order = [PseudoHeader::Method, PseudoHeader::Method, PseudoHeader::Scheme, PseudoHeader::Path];
+    s.pseudo_order = [
+        PseudoHeader::Method,
+        PseudoHeader::Method,
+        PseudoHeader::Scheme,
+        PseudoHeader::Path,
+    ];
     assert_eq!(s.check_reproducible(), Err(H2SpecError::PseudoOrder));
 }
 

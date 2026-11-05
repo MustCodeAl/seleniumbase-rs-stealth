@@ -19,7 +19,7 @@ use std::time::Duration;
 use serde_json::{json, Value};
 
 use crate::challenge::detect::{
-    clearance_cookie, detect, ChallengeKind, Detection, ResponseView, ProtectionVendor,
+    clearance_cookie, detect, ChallengeKind, Detection, ProtectionVendor, ResponseView,
 };
 use crate::egress::geo::{placed_in, GeoError, GeoResolver, Locale, LocaleExt};
 use crate::egress::redact::RedactedUrl;

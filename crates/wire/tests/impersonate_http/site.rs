@@ -21,14 +21,14 @@ use seleniumbase_rs::evasion::fingerprint::{Fingerprint, OsType};
 use seleniumbase_rs_codec::client_hello::{ClientHello, MAX_CLIENT_HELLO};
 use seleniumbase_rs_codec::h2_frames::H2Preface;
 use seleniumbase_rs_codec::{measurement, BrowserKind};
+use seleniumbase_rs_scrape::egress::route::{ProxyKey, ProxyRoute};
+use seleniumbase_rs_scrape::passport::identity::{Identity, WireMeasurementRef};
+use seleniumbase_rs_scrape::runtime::capture::stream::read_h2c_preface;
 use seleniumbase_rs_wire::capture_h2::site::h2_reply;
-use seleniumbase_rs_wire::http_session::{HttpSessionOptions, HttpSession};
+use seleniumbase_rs_wire::http_session::{HttpSession, HttpSessionOptions};
 use seleniumbase_rs_wire::tls_server::{
     accept, acceptor, EphemeralCa, ALPN_HTTP1, DEFAULT_HANDSHAKE_TIMEOUT,
 };
-use seleniumbase_rs_scrape::egress::route::{ProxyKey, ProxyRoute};
-use seleniumbase_rs_scrape::passport::identity::{WireMeasurementRef, Identity};
-use seleniumbase_rs_scrape::runtime::capture::stream::read_h2c_preface;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::task::JoinHandle;

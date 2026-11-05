@@ -17,7 +17,7 @@ use wreq::Method;
 use super::error::HttpError;
 use super::options::MAX_TIMEOUT;
 use super::redirect::{site_name, target_of, Hop};
-use super::reply::{ResponseHeaders, HttpResponse, ReplyProtocol};
+use super::reply::{HttpResponse, ResponseHeaders};
 use super::request::{merge_headers, Prepared};
 use super::{HttpSession, MAX_REMEMBERED_ORIGINS};
 use crate::client::{WireFormatError, WireProtocol};
@@ -40,7 +40,7 @@ const TIMED_OUT: &str = "timed out";
 struct Answer {
     status: u16,
     headers: ResponseHeaders,
-    protocol: ReplyProtocol,
+    protocol: WireProtocol,
     response: wreq::Response,
 }
 
@@ -49,7 +49,10 @@ struct Answer {
 /// # Errors
 ///
 /// See [`HttpRequest::send`](super::HttpRequest::send).
-pub(super) async fn run(session: &HttpSession, prepared: Prepared) -> Result<HttpResponse, HttpError> {
+pub(super) async fn run(
+    session: &HttpSession,
+    prepared: Prepared,
+) -> Result<HttpResponse, HttpError> {
     let limits = *session.limits();
     let started = Instant::now();
     let budget = prepared.timeout.unwrap_or(limits.timeout).min(MAX_TIMEOUT);
@@ -119,9 +122,9 @@ async fn exchange(
         .map_err(|_elapsed| failure(&hop.url, TIMED_OUT))?
         .map_err(|error| failure(&hop.url, classify(&error)))?;
     let protocol = if response.version() == wreq::Version::HTTP_2 {
-        ReplyProtocol::Http2
+        WireProtocol::Http2
     } else {
-        ReplyProtocol::Http1
+        WireProtocol::Http1
     };
     remember(session, &hop.url, protocol);
     let headers = headers_of(response.headers());
@@ -179,11 +182,7 @@ fn wire_for(session: &HttpSession, url: &Url) -> WireProtocol {
 }
 
 /// Remembers the protocol an origin answered on.
-fn remember(session: &HttpSession, url: &Url, protocol: ReplyProtocol) {
-    let wire = match protocol {
-        ReplyProtocol::Http2 => WireProtocol::Http2,
-        ReplyProtocol::Http1 => WireProtocol::Http1,
-    };
+fn remember(session: &HttpSession, url: &Url, wire: WireProtocol) {
     let mut table = crate::sync::locked(&session.inner().protocols);
     if table.len() >= MAX_REMEMBERED_ORIGINS {
         table.clear();
