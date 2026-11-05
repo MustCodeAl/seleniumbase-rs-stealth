@@ -26,8 +26,8 @@ use seleniumbase_rs_mimic::http_session::{HttpOptions, HttpSession};
 use seleniumbase_rs_mimic::tls_server::{
     accept, acceptor, EphemeralCa, ALPN_HTTP1, DEFAULT_HANDSHAKE_TIMEOUT,
 };
-use seleniumbase_rs_scrape::egress::route::{EgressKey, EgressRef};
-use seleniumbase_rs_scrape::passport::identity::{WireMeasurementRef, StealthIdentity};
+use seleniumbase_rs_scrape::egress::route::{ProxyKey, ProxyRoute};
+use seleniumbase_rs_scrape::passport::identity::{WireMeasurementRef, Identity};
 use seleniumbase_rs_scrape::runtime::capture::stream::read_h2c_preface;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
@@ -231,13 +231,13 @@ pub fn fingerprint(os: OsType, major: u32) -> Fingerprint {
 pub fn identity_of(
     fp: Fingerprint,
     emulation: WireMeasurementRef,
-    egress: Option<EgressKey>,
-) -> StealthIdentity {
-    StealthIdentity::new(fp, emulation, egress, now()).expect("a coherent fingerprint")
+    egress: Option<ProxyKey>,
+) -> Identity {
+    Identity::new(fp, emulation, egress, now()).expect("a coherent fingerprint")
 }
 
 /// The sample identity: the measured Chrome on macOS, going direct, holding no cookie.
-pub fn identity() -> StealthIdentity {
+pub fn identity() -> Identity {
     let major = measured_major();
     identity_of(
         fingerprint(OsType::Macos, major),
@@ -251,8 +251,8 @@ pub fn identity() -> StealthIdentity {
 }
 
 /// An egress for `spec` that is never connected to.
-pub fn egress(spec: &str) -> EgressRef {
-    EgressRef::parse(spec, None).expect("a valid egress")
+pub fn egress(spec: &str) -> ProxyRoute {
+    ProxyRoute::parse(spec, None).expect("a valid egress")
 }
 
 async fn serve(

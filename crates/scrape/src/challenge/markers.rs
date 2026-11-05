@@ -12,7 +12,7 @@
 
 use seleniumbase_rs::sb_cdp::Captcha;
 
-use super::detect::{ChallengeKind, Vendor};
+use super::detect::{ChallengeKind, ProtectionVendor};
 
 /// Cloudflare's interstitial title. Fixtures: `cloudflare_managed.html`,
 /// `cloudflare_legacy_js.html`, `cloudflare_turnstile_challenge.html`.
@@ -88,14 +88,14 @@ impl Gate {
 /// asks for `kind`.
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Marker {
-    pub(crate) vendor: Vendor,
+    pub(crate) vendor: ProtectionVendor,
     pub(crate) text: &'static str,
     pub(crate) kind: ChallengeKind,
     pub(crate) gate: Gate,
 }
 
 impl Marker {
-    const fn new(vendor: Vendor, text: &'static str, kind: ChallengeKind, gate: Gate) -> Self {
+    const fn new(vendor: ProtectionVendor, text: &'static str, kind: ChallengeKind, gate: Gate) -> Self {
         Self {
             vendor,
             text,
@@ -108,97 +108,97 @@ impl Marker {
 /// Every body marker. The scan takes the strongest kind among the markers it finds.
 pub(crate) const MARKERS: [Marker; 16] = [
     Marker::new(
-        Vendor::Cloudflare,
+        ProtectionVendor::Cloudflare,
         CLOUDFLARE_TITLE,
         ChallengeKind::JsChallenge,
         Gate::Any,
     ),
     Marker::new(
-        Vendor::Cloudflare,
+        ProtectionVendor::Cloudflare,
         CLOUDFLARE_CHL_OPT,
         ChallengeKind::JsChallenge,
         Gate::Any,
     ),
     Marker::new(
-        Vendor::Cloudflare,
+        ProtectionVendor::Cloudflare,
         CLOUDFLARE_ORCHESTRATE_B,
         ChallengeKind::JsChallenge,
         Gate::Any,
     ),
     Marker::new(
-        Vendor::Cloudflare,
+        ProtectionVendor::Cloudflare,
         CLOUDFLARE_ORCHESTRATE_G,
         ChallengeKind::JsChallenge,
         Gate::Any,
     ),
     Marker::new(
-        Vendor::Cloudflare,
+        ProtectionVendor::Cloudflare,
         CLOUDFLARE_CHALLENGE_FORM,
         ChallengeKind::JsChallenge,
         Gate::Any,
     ),
     Marker::new(
-        Vendor::Cloudflare,
+        ProtectionVendor::Cloudflare,
         CLOUDFLARE_CHALLENGE_STAGE,
         ChallengeKind::JsChallenge,
         Gate::Any,
     ),
     Marker::new(
-        Vendor::Cloudflare,
+        ProtectionVendor::Cloudflare,
         CLOUDFLARE_BLOCK_TITLE,
         ChallengeKind::Blocked,
         Gate::Any,
     ),
     Marker::new(
-        Vendor::DataDome,
+        ProtectionVendor::DataDome,
         DATADOME_HOST,
         ChallengeKind::Interactive,
         Gate::Any,
     ),
     Marker::new(
-        Vendor::PerimeterX,
+        ProtectionVendor::PerimeterX,
         PERIMETERX_CAPTCHA,
         ChallengeKind::Interactive,
         Gate::Any,
     ),
     Marker::new(
-        Vendor::Akamai,
+        ProtectionVendor::Akamai,
         AKAMAI_BM_VERIFY,
         ChallengeKind::JsChallenge,
         Gate::Any,
     ),
     Marker::new(
-        Vendor::Akamai,
+        ProtectionVendor::Akamai,
         AKAMAI_BLOCK_HOST,
         ChallengeKind::Blocked,
         Gate::Statuses(AKAMAI_BLOCK_STATUSES),
     ),
     Marker::new(
-        Vendor::Imperva,
+        ProtectionVendor::Imperva,
         IMPERVA_INCIDENT,
         ChallengeKind::Blocked,
         Gate::Any,
     ),
     Marker::new(
-        Vendor::Imperva,
+        ProtectionVendor::Imperva,
         IMPERVA_PARDON_TITLE,
         ChallengeKind::JsChallenge,
         Gate::Any,
     ),
     Marker::new(
-        Vendor::Kasada,
+        ProtectionVendor::Kasada,
         KASADA_SDK,
         ChallengeKind::JsChallenge,
         Gate::Statuses(KASADA_STATUSES),
     ),
     Marker::new(
-        Vendor::AwsWaf,
+        ProtectionVendor::AwsWaf,
         AWS_WAF_INTEGRATION,
         ChallengeKind::JsChallenge,
         Gate::Statuses(AWS_WAF_STATUSES),
     ),
     Marker::new(
-        Vendor::AwsWaf,
+        ProtectionVendor::AwsWaf,
         AWS_WAF_CAPTCHA,
         ChallengeKind::Interactive,
         Gate::Statuses(AWS_WAF_STATUSES),
@@ -210,9 +210,9 @@ pub(crate) const MARKERS: [Marker; 16] = [
 pub(crate) struct HeaderMarker {
     pub(crate) name: &'static str,
     pub(crate) value: &'static str,
-    pub(crate) vendor: Vendor,
+    pub(crate) vendor: ProtectionVendor,
     pub(crate) kind: ChallengeKind,
-    /// How the header is named in [`super::detect::Evidence::markers`].
+    /// How the header is named in [`super::detect::ChallengeEvidence::markers`].
     pub(crate) label: &'static str,
 }
 
@@ -223,21 +223,21 @@ pub(crate) const HEADER_MARKERS: [HeaderMarker; 3] = [
     HeaderMarker {
         name: "cf-mitigated",
         value: "challenge",
-        vendor: Vendor::Cloudflare,
+        vendor: ProtectionVendor::Cloudflare,
         kind: ChallengeKind::JsChallenge,
         label: "cf-mitigated: challenge",
     },
     HeaderMarker {
         name: "x-amzn-waf-action",
         value: "challenge",
-        vendor: Vendor::AwsWaf,
+        vendor: ProtectionVendor::AwsWaf,
         kind: ChallengeKind::JsChallenge,
         label: "x-amzn-waf-action: challenge",
     },
     HeaderMarker {
         name: "x-amzn-waf-action",
         value: "captcha",
-        vendor: Vendor::AwsWaf,
+        vendor: ProtectionVendor::AwsWaf,
         kind: ChallengeKind::Interactive,
         label: "x-amzn-waf-action: captcha",
     },
@@ -250,7 +250,7 @@ pub(crate) struct HeaderHint {
     pub(crate) name: &'static str,
     /// What the lower-cased value must contain; empty matches any value.
     pub(crate) contains: &'static str,
-    pub(crate) vendor: Vendor,
+    pub(crate) vendor: ProtectionVendor,
     pub(crate) label: &'static str,
 }
 
@@ -259,37 +259,37 @@ pub(crate) const HEADER_HINTS: [HeaderHint; 6] = [
     HeaderHint {
         name: "cf-ray",
         contains: "",
-        vendor: Vendor::Cloudflare,
+        vendor: ProtectionVendor::Cloudflare,
         label: "cf-ray",
     },
     HeaderHint {
         name: "server",
         contains: "cloudflare",
-        vendor: Vendor::Cloudflare,
+        vendor: ProtectionVendor::Cloudflare,
         label: "server: cloudflare",
     },
     HeaderHint {
         name: "x-datadome",
         contains: "",
-        vendor: Vendor::DataDome,
+        vendor: ProtectionVendor::DataDome,
         label: "x-datadome",
     },
     HeaderHint {
         name: "x-iinfo",
         contains: "",
-        vendor: Vendor::Imperva,
+        vendor: ProtectionVendor::Imperva,
         label: "x-iinfo",
     },
     HeaderHint {
         name: "server",
         contains: "akamaighost",
-        vendor: Vendor::Akamai,
+        vendor: ProtectionVendor::Akamai,
         label: "server: akamaighost",
     },
     HeaderHint {
         name: "x-amzn-waf-action",
         contains: "",
-        vendor: Vendor::AwsWaf,
+        vendor: ProtectionVendor::AwsWaf,
         label: "x-amzn-waf-action",
     },
 ];

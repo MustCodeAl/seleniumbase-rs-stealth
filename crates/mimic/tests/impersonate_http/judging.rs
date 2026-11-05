@@ -5,11 +5,11 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
 use seleniumbase_rs_mimic::http_session::{Attempt, HttpError, HttpSession, Rules};
-use seleniumbase_rs_scrape::challenge::detect::{ChallengeKind, Vendor};
-use seleniumbase_rs_scrape::challenge::mitigation::{Action, Mode};
-use seleniumbase_rs_scrape::ledger::events::{CollectingEventSink, ScraperEvent};
-use seleniumbase_rs_scrape::ledger::state::DomainState;
-use seleniumbase_rs_scrape::passport::policy::{EscalateReason, Transition};
+use seleniumbase_rs_scrape::challenge::detect::{ChallengeKind, ProtectionVendor};
+use seleniumbase_rs_scrape::challenge::mitigation::{Mitigation, FetchKind};
+use seleniumbase_rs_scrape::ledger::events::{CollectingEventSink, ScrapeEvent};
+use seleniumbase_rs_scrape::ledger::state::SiteRecord;
+use seleniumbase_rs_scrape::passport::policy::{EscalateReason, Escalation};
 use url::Url;
 
 use crate::site::{identity, now, Answer, Site};
@@ -54,14 +54,14 @@ async fn a_challenge_page_asks_for_the_browser_and_says_so_in_events() {
     assert_eq!(fetched.verdict.detection.kind, ChallengeKind::JsChallenge);
     assert_eq!(
         fetched.verdict.detection.evidence.vendor,
-        Some(Vendor::Cloudflare)
+        Some(ProtectionVendor::Cloudflare)
     );
-    assert_eq!(fetched.verdict.action, Action::Escalate);
+    assert_eq!(fetched.verdict.action, Mitigation::Escalate);
     assert_eq!(
         fetched.verdict.transition,
-        Transition::Escalate(EscalateReason::Challenge(ChallengeKind::JsChallenge))
+        Escalation::Escalate(EscalateReason::Challenge(ChallengeKind::JsChallenge))
     );
-    let names: Vec<&str> = sink.events().iter().map(ScraperEvent::name).collect();
+    let names: Vec<&str> = sink.events().iter().map(ScrapeEvent::name).collect();
     assert_eq!(names, ["request", "challenge_detected", "action_chosen"]);
 }
 
@@ -74,7 +74,7 @@ async fn without_a_browser_the_challenge_is_retried_and_then_given_up() {
     let alone = |number, previous_challenges| Attempt {
         number,
         previous_challenges,
-        can_rotate_egress: false,
+        can_rotate_proxy: false,
         can_escalate: false,
     };
 
@@ -98,13 +98,13 @@ async fn without_a_browser_the_challenge_is_retried_and_then_given_up() {
         .expect("a reply");
 
     assert!(
-        matches!(first.verdict.action, Action::Retry { .. }),
+        matches!(first.verdict.action, Mitigation::Retry { .. }),
         "{:?}",
         first.verdict
     );
-    assert_eq!(first.verdict.transition, Transition::Stay);
+    assert_eq!(first.verdict.transition, Escalation::Stay);
     assert!(
-        matches!(last.verdict.action, Action::GiveUp(_)),
+        matches!(last.verdict.action, Mitigation::GiveUp(_)),
         "{:?}",
         last.verdict
     );
@@ -129,8 +129,8 @@ async fn a_clear_page_proceeds_and_stays_in_http_mode() {
         .expect("a reply");
 
     assert!(fetched.verdict.is_clear());
-    assert_eq!(fetched.verdict.action, Action::Proceed);
-    assert_eq!(fetched.verdict.transition, Transition::Stay);
+    assert_eq!(fetched.verdict.action, Mitigation::Proceed);
+    assert_eq!(fetched.verdict.transition, Escalation::Stay);
     assert_eq!(sink.len(), 1, "only the request event");
 }
 
@@ -164,15 +164,15 @@ async fn a_rate_limit_waits_as_long_as_the_server_says() {
     );
     assert_eq!(
         fetched.verdict.action,
-        Action::Cooldown {
+        Mitigation::Cooldown {
             until: clock.load(Ordering::SeqCst) + 7
         }
     );
-    assert_eq!(fetched.verdict.transition, Transition::Stay);
+    assert_eq!(fetched.verdict.transition, Escalation::Stay);
 }
 
 /// An identity holding a clearance for `shop.test` that ends `lifetime` seconds after `at`.
-fn cleared(at: u64, lifetime: u64) -> seleniumbase_rs_scrape::passport::identity::StealthIdentity {
+fn cleared(at: u64, lifetime: u64) -> seleniumbase_rs_scrape::passport::identity::Identity {
     let mut base = identity();
     let url = Url::parse(&format!("https://{HOST}/")).expect("a url");
     let line = format!("cf_clearance=CLEARANCE; Path=/; Secure; HttpOnly; Max-Age={lifetime}");
@@ -209,19 +209,19 @@ async fn a_clearance_about_to_end_sends_the_session_to_the_browser_first() {
         .preflight(&url, &base, None, &rules)
         .expect("a verdict");
 
-    assert_eq!(fresh, Transition::Stay);
+    assert_eq!(fresh, Escalation::Stay);
     assert_eq!(
         ending,
-        Transition::Escalate(EscalateReason::ClearanceExpiring { remaining_secs: 60 })
+        Escalation::Escalate(EscalateReason::ClearanceExpiring { remaining_secs: 60 })
     );
     assert_eq!(
         ended,
-        Transition::Escalate(EscalateReason::ClearanceExpiring { remaining_secs: 0 })
+        Escalation::Escalate(EscalateReason::ClearanceExpiring { remaining_secs: 0 })
     );
-    let expiring: Vec<ScraperEvent> = sink
+    let expiring: Vec<ScrapeEvent> = sink
         .events()
         .into_iter()
-        .filter(|event| matches!(event, ScraperEvent::ClearanceExpiring { .. }))
+        .filter(|event| matches!(event, ScrapeEvent::ClearanceExpiring { .. }))
         .collect();
     assert_eq!(expiring.len(), 2);
 }
@@ -250,8 +250,8 @@ async fn a_site_that_needs_a_browser_sends_the_session_there_before_the_request(
     let clock = Arc::new(AtomicU64::new(now()));
     let sink = Arc::new(CollectingEventSink::new());
     let session = clocked(&site, &clock, &sink);
-    let mut state = DomainState::new(HOST);
-    state.preferred_mode = Some(Mode::Browser);
+    let mut state = SiteRecord::new(HOST);
+    state.preferred_kind = Some(FetchKind::Browser);
 
     let transition = session
         .preflight(
@@ -267,9 +267,9 @@ async fn a_site_that_needs_a_browser_sends_the_session_there_before_the_request(
 
     assert_eq!(
         transition,
-        Transition::Escalate(EscalateReason::SiteNeedsBrowser)
+        Escalation::Escalate(EscalateReason::SiteNeedsBrowser)
     );
-    assert_eq!(plain, Transition::Stay);
+    assert_eq!(plain, Escalation::Stay);
 }
 
 #[tokio::test]
@@ -292,7 +292,7 @@ async fn a_clearance_the_session_just_earned_counts_for_the_preflight() {
 
     assert!(matches!(
         transition,
-        Transition::Escalate(EscalateReason::ClearanceExpiring { .. })
+        Escalation::Escalate(EscalateReason::ClearanceExpiring { .. })
     ));
     assert_eq!(exported.clearances.len(), 1, "{exported:?}");
     assert_eq!(base.clearances.len(), 0, "{:?}", base.clearances);

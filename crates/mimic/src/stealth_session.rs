@@ -1,31 +1,31 @@
 //! `StealthSession`: the dual-mode session that moves between plain HTTP and a real browser.
 //!
-//! A session presents one [`StealthIdentity`] (a fingerprint, the measured browser it belongs to,
+//! A session presents one [`Identity`] (a fingerprint, the measured browser it belongs to,
 //! the cookies it earned and the egress they were earned through) in one of two modes:
 //!
-//! - [`Mode::Http`]: an [`HttpSession`] sends the requests. It is fast and cheap, and its TLS
+//! - [`FetchKind::Http`]: an [`HttpSession`] sends the requests. It is fast and cheap, and its TLS
 //!   `ClientHello`, HTTP/2 start and headers are those of the measured Chrome.
-//! - [`Mode::Browser`]: a real Chrome sends them, behind the [`MitmProxy`], which ends the
+//! - [`FetchKind::Browser`]: a real Chrome sends them, behind the [`MitmProxy`], which ends the
 //!   browser's TLS and replays each request with the same measured `ClientHello` and HTTP/2 start.
 //!   Both modes therefore look alike on the wire, and a clearance earned in one is valid in the
 //!   other.
 //!
 //! # The loop
 //!
-//! A session starts in the mode its [`SessionPolicy`] prefers (HTTP unless told otherwise) and
+//! A session starts in the mode its [`EscalationPolicy`] prefers (HTTP unless told otherwise) and
 //! [`fetch`](StealthSession::fetch) asks the policies three questions:
 //!
-//! 1. Before the request, [`SessionPolicy::before_fetch`]: does the identity hold a clearance for
+//! 1. Before the request, [`EscalationPolicy::before_fetch`]: does the identity hold a clearance for
 //!    the site that is about to end, or must it hold one and does not, or does the site's history
 //!    say plain requests fail? Then the session goes to the browser first.
 //! 2. After the answer, [`MitigationPolicy::decide`]: a real page ends the loop; a challenge met in
-//!    HTTP mode sends the session to the browser ([`Transition::Escalate`]); in the browser the
+//!    HTTP mode sends the session to the browser ([`Escalation::Escalate`]); in the browser the
 //!    challenge is solved and the cookies move into the identity; a block or a rate limit starts a
 //!    cooldown, rotates the egress or the profile, or stops the fetch.
-//! 3. After a solve, [`SessionPolicy::after_fetch`]: a browser that earned a clearance hands the
-//!    identity back to HTTP ([`Transition::Demote`]), which carries it on from there.
+//! 3. After a solve, [`EscalationPolicy::after_fetch`]: a browser that earned a clearance hands the
+//!    identity back to HTTP ([`Escalation::Demote`]), which carries it on from there.
 //!
-//! Every change of mode emits [`ScraperEvent::ModeChanged`] with its reason. The browser is closed
+//! Every change of mode emits [`ScrapeEvent::FetchKindChanged`] with its reason. The browser is closed
 //! when the session goes back to HTTP and is started again, with the same identity and egress,
 //! when it is needed. The MITM proxy lives from the first time a browser is needed until the
 //! session is closed, so its port and its certificate stay the same across browsers.
@@ -36,7 +36,7 @@
 //!
 //! # async fn demo() -> Result<(), Box<dyn std::error::Error>> {
 //! let mut session = StealthSession::builder()
-//!     .with_geo_proxies([("http://user:pass@de.proxy.example:8080", CountryCode::new("DE")?)])?
+//!     .geo_proxies([("http://user:pass@de.proxy.example:8080", CountryCode::new("DE")?)])?
 //!     .build()
 //!     .await?;
 //! let page = session.fetch("https://example.com/").await?;
@@ -50,7 +50,7 @@
 //!
 //! Both legs share one egress: the HTTP session connects through it and the MITM proxy sends the
 //! browser's requests through it. A clearance belongs to the address that earned it, so changing
-//! the egress ([`rotate_egress`](StealthSession::rotate_egress)) drops the cookies and the
+//! the egress ([`rotate_proxy`](StealthSession::rotate_proxy)) drops the cookies and the
 //! clearances, and an identity can only be restored through the egress it names
 //! ([`StealthSessionBuilder::restore`], [`StealthSession::import_identity`]).
 //!
@@ -66,12 +66,12 @@
 //! automation permitted by a site's terms. The measured Chrome and the installed Chrome must have
 //! the same major version: a browser that is another version is refused before it loads a page.
 //!
-//! [`SessionPolicy`]: seleniumbase_rs_scrape::passport::policy::SessionPolicy
-//! [`SessionPolicy::before_fetch`]: seleniumbase_rs_scrape::passport::policy::SessionPolicy::before_fetch
-//! [`SessionPolicy::after_fetch`]: seleniumbase_rs_scrape::passport::policy::SessionPolicy::after_fetch
+//! [`EscalationPolicy`]: seleniumbase_rs_scrape::passport::policy::EscalationPolicy
+//! [`EscalationPolicy::before_fetch`]: seleniumbase_rs_scrape::passport::policy::EscalationPolicy::before_fetch
+//! [`EscalationPolicy::after_fetch`]: seleniumbase_rs_scrape::passport::policy::EscalationPolicy::after_fetch
 //! [`MitigationPolicy::decide`]: seleniumbase_rs_scrape::challenge::mitigation::MitigationPolicy::decide
-//! [`Transition::Escalate`]: seleniumbase_rs_scrape::passport::policy::Transition::Escalate
-//! [`Transition::Demote`]: seleniumbase_rs_scrape::passport::policy::Transition::Demote
+//! [`Escalation::Escalate`]: seleniumbase_rs_scrape::passport::policy::Escalation::Escalate
+//! [`Escalation::Demote`]: seleniumbase_rs_scrape::passport::policy::Escalation::Demote
 
 mod browser;
 mod builder;
@@ -96,20 +96,20 @@ use super::http_session::{HttpOptions, HttpSession, Rules};
 use super::mitm::{MitmOptions, MitmProxy};
 use seleniumbase_rs::evasion::fingerprint::OsType;
 use seleniumbase_rs::sb_cdp::{LaunchOptionsBuilder, Page};
-use seleniumbase_rs_scrape::challenge::mitigation::Mode;
+use seleniumbase_rs_scrape::challenge::mitigation::FetchKind;
 use seleniumbase_rs_scrape::egress::geo::GeoResolver;
 use seleniumbase_rs_scrape::egress::pool::ProxyPool;
-use seleniumbase_rs_scrape::egress::route::{EgressKey, EgressRef};
-use seleniumbase_rs_scrape::ledger::events::{EventSink, ScraperEvent};
-use seleniumbase_rs_scrape::ledger::state::StateStore;
-use seleniumbase_rs_scrape::passport::identity::StealthIdentity;
+use seleniumbase_rs_scrape::egress::route::{ProxyKey, ProxyRoute};
+use seleniumbase_rs_scrape::ledger::events::{EventSink, ScrapeEvent};
+use seleniumbase_rs_scrape::ledger::state::Ledger;
+use seleniumbase_rs_scrape::passport::identity::Identity;
 use seleniumbase_rs_scrape::runtime::browser_scraper::BrowserLauncher;
 
 /// The ports and settings that are fixed when the session is built.
 struct Wiring {
     launch: LaunchOptionsBuilder,
     launcher: Arc<dyn BrowserLauncher>,
-    store: Arc<dyn StateStore>,
+    store: Arc<dyn Ledger>,
     sink: Arc<dyn EventSink>,
     geo: Arc<dyn GeoResolver>,
     rules: Rules,
@@ -132,7 +132,7 @@ struct Persona {
 struct Egress {
     pool: Option<ProxyPool>,
     size: usize,
-    current: Option<EgressRef>,
+    current: Option<ProxyRoute>,
     /// The site fetched last, so a rotation can keep a site on one egress when the pool does.
     site: Option<String>,
 }
@@ -145,10 +145,10 @@ enum Leg {
 
 impl Leg {
     /// The mode the leg stands for.
-    fn mode(&self) -> Mode {
+    fn fetch_kind(&self) -> FetchKind {
         match self {
-            Self::Http(_) => Mode::Http,
-            Self::Browser(_) => Mode::Browser,
+            Self::Http(_) => FetchKind::Http,
+            Self::Browser(_) => FetchKind::Browser,
         }
     }
 
@@ -165,7 +165,7 @@ impl Leg {
 pub struct StealthSession {
     wiring: Wiring,
     persona: Persona,
-    identity: StealthIdentity,
+    identity: Identity,
     leg: Leg,
     /// The proxy the browser leg runs behind, once a browser has been needed.
     mitm: Option<MitmProxy>,
@@ -176,7 +176,7 @@ impl fmt::Debug for StealthSession {
     /// The mode, the seed and the egress key; never a proxy credential, a token or a cookie.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("StealthSession")
-            .field("mode", &self.leg.mode())
+            .field("mode", &self.leg.fetch_kind())
             .field("seed", &self.persona.seed)
             .field("egress", &self.egress_key())
             .field("egresses", &self.egress.size)
@@ -194,8 +194,8 @@ impl StealthSession {
 
     /// The mode the requests are sent in now.
     #[must_use]
-    pub fn mode(&self) -> Mode {
-        self.leg.mode()
+    pub fn fetch_kind(&self) -> FetchKind {
+        self.leg.fetch_kind()
     }
 
     /// The identity as of the last change of mode, rotation, import or restore.
@@ -203,14 +203,14 @@ impl StealthSession {
     /// The cookies the current leg has gathered since are not in it;
     /// [`export_identity`](Self::export_identity) reads them.
     #[must_use]
-    pub fn identity(&self) -> &StealthIdentity {
+    pub fn identity(&self) -> &Identity {
         &self.identity
     }
 
     /// The egress both legs leave through; `None` for the direct connection. It carries no
     /// credentials.
     #[must_use]
-    pub fn egress(&self) -> Option<&EgressKey> {
+    pub fn proxy_route(&self) -> Option<&ProxyKey> {
         self.egress_key()
     }
 
@@ -265,13 +265,13 @@ impl StealthSession {
     }
 
     /// Hands an event to the sink.
-    fn emit(&self, event: &ScraperEvent) {
+    fn emit(&self, event: &ScrapeEvent) {
         self.wiring.sink.emit(event);
     }
 
     /// The key of the egress in use.
-    fn egress_key(&self) -> Option<&EgressKey> {
-        self.egress.current.as_ref().map(EgressRef::key)
+    fn egress_key(&self) -> Option<&ProxyKey> {
+        self.egress.current.as_ref().map(ProxyRoute::key)
     }
 }
 
@@ -291,8 +291,8 @@ mod tests {
         is_send(session.fetch("https://example.com/"));
         is_send(session.escalate());
         is_send(session.demote());
-        is_send(session.rotate_profile());
-        is_send(session.rotate_egress());
+        is_send(session.rotate_fingerprint());
+        is_send(session.rotate_proxy());
         is_send(session.export_identity());
         is_send(StealthSession::builder().build());
         is_send(session);

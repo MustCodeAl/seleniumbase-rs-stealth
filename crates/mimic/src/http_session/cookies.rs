@@ -16,7 +16,7 @@ use wreq::Method;
 use crate::sync::locked;
 use seleniumbase_rs::sb_cdp::SameSite;
 use seleniumbase_rs_codec::header_spec::RequestShape;
-use seleniumbase_rs_scrape::jar::store::{CookieJar, SiteContext, StoreOutcome, StoredCookie};
+use seleniumbase_rs_scrape::jar::store::{CookieJar, SiteContext, SetCookieOutcome, StoredCookie};
 
 /// The most changes remembered for the next sync. Past it the oldest is forgotten.
 pub(super) const MAX_PENDING_CHANGES: usize = 4096;
@@ -174,9 +174,9 @@ impl SessionJar {
         let before = state.jar.cookies().to_vec();
         for line in lines.iter().take(MAX_SET_COOKIES_PER_RESPONSE) {
             match state.jar.store(url, line, now) {
-                StoreOutcome::Stored | StoreOutcome::Replaced => absorbed.stored += 1,
-                StoreOutcome::Deleted => absorbed.deleted += 1,
-                StoreOutcome::Ignored(_) => absorbed.ignored += 1,
+                SetCookieOutcome::Stored | SetCookieOutcome::Replaced => absorbed.stored += 1,
+                SetCookieOutcome::Deleted => absorbed.deleted += 1,
+                SetCookieOutcome::Ignored(_) => absorbed.ignored += 1,
             }
         }
         let after = state.jar.cookies().to_vec();

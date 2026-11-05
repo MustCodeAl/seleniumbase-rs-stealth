@@ -11,7 +11,7 @@ use seleniumbase_rs_codec::BrowserKind;
 use seleniumbase_rs_mimic::client::ImpersonationProfile;
 use seleniumbase_rs_mimic::http_session::{HttpError, HttpOptions, HttpSession};
 use seleniumbase_rs_scrape::passport::identity::IdentityError;
-use seleniumbase_rs_scrape::runtime::egress_switch::{ContextProxySwitch, EgressSwitch};
+use seleniumbase_rs_scrape::runtime::proxy_switch::{ContextProxySwitch, ProxySwitch};
 use serde_json::{json, Value};
 
 use crate::site::{egress, measured_major, Answer, Site};
@@ -236,14 +236,14 @@ async fn the_proxy_of_the_pages_context_is_taken_when_no_egress_is_given() {
         .expect_err("mismatch");
 
     assert_eq!(
-        adopted.egress().map(|key| key.host.as_str()),
+        adopted.proxy_route().map(|key| key.host.as_str()),
         Some("proxy.example")
     );
-    assert_eq!(same.egress(), Some(proxy.key()));
+    assert_eq!(same.proxy_route(), Some(proxy.key()));
     assert!(
         matches!(
             refused,
-            HttpError::Identity(IdentityError::EgressMismatch { .. })
+            HttpError::Identity(IdentityError::ProxyMismatch { .. })
         ),
         "{refused}"
     );
@@ -317,7 +317,7 @@ async fn the_egress_a_loopback_proxy_really_leaves_through_is_what_the_session_t
         .await
         .expect("the caller named the real egress");
 
-    assert_eq!(session.egress(), Some(real.key()));
+    assert_eq!(session.proxy_route(), Some(real.key()));
     let shown = format!("{session:?}");
     assert!(
         !shown.contains("s3cret") && !shown.contains("alice"),
@@ -338,11 +338,11 @@ async fn an_egress_that_is_not_the_browsers_own_proxy_is_refused() {
         .await
         .expect_err("another proxy");
 
-    assert_eq!(accepted.egress(), Some(same.key()));
+    assert_eq!(accepted.proxy_route(), Some(same.key()));
     assert!(
         matches!(
             refused,
-            HttpError::Identity(IdentityError::EgressMismatch { .. })
+            HttpError::Identity(IdentityError::ProxyMismatch { .. })
         ),
         "{refused}"
     );
@@ -365,7 +365,7 @@ async fn a_proxy_that_leaves_directly_can_be_said_to_do_so() {
     .await
     .expect("said to leave directly");
 
-    assert_eq!(session.egress(), None);
+    assert_eq!(session.proxy_route(), None);
 }
 
 #[tokio::test]
@@ -382,7 +382,7 @@ async fn a_browser_with_no_proxy_switch_or_a_direct_one_is_a_direct_browser() {
             .await
             .expect(switches);
 
-        assert_eq!(session.egress(), None, "{switches}");
+        assert_eq!(session.proxy_route(), None, "{switches}");
     }
 }
 
@@ -394,5 +394,5 @@ async fn a_browser_that_will_not_say_how_it_was_started_is_taken_as_before() {
         .await
         .expect("nothing to go by");
 
-    assert_eq!(session.egress(), None);
+    assert_eq!(session.proxy_route(), None);
 }

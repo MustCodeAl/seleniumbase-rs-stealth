@@ -499,7 +499,7 @@ pub fn impersonation_client(
         .orig_headers(order)
         .build(Group::default());
     Ok(wreq::Client::builder()
-        .emulation(emulation)
+        .wire_measurement(emulation)
         .tls_sni(profile.tls.has_extension(ext_id::SERVER_NAME)))
 }
 

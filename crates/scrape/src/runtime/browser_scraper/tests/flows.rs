@@ -8,13 +8,13 @@ use async_trait::async_trait;
 use tokio::time::Instant;
 
 use super::rig::{block, country, real_page, script_challenge, widget_challenge, Rig, NOW};
-use crate::challenge::detect::{ChallengeKind, Detection, Evidence};
-use crate::challenge::mitigation::{Action, GiveUpReason};
-use crate::egress::pool::{EgressOutcome, DEFAULT_QUARANTINE_AFTER};
-use crate::egress::route::EgressRef;
+use crate::challenge::detect::{ChallengeKind, Detection, ChallengeEvidence};
+use crate::challenge::mitigation::{Mitigation, GiveUpReason};
+use crate::egress::pool::{ProxyOutcome, DEFAULT_QUARANTINE_AFTER};
+use crate::egress::route::ProxyRoute;
 use crate::error::ScrapeError;
-use crate::ledger::events::ScraperEvent;
-use crate::ledger::state::{DomainState, StateError, StateStore};
+use crate::ledger::events::ScrapeEvent;
+use crate::ledger::state::{SiteRecord, LedgerError, Ledger};
 use crate::runtime::browser_scraper::fetch::{give_up, Step, Target};
 use crate::runtime::cdp::testkit::Served;
 use crate::runtime::cdp::PageSnapshot;
@@ -32,7 +32,7 @@ fn mouse_events(rig: &Rig, kind: &str) -> usize {
         .count()
 }
 
-async fn state_of(rig: &Rig, site: &str) -> DomainState {
+async fn state_of(rig: &Rig, site: &str) -> SiteRecord {
     rig.store
         .get(site)
         .await
@@ -49,7 +49,7 @@ async fn a_real_page_is_returned_at_the_first_load() {
 
     assert_eq!((fetched.status, fetched.attempts), (200, 1));
     assert_eq!(fetched.solved, None);
-    assert_eq!(fetched.detection.kind, ChallengeKind::None);
+    assert_eq!(fetched.detection.kind, ChallengeKind::Clear);
     assert_eq!(fetched.url, URL);
     assert!(fetched.headers.iter().any(|(name, _)| name == "server"));
     assert!(fetched.body.contains("<html") || fetched.body.contains("<HTML"));
@@ -100,7 +100,7 @@ async fn a_widget_challenge_is_clicked_and_the_page_is_loaded_again_with_the_cle
     let solved = rig.sink.events().pop().expect("an event");
     assert!(matches!(
         solved,
-        ScraperEvent::ChallengeSolved {
+        ScrapeEvent::ChallengeSolved {
             kind: ChallengeKind::Interactive,
             attempts: 2,
             ..
@@ -128,7 +128,7 @@ async fn a_widget_the_page_never_accepts_leaves_the_decision_to_the_policy() {
     rig.site.ignore_clicks();
     let mut scraper = rig
         .builder()
-        .with_max_challenge_attempts(3)
+        .max_challenge_attempts(3)
         .build()
         .await
         .expect("the scraper builds");
@@ -151,21 +151,21 @@ async fn a_widget_the_page_never_accepts_leaves_the_decision_to_the_policy() {
         "the widget is pressed on every solve"
     );
     assert!(!rig.site.is_cleared());
-    let chosen: Vec<Action> = rig
+    let chosen: Vec<Mitigation> = rig
         .sink
         .events()
         .into_iter()
         .filter_map(|event| match event {
-            ScraperEvent::ActionChosen { action, .. } => Some(action),
+            ScrapeEvent::ActionChosen { action, .. } => Some(action),
             _ => None,
         })
         .collect();
     assert_eq!(
         chosen,
         [
-            Action::Solve,
-            Action::Solve,
-            Action::GiveUp(GiveUpReason::AttemptsExhausted)
+            Mitigation::Solve,
+            Mitigation::Solve,
+            Mitigation::GiveUp(GiveUpReason::AttemptsExhausted)
         ]
     );
 }
@@ -192,7 +192,7 @@ async fn a_challenge_that_never_clears_is_unsolved_after_the_attempts_allowed() 
     let rig = Rig::new(vec![script_challenge()]);
     let mut scraper = rig
         .builder()
-        .with_max_challenge_attempts(3)
+        .max_challenge_attempts(3)
         .build()
         .await
         .expect("the scraper builds");
@@ -212,21 +212,21 @@ async fn a_challenge_that_never_clears_is_unsolved_after_the_attempts_allowed() 
     );
     let state = state_of(&rig, "shop.example").await;
     assert_eq!((state.challenges, state.consecutive_challenges), (3, 3));
-    let chosen: Vec<Action> = rig
+    let chosen: Vec<Mitigation> = rig
         .sink
         .events()
         .into_iter()
         .filter_map(|event| match event {
-            ScraperEvent::ActionChosen { action, .. } => Some(action),
+            ScrapeEvent::ActionChosen { action, .. } => Some(action),
             _ => None,
         })
         .collect();
     assert_eq!(
         chosen,
         [
-            Action::Solve,
-            Action::Solve,
-            Action::GiveUp(GiveUpReason::AttemptsExhausted)
+            Mitigation::Solve,
+            Mitigation::Solve,
+            Mitigation::GiveUp(GiveUpReason::AttemptsExhausted)
         ]
     );
 }
@@ -236,12 +236,12 @@ async fn repeated_challenges_change_the_egress_and_then_the_profile() {
     let rig = Rig::new(vec![script_challenge()]);
     let mut scraper = rig
         .builder()
-        .with_geo_proxies([
+        .geo_proxies([
             ("http://de.proxy.example:8080", country("DE")),
             ("http://fr.proxy.example:8080", country("FR")),
         ])
         .expect("valid specs")
-        .with_max_challenge_attempts(4)
+        .max_challenge_attempts(4)
         .build()
         .await
         .expect("the scraper builds");
@@ -257,10 +257,10 @@ async fn repeated_challenges_change_the_egress_and_then_the_profile() {
     let rotated = events
         .iter()
         .find_map(|event| match event {
-            ScraperEvent::EgressRotated { from, to } => Some((from.clone(), to.clone())),
+            ScrapeEvent::ProxyRotated { from, to } => Some((from.clone(), to.clone())),
             _ => None,
         })
-        .expect("the egress was rotated");
+        .expect("the proxy was rotated");
     assert_eq!(
         rotated.0.map(|key| key.host),
         Some("de.proxy.example".to_owned())
@@ -271,7 +271,7 @@ async fn repeated_challenges_change_the_egress_and_then_the_profile() {
     );
     assert!(events
         .iter()
-        .any(|event| matches!(event, ScraperEvent::ProfileRotated { from_seed, .. } if *from_seed == first_seed)));
+        .any(|event| matches!(event, ScrapeEvent::FingerprintRotated { from_seed, .. } if *from_seed == first_seed)));
     assert_eq!(
         rig.launcher.count(),
         4,
@@ -285,7 +285,7 @@ async fn repeated_challenges_change_the_egress_and_then_the_profile() {
     }
     assert!(rig.launcher.nth(3).browser.is_connected());
     assert_eq!(
-        scraper.egress().map(|key| key.host.as_str()),
+        scraper.proxy_route().map(|key| key.host.as_str()),
         Some("fr.proxy.example")
     );
     assert_eq!(scraper.fingerprint().locale().as_str(), Some("fr-FR"));
@@ -337,7 +337,7 @@ async fn a_block_with_another_egress_moves_there_and_tries_again() {
     let rig = Rig::new(vec![block(), real_page()]);
     let mut scraper = rig
         .builder()
-        .with_geo_proxies([
+        .geo_proxies([
             ("http://de.proxy.example:8080", country("DE")),
             ("http://fr.proxy.example:8080", country("FR")),
         ])
@@ -346,17 +346,17 @@ async fn a_block_with_another_egress_moves_there_and_tries_again() {
         .await
         .expect("the scraper builds");
 
-    let fetched = scraper.fetch(URL).await.expect("the second egress gets in");
+    let fetched = scraper.fetch(URL).await.expect("the second proxy gets in");
 
     assert_eq!(fetched.attempts, 2);
     assert_eq!(
-        fetched.egress.map(|key| key.host),
+        fetched.proxy.map(|key| key.host),
         Some("fr.proxy.example".to_owned())
     );
     assert_eq!(
         rig.launcher.count(),
         3,
-        "the French egress needed a new browser"
+        "the French proxy needed a new browser"
     );
     assert_eq!(rig.launcher.last().options.lang(), Some("fr-FR"));
     assert_eq!(
@@ -365,7 +365,7 @@ async fn a_block_with_another_egress_moves_there_and_tries_again() {
     );
     let state = state_of(&rig, "shop.example").await;
     assert_eq!(
-        state.last_egress.map(|key| key.host),
+        state.last_proxy.map(|key| key.host),
         Some("fr.proxy.example".to_owned())
     );
 }
@@ -375,7 +375,7 @@ async fn a_block_with_every_other_egress_out_of_rotation_gives_up_instead_of_loo
     let rig = Rig::new(vec![block()]);
     let mut scraper = rig
         .builder()
-        .with_geo_proxies([
+        .geo_proxies([
             ("http://de.proxy.example:8080", country("DE")),
             ("http://fr.proxy.example:8080", country("FR")),
         ])
@@ -383,11 +383,11 @@ async fn a_block_with_every_other_egress_out_of_rotation_gives_up_instead_of_loo
         .build()
         .await
         .expect("the scraper builds");
-    let france = EgressRef::parse("http://fr.proxy.example:8080", Some(country("FR")))
+    let france = ProxyRoute::parse("http://fr.proxy.example:8080", Some(country("FR")))
         .expect("a valid spec");
-    let pool = scraper.egress.pool.as_ref().expect("a pool");
+    let pool = scraper.proxy.pool.as_ref().expect("a pool");
     for _ in 0..DEFAULT_QUARANTINE_AFTER {
-        pool.report(france.key(), EgressOutcome::Blocked, NOW);
+        pool.report(france.key(), ProxyOutcome::Blocked, NOW);
     }
 
     let error = scraper
@@ -449,7 +449,7 @@ async fn a_page_that_will_not_load_is_a_navigation_error_and_the_pool_hears_of_i
 #[tokio::test(start_paused = true)]
 async fn a_site_in_cooldown_in_the_store_is_not_requested() {
     let rig = Rig::new(vec![real_page()]);
-    let mut remembered = DomainState::new("shop.example");
+    let mut remembered = SiteRecord::new("shop.example");
     remembered.start_cooldown(NOW + 100);
     rig.store.put(remembered).await.expect("the store writes");
     let mut scraper = rig.builder().build().await.expect("the scraper builds");
@@ -465,7 +465,7 @@ async fn fetches_of_one_site_are_paced_and_other_sites_are_not() {
     let rig = Rig::new(vec![real_page()]);
     let mut scraper = rig
         .builder()
-        .per_site_rate(1, Duration::from_millis(400))
+        .rate_limit(1, Duration::from_millis(400))
         .build()
         .await
         .expect("the scraper builds");
@@ -523,7 +523,7 @@ async fn solving_a_page_that_is_not_a_challenge_changes_nothing() {
 
     let detection = scraper.solve_challenge().await.expect("nothing to solve");
 
-    assert_eq!(detection.kind, ChallengeKind::None);
+    assert_eq!(detection.kind, ChallengeKind::Clear);
     assert_eq!(mouse_events(&rig, "mousePressed"), 0);
 }
 
@@ -531,7 +531,7 @@ fn snapshot(kind: ChallengeKind) -> PageSnapshot {
     PageSnapshot {
         detection: Detection {
             kind,
-            evidence: Evidence::default(),
+            evidence: ChallengeEvidence::default(),
         },
         body: String::new(),
     }
@@ -542,12 +542,12 @@ async fn a_retry_waits_the_time_it_was_given_and_asks_for_another_load() {
     let rig = Rig::new(vec![real_page()]);
     let mut scraper = rig.builder().build().await.expect("the scraper builds");
     let target = Target::parse(URL).expect("a valid URL");
-    let mut state = DomainState::new("shop.example");
+    let mut state = SiteRecord::new("shop.example");
     let start = Instant::now();
 
     let step = scraper
         .act(
-            Action::Retry {
+            Mitigation::Retry {
                 after: Duration::from_secs(5),
             },
             &target,
@@ -567,11 +567,11 @@ async fn an_action_the_loop_does_not_know_ends_it_instead_of_being_guessed_at() 
     let rig = Rig::new(vec![real_page()]);
     let mut scraper = rig.builder().build().await.expect("the scraper builds");
     let target = Target::parse(URL).expect("a valid URL");
-    let mut state = DomainState::new("shop.example");
+    let mut state = SiteRecord::new("shop.example");
 
     let result = scraper
         .act(
-            Action::Escalate,
+            Mitigation::Escalate,
             &target,
             &mut state,
             &snapshot(ChallengeKind::JsChallenge),
@@ -628,23 +628,23 @@ fn a_policy_that_stops_is_an_unsolved_challenge_only_when_a_challenge_stood() {
 struct ReadOnlyStore;
 
 #[async_trait]
-impl StateStore for ReadOnlyStore {
-    async fn get(&self, _site: &str) -> Result<Option<DomainState>, StateError> {
+impl Ledger for ReadOnlyStore {
+    async fn get(&self, _site: &str) -> Result<Option<SiteRecord>, LedgerError> {
         Ok(None)
     }
 
-    async fn put(&self, _state: DomainState) -> Result<(), StateError> {
-        Err(StateError::TooLarge {
+    async fn put(&self, _state: SiteRecord) -> Result<(), LedgerError> {
+        Err(LedgerError::TooLarge {
             path: PathBuf::from("state.json"),
             limit: 0,
         })
     }
 
-    async fn remove(&self, _site: &str) -> Result<(), StateError> {
+    async fn remove(&self, _site: &str) -> Result<(), LedgerError> {
         Ok(())
     }
 
-    async fn sites(&self) -> Result<Vec<String>, StateError> {
+    async fn sites(&self) -> Result<Vec<String>, LedgerError> {
         Ok(Vec::new())
     }
 }
@@ -654,7 +654,7 @@ async fn a_store_that_cannot_write_fails_a_fetch_that_worked_but_not_the_reason_
     let worked = Rig::new(vec![real_page()]);
     let mut scraper = worked
         .builder()
-        .with_state_store(Arc::new(ReadOnlyStore))
+        .ledger(Arc::new(ReadOnlyStore))
         .build()
         .await
         .expect("the scraper builds");
@@ -662,13 +662,13 @@ async fn a_store_that_cannot_write_fails_a_fetch_that_worked_but_not_the_reason_
         .fetch(URL)
         .await
         .expect_err("the state cannot be saved");
-    assert!(matches!(saved, ScrapeError::State(_)), "{saved:?}");
+    assert!(matches!(saved, ScrapeError::Ledger(_)), "{saved:?}");
 
     let failed = Rig::new(vec![script_challenge()]);
     let mut scraper = failed
         .builder()
-        .with_state_store(Arc::new(ReadOnlyStore))
-        .with_max_challenge_attempts(1)
+        .ledger(Arc::new(ReadOnlyStore))
+        .max_challenge_attempts(1)
         .build()
         .await
         .expect("the scraper builds");

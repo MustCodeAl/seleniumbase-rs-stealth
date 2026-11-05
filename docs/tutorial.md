@@ -28,7 +28,7 @@ of it.
 | Capture tool `capture_h2` | `mimic` | Available |
 | `ImpersonationProfile`, `CustomProfileBuilder`, `impersonation_client` (wreq with BoringSSL) | `mimic` | Available |
 | RFC 6265 cookie jar | `scrape` | Available |
-| `StealthIdentity`, its identity file, `SessionPolicy` | `scrape` | Available |
+| `Identity`, its identity file, `EscalationPolicy` | `scrape` | Available |
 | Challenge detection, mitigation policy, proxy pool, per-site state, events | `scrape` | Available |
 | `BrowserScraper` (a real Chrome, no TLS spoofing) | `scrape` | Available |
 | Ephemeral-CA TLS server | `mimic` | Available |
@@ -412,7 +412,7 @@ What the jar enforces: `Secure` cookies need a secure origin (https or wss, or a
 loopback host), `__Secure-` and `__Host-` prefixes, `SameSite=None` needs
 `Secure`, and a `Domain` on a public suffix or an IP address is refused. Lifetimes
 are capped at 400 days. A cookie it refuses comes back as
-`StoreOutcome::Ignored(IgnoreReason)` with the reason. The jar is bounded: 180
+`SetCookieOutcome::Ignored(IgnoreReason)` with the reason. The jar is bounded: 180
 cookies and 256 KiB per site, 3000 cookies in all, and a path or domain over its
 limit is refused. `Debug` prints counts only, and a jar read back from a file is
 checked against the same rules, so an edited file cannot smuggle in a cookie the
@@ -424,14 +424,14 @@ between runs.
 
 ## Identity, session policy and the identity file
 
-A `StealthIdentity` (`scrape::passport::identity`) is what a scrape session
+A `Identity` (`scrape::passport::identity`) is what a scrape session
 presents to a site: the `Fingerprint`, a reference to the measured browser its
 wire behaviour comes from (`WireMeasurementRef`), the cookies it earned, the client
 hints each origin asked for, the clearances found in the jar, and the egress
 those cookies were earned through.
 
 ```rust
-use seleniumbase_rs_stealth::scrape::passport::identity::{WireMeasurementRef, StealthIdentity};
+use seleniumbase_rs_stealth::scrape::passport::identity::{WireMeasurementRef, Identity};
 use seleniumbase_rs_stealth::scrape::runtime::identity_file;
 use seleniumbase_rs_stealth::evasion::fingerprint::{Fingerprint, OsType};
 use seleniumbase_rs_stealth::codec::BrowserKind;
@@ -439,7 +439,7 @@ use seleniumbase_rs_stealth::codec::BrowserKind;
 # async fn demo(now: u64) -> Result<(), Box<dyn std::error::Error>> {
 let fingerprint = Fingerprint::randomized_with_major(OsType::Macos, 7, 155);
 let emulation = WireMeasurementRef { kind: BrowserKind::Chrome, major: 155, os: OsType::Macos };
-let identity = StealthIdentity::new(fingerprint, emulation, None, now)?;
+let identity = Identity::new(fingerprint, emulation, None, now)?;
 
 identity_file::save("identity.json", &identity).await?;
 let again = identity_file::load("identity.json").await?;
@@ -452,11 +452,11 @@ Things to know:
 
 - **A clearance belongs to the address that earned it.** A clearance cookie is
   bound to the exit address, so an identity is used again only through the same
-  egress. `check_egress` returns `IdentityError::EgressMismatch` for any other.
-  `check_emulation` refuses an identity made for another Chrome major than the
+  egress. `check_proxy` returns `IdentityError::ProxyMismatch` for any other.
+  `check_wire_measurement` refuses an identity made for another Chrome major than the
   measured one.
 - **It never holds a proxy.** A proxy can carry a password, so
-  `StealthIdentity::new` builds the fingerprint again without it (a built
+  `Identity::new` builds the fingerprint again without it (a built
   `Fingerprint` is never edited, see
   [Moving a fingerprint to a locale](#moving-a-fingerprint-to-a-locale)),
   serialization leaves it out, and `verify` refuses an identity that has one. `Debug`
@@ -473,29 +473,29 @@ Things to know:
   file is limited to 16 MiB. One process writes a file at a time; there is no
   lock between processes. On systems other than Unix there is no mode to check.
 
-`SessionPolicy` (`scrape::passport::policy`) decides when a session should move
+`EscalationPolicy` (`scrape::passport::policy`) decides when a session should move
 between plain HTTP and the browser, as a pure function of the mode, the identity,
 the site's state and the time:
 
 ```rust
-use seleniumbase_rs_stealth::scrape::challenge::mitigation::Mode;
-use seleniumbase_rs_stealth::scrape::passport::identity::StealthIdentity;
-use seleniumbase_rs_stealth::scrape::passport::policy::{SessionPolicy, Transition};
+use seleniumbase_rs_stealth::scrape::challenge::mitigation::FetchKind;
+use seleniumbase_rs_stealth::scrape::passport::identity::Identity;
+use seleniumbase_rs_stealth::scrape::passport::policy::{EscalationPolicy, Escalation};
 
-# fn demo(identity: &StealthIdentity, now: u64) {
-let policy = SessionPolicy {
+# fn demo(identity: &Identity, now: u64) {
+let policy = EscalationPolicy {
     require_clearance_for_http: true,
-    ..SessionPolicy::default()
+    ..EscalationPolicy::default()
 };
 // An HTTP session whose identity holds no clearance for the site goes to the browser.
-let step = policy.before_fetch(Mode::Http, identity, "example.com", None, now);
-assert!(matches!(step, Transition::Escalate(_)));
+let step = policy.before_fetch(FetchKind::Http, identity, "example.com", None, now);
+assert!(matches!(step, Escalation::Escalate(_)));
 # }
 ```
 
 The defaults are a margin of 120 seconds before a clearance expires, demotion
 back to HTTP after a solve, and a preference for HTTP. `after_fetch` turns an
-`Action::Escalate` seen in HTTP mode into an escalation and a solved challenge in
+`Mitigation::Escalate` seen in HTTP mode into an escalation and a solved challenge in
 the browser into a demotion when the identity now holds a clearance. The tables
 are in the module documentation. `BrowserScraper` stays in the browser and never
 applies them. [`HttpSession`](#httpsession) offers `preflight` and `assess` for a
@@ -505,7 +505,7 @@ them for you.
 ## Challenge detection and mitigation
 
 `scrape::challenge::detect::detect` reads a `ResponseView` (URL, status, headers,
-body) and returns a `Detection`: a `ChallengeKind` and the `Evidence` behind it.
+body) and returns a `Detection`: a `ChallengeKind` and the `ChallengeEvidence` behind it.
 
 - The kinds are `None`, `JsChallenge` (a script must run), `Interactive` (a widget
   must be completed), `Blocked` and `RateLimited { retry_after_secs }`.
@@ -519,7 +519,7 @@ body) and returns a `Detection`: a `ChallengeKind` and the `Evidence` behind it.
 - Only the first 256 KiB of a body is scanned.
 
 `MitigationPolicy::decide(&detection, &AttemptContext)` turns a detection into one
-`Action`. It is a pure function; the caller passes the attempt number, the mode,
+`Mitigation`. It is a pure function; the caller passes the attempt number, the mode,
 the streak of challenges the site has shown, whether another egress exists, and
 `now`.
 
@@ -528,7 +528,7 @@ the streak of challenges the site has shown, whether another egress exists, and
 | `None` | `Proceed` |
 | Anything else, once `attempt >= max_challenge_attempts` (default 3) | `GiveUp` |
 | `RateLimited` | `Cooldown` for `Retry-After` (capped at one hour), or 60 s |
-| `Blocked` | `RotateEgress`, or `Cooldown` (900 s by default) when there is nothing to rotate to |
+| `Blocked` | `RotateProxy`, or `Cooldown` (900 s by default) when there is nothing to rotate to |
 | Script or interactive challenge, HTTP mode | `Escalate` to the browser when it can; otherwise retry, rotate, or give up |
 | Script or interactive challenge, browser mode | `Solve`; a streak of 2 rotates the egress (when another exists) and a streak of 3 rotates the profile |
 
@@ -554,8 +554,8 @@ use seleniumbase_rs_stealth::scrape::runtime::browser_scraper::BrowserScraper;
 
 # async fn demo() -> Result<(), seleniumbase_rs_stealth::scrape::error::ScrapeError> {
 let mut scraper = BrowserScraper::builder()
-    .with_geo_proxies([("http://user:pass@de.proxy.example:8080", CountryCode::new("DE")?)])?
-    .with_max_challenge_attempts(4)
+    .geo_proxies([("http://user:pass@de.proxy.example:8080", CountryCode::new("DE")?)])?
+    .max_challenge_attempts(4)
     .build()
     .await?;
 let page = scraper.fetch("https://example.com/").await?;
@@ -575,21 +575,21 @@ scraper.close().await?;
   it took, the challenge solved on the way, and the egress);
 - a challenge is solved in the browser (`solve_challenge`), then the page is
   loaded again with the clearance it earned;
-- repeated challenges change the egress (`rotate_egress`) and then the browser
-  profile (`rotate_profile`). With the default of three attempts, a fetch gives
+- repeated challenges change the egress (`rotate_proxy`) and then the browser
+  profile (`rotate_fingerprint`). With the default of three attempts, a fetch gives
   up before the profile ladder starts unless the site's stored streak was already
-  high; raise `with_max_challenge_attempts` to let one fetch climb it;
+  high; raise `max_challenge_attempts` to let one fetch climb it;
 - a rate limit or a block with no egress to change to starts a cooldown for the
   site, which the next fetch respects (`ScrapeError::CoolingDown`);
 - when the attempts run out the fetch fails: `ScrapeError::Unsolved` if a
   challenge was still there, `ScrapeError::GaveUp` for another reason.
 
-What each site did is kept in a `StateStore` (successes, challenges, blocks, the
+What each site did is kept in a `Ledger` (successes, challenges, blocks, the
 streak, a cooldown, the egress it last answered through). The default is in
-memory; `JsonStateStore::open(path)` keeps one file, written atomically with
+memory; `JsonLedger::open(path)` keeps one file, written atomically with
 `0600` permissions, bounded to 10,000 sites, never reset when it cannot be read
 (an unreadable file is an error and is left alone), and with one writer at a
-time. Pass it with `with_state_store(Arc::new(store))`. `per_site_rate(calls,
+time. Pass it with `ledger(Arc::new(store))`. `rate_limit(calls,
 window)` limits fetches per site.
 
 ### Egress and the profile
@@ -597,7 +597,7 @@ window)` limits fetches per site.
 Proxies are `(spec, country)` pairs. A spec is `scheme://[user:password@]host:port`
 with `http`, `https`, `socks5` or `socks5h`; the credentials are taken out of the
 string at once and never appear in `Debug`, `Display`, logs, events, errors or
-serialized state, which carry the `EgressKey` (scheme, host, port, country)
+serialized state, which carry the `ProxyKey` (scheme, host, port, country)
 instead. The country decides the language and the time zone the browser presents
 while it leaves through that proxy, from a built-in locale table (the
 `StaticGeoResolver`; no IP lookup service ships).
@@ -606,13 +606,13 @@ while it leaves through that proxy, from a built-in locale table (the
 `Random { seed }`, `LeastFailures` or `StickyPerSite`. An egress with three
 failures in a row is out of rotation for ten minutes by default.
 
-- `rotate_egress()` opens a new browser context behind the new proxy and drops
+- `rotate_proxy()` opens a new browser context behind the new proxy and drops
   the old one with its cookies, because a clearance belongs to the address that
   earned it. When the new egress is in another country, the browser is also
   started again with the same profile in that country's language and time zone,
   because the fingerprint is written into every document before its scripts run.
-  It returns `ScrapeError::NoEgressAvailable` when the pool has nothing else.
-- `rotate_profile()` derives a new seed, draws a new fingerprint for the same
+  It returns `ScrapeError::NoProxyLeft` when the pool has nothing else.
+- `rotate_fingerprint()` derives a new seed, draws a new fingerprint for the same
   operating system that claims the version of the Chrome that is running, and
   starts the browser again behind the same egress, with empty cookies. What is
   known of each site stays.
@@ -626,10 +626,10 @@ failures in a row is out of rotation for ten minutes by default.
 A built `Fingerprint` is read through accessors and never changed: every setting is
 one `Spoof` (`Natural`, `Random`, `Value` or `Off`) of the core's fingerprint API,
 and a change builds the next fingerprint. The locale helpers follow that.
-`LocaleExt::localize` and `EgressLocale::localize` return the fingerprint moved to
+`LocaleExt::localize` and `ProxyLocale::localize` return the fingerprint moved to
 the locale (language list, `Accept-Language`, time zone and a position near the
 city, a function of the fingerprint's seed) and leave the one they were given as it
-was. `EgressLocale::localize` takes the time zone its egress reported.
+was. `ProxyLocale::localize` takes the time zone its egress reported.
 
 ```rust
 use seleniumbase_rs_stealth::evasion::fingerprint::{Fingerprint, OsType};
@@ -667,9 +667,9 @@ local storage in a `SessionStore`, the way a browser pool lease does.
 
 ### Events and errors
 
-The scraper reports what it does to an `EventSink`. A `ScraperEvent` can hold a
+The scraper reports what it does to an `EventSink`. A `ScrapeEvent` can hold a
 URL only as a `RedactedUrl` (userinfo and sensitive query values removed) and a
-proxy only as an `EgressKey`, so a password or token cannot reach a sink by
+proxy only as an `ProxyKey`, so a password or token cannot reach a sink by
 construction. The default sink, `TracingEventSink`, writes each event to
 `tracing` on the target `seleniumbase_rs_scrape`; `CollectingEventSink` keeps
 the newest events for tests. Errors are `ScrapeError`, whose URLs are redacted
@@ -717,7 +717,7 @@ session.sync_cookies_back(&page).await?;
   proxy, such as a MITM proxy the browser was launched with, is not visible to a
   page, so say so with `egress`.
 - `HttpSession::from_identity(&identity, egress, options)` builds one from a
-  [`StealthIdentity`](#identity-session-policy-and-the-identity-file): its
+  [`Identity`](#identity-session-policy-and-the-identity-file): its
   fingerprint becomes the user agent, hints and languages, and its cookies fill
   the jar.
 
@@ -803,7 +803,7 @@ println!("{}: {}", reply.status(), reply.text()?);
 - **Judging replies.** `reply.detect()` runs the [challenge
   detection](#challenge-detection-and-mitigation). `session.assess(&reply,
   &Attempt, &Rules, &identity)` adds what the `MitigationPolicy` and the
-  `SessionPolicy` make of it, as a `Verdict { detection, action, transition }`;
+  `EscalationPolicy` make of it, as a `Verdict { detection, action, transition }`;
   `session.fetch(url, &attempt, &rules, &identity)` sends a `GET` and judges it
   in one call (`Fetched { reply, verdict }`); `session.preflight(url, &identity,
   state, &rules)` asks, before a request, whether the identity's clearance is
@@ -813,9 +813,9 @@ println!("{}: {}", reply.status(), reply.text()?);
   ```rust
   use seleniumbase_rs_stealth::mimic::http_session::{Attempt, Rules};
   use seleniumbase_rs_stealth::mimic::HttpSession;
-  use seleniumbase_rs_stealth::scrape::StealthIdentity;
+  use seleniumbase_rs_stealth::scrape::Identity;
 
-  # async fn demo(session: HttpSession, identity: StealthIdentity) -> Result<(), Box<dyn std::error::Error>> {
+  # async fn demo(session: HttpSession, identity: Identity) -> Result<(), Box<dyn std::error::Error>> {
   let fetched = session
       .fetch("https://example.com/", &Attempt::default(), &Rules::default(), &identity)
       .await?;
@@ -828,7 +828,7 @@ println!("{}: {}", reply.status(), reply.text()?);
   # }
   ```
 - **Identity.** `export_identity(&base)` puts the session's cookies back into a
-  `StealthIdentity` and refreshes its clearances. `egress()` is the exit without
+  `Identity` and refreshes its clearances. `egress()` is the exit without
   credentials, `cookie_count()` and `profile()` read the state. Cloning gives
   another handle to the same session.
 - **Secrets.** Cookies, credentials and proxy passwords never reach `Debug`, logs,
@@ -1189,13 +1189,13 @@ test of the file skipped there.
 ## StealthSession
 
 `mimic::stealth_session::StealthSession` joins the pieces. It presents one
-`StealthIdentity` (the fingerprint, the measured browser it belongs to, the
+`Identity` (the fingerprint, the measured browser it belongs to, the
 cookies it earned and the egress they were earned through) in one of two modes
 and moves between them by the policies:
 
-- `Mode::Http`: an [`HttpSession`](#httpsession) sends the requests. It is fast
+- `FetchKind::Http`: an [`HttpSession`](#httpsession) sends the requests. It is fast
   and cheap, with the measured handshake and headers.
-- `Mode::Browser`: a real Chrome sends them, behind a
+- `FetchKind::Browser`: a real Chrome sends them, behind a
   [`MitmProxy`](#mitmproxy) that replays each request with the same measured
   handshake. A clearance earned here is valid in the other mode.
 
@@ -1205,7 +1205,7 @@ use seleniumbase_rs_stealth::scrape::CountryCode;
 
 # async fn demo() -> Result<(), Box<dyn std::error::Error>> {
 let mut session = StealthSession::builder()
-    .with_geo_proxies([("http://user:pass@de.proxy.example:8080", CountryCode::new("DE")?)])?
+    .geo_proxies([("http://user:pass@de.proxy.example:8080", CountryCode::new("DE")?)])?
     .build()
     .await?;
 let page = session.fetch("https://example.com/").await?;
@@ -1217,10 +1217,10 @@ session.close().await?;
 
 ### The loop
 
-A session starts in the mode its `SessionPolicy` prefers (HTTP by default).
+A session starts in the mode its `EscalationPolicy` prefers (HTTP by default).
 `fetch(url)` asks the policies three questions:
 
-1. **Before the request**, `SessionPolicy::before_fetch`: does the identity hold
+1. **Before the request**, `EscalationPolicy::before_fetch`: does the identity hold
    a clearance for the site that is about to end, must it hold one and does not,
    or does the site's history say plain requests fail? Then the session goes to
    the browser first.
@@ -1229,10 +1229,10 @@ A session starts in the mode its `SessionPolicy` prefers (HTTP by default).
    the browser the challenge is solved and the cookies move into the identity; a
    block or a rate limit starts a cooldown, rotates the egress or the profile, or
    stops the fetch.
-3. **After a solve**, `SessionPolicy::after_fetch`: a browser that earned a
+3. **After a solve**, `EscalationPolicy::after_fetch`: a browser that earned a
    clearance hands the identity back to HTTP (a demotion), which carries it on.
 
-Every change of mode emits `ScraperEvent::ModeChanged` with its reason. The
+Every change of mode emits `ScrapeEvent::FetchKindChanged` with its reason. The
 browser is closed when the session goes back to HTTP and started again, with the
 same identity and egress, when it is needed. **The MITM proxy is started the first
 time a browser is needed** (at `build()` when the policy prefers the browser) and
@@ -1262,10 +1262,10 @@ HTTP preferred, and a profile drawn from a random seed.
 | Setting | What it does |
 |---|---|
 | `launch_options(builder)`, `launcher(..)` | How the browser starts. A setting made in the options (a user agent, say) wins over the fingerprint's, and the proxy is always the MITM proxy's. |
-| `with_geo_proxies([(spec, country)])`, `proxy_strategy(..)` | The egress pool and how it picks, as for `BrowserScraper`. Both legs leave through the same egress. |
-| `with_max_challenge_attempts(n)`, `mitigation(policy)` | Loads per fetch (zero reads as one) and the whole mitigation policy. |
-| `policy(SessionPolicy)` | The mode it prefers, whether HTTP needs a clearance, the clearance margin, whether a solve sends it back to HTTP. |
-| `with_state_store(..)`, `with_event_sink(..)`, `geo_resolver(..)`, `per_site_rate(calls, window)` | As for `BrowserScraper`. The HTTP leg and the proxy report to the same sink. |
+| `geo_proxies([(spec, country)])`, `proxy_strategy(..)` | The egress pool and how it picks, as for `BrowserScraper`. Both legs leave through the same egress. |
+| `max_challenge_attempts(n)`, `mitigation(policy)` | Loads per fetch (zero reads as one) and the whole mitigation policy. |
+| `policy(EscalationPolicy)` | The mode it prefers, whether HTTP needs a clearance, the clearance margin, whether a solve sends it back to HTTP. |
+| `ledger(..)`, `event_sink(..)`, `geo_resolver(..)`, `rate_limit(calls, window)` | As for `BrowserScraper`. The HTTP leg and the proxy report to the same sink. |
 | `seed(..)`, `fingerprint(..)` | The first profile. A fingerprint must claim the measured Chrome. |
 | `restore(identity)` | Starts from a saved identity: its fingerprint, cookies and clearances. It must belong to one of the proxies added, or to the direct connection when there is none. |
 | `http_options(HttpOptions)`, `mitm_options(MitmOptions)` | The limits of each leg. The session's clock and event sink replace the ones in the HTTP options. |
@@ -1283,8 +1283,8 @@ legs.
 |---|---|
 | `escalate()` | Goes to the browser now, with the identity as it stands. The cookies of the HTTP session move into the browser. |
 | `demote()` | Goes back to HTTP now, with the cookies the browser holds, and closes the browser. A browser that cannot be read (it crashed) does not trap the session: the identity as of the last read is used. |
-| `rotate_profile()` | A new seed derived from the old one, a new fingerprint for the same operating system that claims the measured Chrome. Cookies and clearances are dropped; what is known of each site stays. In browser mode a new Chrome starts behind the same proxy, on the same port. |
-| `rotate_egress()` | Another egress of the pool, with the same fingerprint in the language and time zone of the new country. The proxy is pointed at it first, so its port stays. Cookies and clearances are dropped, because a clearance belongs to the address that earned it. `NoEgressAvailable` when the pool has nothing else. |
+| `rotate_fingerprint()` | A new seed derived from the old one, a new fingerprint for the same operating system that claims the measured Chrome. Cookies and clearances are dropped; what is known of each site stays. In browser mode a new Chrome starts behind the same proxy, on the same port. |
+| `rotate_proxy()` | Another egress of the pool, with the same fingerprint in the language and time zone of the new country. The proxy is pointed at it first, so its port stays. Cookies and clearances are dropped, because a clearance belongs to the address that earned it. `NoProxyLeft` when the pool has nothing else. |
 | `export_identity()`, `import_identity(&id)` | Take the identity out of the session, or put one in. It must belong to the egress in use. |
 | `mode()`, `identity()`, `egress()`, `seed()`, `http()`, `page()` | Read the state. `http()` is the `HttpSession` in HTTP mode, for requests of your own that carry the earned cookies; `page()` is the tab in browser mode. |
 | `close()` | Closes the browser if one runs and stops the proxy. A dropped session leaves both to their own drop. |
@@ -1445,14 +1445,14 @@ State these plainly to yourself before you build on any of this.
 | The build fails while compiling BoringSSL | `cmake` or a C/C++ toolchain is missing. | Install them, or do not depend on the `mimic` crate. |
 | `IdentityFileError::Permissions` | Group or others can read the identity file. | `chmod 600` it, or delete it and make a new one. |
 | `ScrapeError::CoolingDown` | The site answered with a block or rate limit and is being left alone. | Wait until the time in the error (seconds since the Unix epoch), or give the scraper another egress. |
-| `ScrapeError::Unsolved` | A challenge was still there after the attempts allowed. | Raise `with_max_challenge_attempts`, add egresses, or accept that this page needs a person. |
-| `ScrapeError::NoEgressAvailable` | A rotation was asked for and the pool has nothing else in rotation. | Add proxies with `with_geo_proxies`. |
+| `ScrapeError::Unsolved` | A challenge was still there after the attempts allowed. | Raise `max_challenge_attempts`, add egresses, or accept that this page needs a person. |
+| `ScrapeError::NoProxyLeft` | A rotation was asked for and the pool has nothing else in rotation. | Add proxies with `geo_proxies`. |
 | `ScrapeError::Fingerprint` | The core refused to build the fingerprint a locale move or a rotation needed (`Off` where an API cannot be off, a proxy without a host, nothing coherent to draw). | Read the message: it names the setting. Build your own fingerprint with `to_builder()` and fix it. |
 | `HttpError::VersionMismatch`, `StealthError::Impersonate` | The page, the identity or the installed Chrome is another major than the measured one. | Update or downgrade Chrome to the measured major, or run the capture tools again. |
 | `HttpError::Impersonate` for a page | The page announces itself as `HeadlessChrome`, is not Chrome, or runs on a system that was not measured. | Give the browser a fingerprint or run it headed; use the measured system. |
 | `HttpError::ReservedHeader` | A request set a header the profile owns (`User-Agent`, `Sec-CH-UA*`, `Accept-Language`, `Accept-Encoding`, `Cookie`, `priority`). | Remove it. Change the identity instead. |
 | `HttpError::RedirectRefused`, `TooManyRedirects` | A hop led somewhere the session refuses, or past the limit. | Request the final URL, or raise `max_redirects`. |
-| `HttpError::Identity(EgressMismatch)` | The identity or the page belongs to another egress than the one passed. | Pass the egress the cookies were earned through. |
+| `HttpError::Identity(ProxyMismatch)` | The identity or the page belongs to another egress than the one passed. | Pass the egress the cookies were earned through. |
 | Chrome behind `MitmProxy` shows a `502` page | The proxy refused the request or the upstream failed (an untrusted certificate, a non-WebSocket upgrade, a version mismatch). | Check `mitm.stats()` and the log; `trust_upstream_root` for a private site. |
 
 ---

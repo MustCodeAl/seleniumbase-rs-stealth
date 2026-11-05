@@ -9,7 +9,7 @@ use wreq::{NoProxy, Proxy};
 use super::error::HttpError;
 use super::options::HttpOptions;
 use crate::client::{impersonation_client, ImpersonationProfile};
-use seleniumbase_rs_scrape::egress::route::EgressRef;
+use seleniumbase_rs_scrape::egress::route::ProxyRoute;
 
 /// The notation of the `no_proxy` list for a host that skips the proxy.
 fn no_proxy_list(bypass: &[String]) -> String {
@@ -52,7 +52,7 @@ fn basic_auth(user: &str, password: &str) -> Result<HeaderValue, HttpError> {
 /// # Errors
 ///
 /// Returns [`HttpError::Client`] when wreq refuses the proxy. The reason never names the proxy.
-pub(super) fn wreq_proxy(egress: &EgressRef, bypass: &[String]) -> Result<Proxy, HttpError> {
+pub(super) fn wreq_proxy(egress: &ProxyRoute, bypass: &[String]) -> Result<Proxy, HttpError> {
     let key = egress.key();
     let host = if key.host.contains(':') {
         format!("[{}]", key.host)
@@ -84,7 +84,7 @@ pub(super) fn wreq_proxy(egress: &EgressRef, bypass: &[String]) -> Result<Proxy,
 /// when the proxy or the client is refused.
 pub(super) fn build_client(
     profile: &ImpersonationProfile,
-    egress: Option<&EgressRef>,
+    egress: Option<&ProxyRoute>,
     options: &HttpOptions,
 ) -> Result<wreq::Client, HttpError> {
     let mut builder = impersonation_client(profile)?
@@ -138,7 +138,7 @@ mod tests {
             "socks5h://alice:s3cret@10.0.0.1:1080",
             "http://[2001:db8::1]:3128",
         ] {
-            let egress = EgressRef::parse(spec, None).expect("a spec");
+            let egress = ProxyRoute::parse(spec, None).expect("a spec");
             assert!(
                 wreq_proxy(&egress, &["skip.test".to_owned()]).is_ok(),
                 "{spec}"
@@ -152,7 +152,7 @@ mod tests {
             "http://alice:s3cret@proxy.example:8080",
             "https://alice:s3cret@proxy.example:8443",
         ] {
-            let egress = EgressRef::parse(spec, None).expect("a spec");
+            let egress = ProxyRoute::parse(spec, None).expect("a spec");
             let proxy = wreq_proxy(&egress, &[]).expect(spec);
             let shown = format!("{proxy:?}");
             assert!(
@@ -176,7 +176,7 @@ mod tests {
         let options = HttpOptions::new();
         assert!(build_client(&profile, None, &options).is_ok());
         let egress =
-            EgressRef::parse("http://alice:s3cret@proxy.example:8080", None).expect("spec");
+            ProxyRoute::parse("http://alice:s3cret@proxy.example:8080", None).expect("spec");
         assert!(build_client(&profile, Some(&egress), &options).is_ok());
     }
 }

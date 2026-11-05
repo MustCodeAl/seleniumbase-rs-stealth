@@ -183,7 +183,7 @@ impl SiteContext {
 
 /// What [`CookieJar::store`] did with a `Set-Cookie` header.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum StoreOutcome {
+pub enum SetCookieOutcome {
     /// A new cookie was stored.
     Stored,
     /// A cookie with the same name, domain and path was replaced; its creation time was kept.
@@ -282,19 +282,19 @@ impl CookieJar {
     /// cookie removes the stored one. Expired cookies are purged, and when a bound is passed the
     /// cookie evicted is, among the others, an insecure one before a `Secure` one, then the least
     /// recently accessed, then the oldest.
-    pub fn store(&mut self, request_url: &Url, set_cookie: &str, now: u64) -> StoreOutcome {
+    pub fn store(&mut self, request_url: &Url, set_cookie: &str, now: u64) -> SetCookieOutcome {
         let Some(origin) = RequestOrigin::of(request_url) else {
-            return StoreOutcome::Ignored(IgnoreReason::UnsupportedUrl);
+            return SetCookieOutcome::Ignored(IgnoreReason::UnsupportedUrl);
         };
         let built = SetCookie::parse(set_cookie)
             .map_err(IgnoreReason::from)
             .and_then(|parsed| build_cookie(&parsed, &origin, now));
         let cookie = match built {
             Ok(cookie) => cookie,
-            Err(reason) => return StoreOutcome::Ignored(reason),
+            Err(reason) => return SetCookieOutcome::Ignored(reason),
         };
         if !origin.secure && self.shadows_secure(&cookie, now) {
-            return StoreOutcome::Ignored(IgnoreReason::SecureFromInsecure);
+            return SetCookieOutcome::Ignored(IgnoreReason::SecureFromInsecure);
         }
         self.insert(cookie, now)
     }
@@ -403,24 +403,24 @@ impl CookieJar {
     }
 
     /// Stores a checked cookie: replace, delete or add, then keep within the bounds.
-    fn insert(&mut self, mut cookie: StoredCookie, now: u64) -> StoreOutcome {
+    fn insert(&mut self, mut cookie: StoredCookie, now: u64) -> SetCookieOutcome {
         self.remove_expired(now);
         let old = self.cookies.iter().position(|c| c.same_identity(&cookie));
         if cookie.is_expired(now) {
             if let Some(index) = old {
                 self.cookies.remove(index);
             }
-            return StoreOutcome::Deleted;
+            return SetCookieOutcome::Deleted;
         }
         if let Some(index) = old {
             cookie.created = self.cookies[index].created.min(cookie.last_access);
             self.cookies[index] = cookie;
             self.evict_beyond_bounds(index);
-            return StoreOutcome::Replaced;
+            return SetCookieOutcome::Replaced;
         }
         self.cookies.push(cookie);
         self.evict_beyond_bounds(self.cookies.len() - 1);
-        StoreOutcome::Stored
+        SetCookieOutcome::Stored
     }
 
     /// Evicts until the site of the cookie at `keep`, which is never evicted, holds at most

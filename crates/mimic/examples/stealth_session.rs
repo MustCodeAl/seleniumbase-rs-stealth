@@ -33,7 +33,7 @@ use std::time::Duration;
 
 use seleniumbase_rs::sb_cdp::LaunchOptions;
 use seleniumbase_rs_mimic::StealthSession;
-use seleniumbase_rs_scrape::{CollectingEventSink, ScraperEvent};
+use seleniumbase_rs_scrape::{CollectingEventSink, ScrapeEvent};
 use stealth_support::shop::{Shop, REAL_MARKER};
 
 /// How long Chrome is given to run the challenge page's script.
@@ -60,15 +60,15 @@ async fn run() -> Result<(), Box<dyn Error>> {
             .launch_options(LaunchOptions::builder().headless(true))
             .http_options(shop.http_options()?)
             .mitm_options(shop.mitm_options()?)
-            .with_event_sink(Arc::new(sink.clone()))
+            .event_sink(Arc::new(sink.clone()))
             .solve_timeout(SOLVE_WITHIN)
             .build(),
     )
     .await?;
-    println!("the session starts in {:?} mode", session.mode());
+    println!("the session starts in {:?} mode", session.fetch_kind());
 
     let fetched = session.fetch(&shop.url("/")).await;
-    println!("the session ends in {:?} mode", session.mode());
+    println!("the session ends in {:?} mode", session.fetch_kind());
     // Close the session whatever the fetch did: it may own a Chrome and a proxy.
     session.close().await?;
     let page = fetched?;
@@ -84,7 +84,7 @@ async fn run() -> Result<(), Box<dyn Error>> {
 
     println!("\nchanges of mode");
     for event in sink.events() {
-        if let ScraperEvent::ModeChanged { from, to, reason } = event {
+        if let ScrapeEvent::FetchKindChanged { from, to, reason } = event {
             println!("  {from:?} -> {to:?}   {reason:?}");
         }
     }

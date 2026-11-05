@@ -195,8 +195,8 @@ use crate::sync::locked;
 use seleniumbase_rs::common::shutdown::{cleanup_within, spawn_cleanup, timeout_from_env};
 use seleniumbase_rs::sb_cdp::{LaunchOptionsBuilder, Proxy};
 use seleniumbase_rs_scrape::egress::redact::{RedactedUrl, Secret};
-use seleniumbase_rs_scrape::egress::route::{EgressKey, EgressRef};
-use seleniumbase_rs_scrape::ledger::events::{EventSink, ScraperEvent};
+use seleniumbase_rs_scrape::egress::route::{ProxyKey, ProxyRoute};
+use seleniumbase_rs_scrape::ledger::events::{EventSink, ScrapeEvent};
 
 /// The user name the browser gives the proxy; the proxy's token is the password.
 pub const PROXY_USER: &str = "sb";
@@ -691,7 +691,7 @@ impl MitmProxy {
     ///
     /// Requests leave with `profile`'s TLS, HTTP/2 and header spelling, through `egress` when one
     /// is given. Each answered request is reported to `sink` as a redacted
-    /// [`ScraperEvent::Request`]; each egress change as [`ScraperEvent::EgressRotated`].
+    /// [`ScrapeEvent::Request`]; each egress change as [`ScrapeEvent::ProxyRotated`].
     ///
     /// # Errors
     ///
@@ -702,7 +702,7 @@ impl MitmProxy {
     #[tracing::instrument(level = "debug", skip_all)]
     pub async fn start(
         profile: ImpersonationProfile,
-        egress: Option<EgressRef>,
+        egress: Option<ProxyRoute>,
         options: MitmOptions,
         sink: Arc<dyn EventSink>,
     ) -> Result<Self, MitmError> {
@@ -836,7 +836,7 @@ impl MitmProxy {
 
     /// The egress requests leave through now, `None` for a direct connection.
     #[must_use]
-    pub fn egress(&self) -> Option<EgressKey> {
+    pub fn proxy_route(&self) -> Option<ProxyKey> {
         self.inner.shared.upstream.current().egress_key()
     }
 
@@ -844,16 +844,16 @@ impl MitmProxy {
     ///
     /// The new upstream client is built first; on an error nothing changes. Requests under way
     /// finish through the old egress, the listener and the browser's connections stay, and
-    /// [`ScraperEvent::EgressRotated`] is emitted.
+    /// [`ScrapeEvent::ProxyRotated`] is emitted.
     ///
     /// # Errors
     ///
     /// [`MitmError::Egress`] or [`MitmError::Upstream`] when the new client cannot be built.
-    pub fn swap_upstream(&self, egress: Option<EgressRef>) -> Result<(), MitmError> {
+    pub fn swap_upstream(&self, egress: Option<ProxyRoute>) -> Result<(), MitmError> {
         let shared = &self.inner.shared;
         let (from, to) = shared.upstream.swap_egress(egress, &shared.options)?;
         tracing::info!(?from, ?to, "MITM upstream egress swapped");
-        shared.sink.emit(&ScraperEvent::EgressRotated { from, to });
+        shared.sink.emit(&ScrapeEvent::ProxyRotated { from, to });
         Ok(())
     }
 

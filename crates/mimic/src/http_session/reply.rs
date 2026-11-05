@@ -344,12 +344,12 @@ mod tests {
         );
         assert_ne!(
             page.detect().kind,
-            ChallengeKind::None,
+            ChallengeKind::Clear,
             "{:?}",
             page.detect()
         );
         let plain = reply(200, &[], b"<html><body>hello</body></html>");
-        assert_eq!(plain.detect().kind, ChallengeKind::None);
+        assert_eq!(plain.detect().kind, ChallengeKind::Clear);
     }
 
     #[test]
@@ -357,7 +357,7 @@ mod tests {
         let mut body = vec![b'a'; MAX_SCAN_BYTES + 16];
         body.extend_from_slice(b"Just a moment...");
         let page = reply(200, &[], &body);
-        assert_eq!(page.detect().kind, ChallengeKind::None);
+        assert_eq!(page.detect().kind, ChallengeKind::Clear);
     }
 
     #[test]

@@ -32,10 +32,10 @@ use std::time::Duration;
 use seleniumbase_rs::sb_cdp::LaunchOptions;
 use seleniumbase_rs_mimic::stealth_session::{StealthSession, StealthSessionBuilder};
 use seleniumbase_rs_scrape::challenge::detect::ChallengeKind;
-use seleniumbase_rs_scrape::challenge::mitigation::Mode;
-use seleniumbase_rs_scrape::ledger::events::{CollectingEventSink, ScraperEvent};
+use seleniumbase_rs_scrape::challenge::mitigation::FetchKind;
+use seleniumbase_rs_scrape::ledger::events::{CollectingEventSink, ScrapeEvent};
 use seleniumbase_rs_scrape::passport::policy::{
-    DemoteReason, EscalateReason, SessionPolicy, Transition,
+    DemoteReason, EscalateReason, EscalationPolicy, Escalation,
 };
 
 use site::{ChallengeSite, CLEARANCE, DEFAULT_TTL_SECS, REAL_MARKER};
@@ -49,16 +49,16 @@ fn builder(site: &ChallengeSite, sink: &CollectingEventSink) -> StealthSessionBu
         .launch_options(LaunchOptions::builder().headless(true))
         .http_options(site.http_options())
         .mitm_options(site.mitm_options())
-        .with_event_sink(Arc::new(sink.clone()))
+        .event_sink(Arc::new(sink.clone()))
         .solve_timeout(SOLVE_WITHIN)
 }
 
 /// The modes the session went through, from its events.
-fn changes(sink: &CollectingEventSink) -> Vec<(Mode, Mode, Transition)> {
+fn changes(sink: &CollectingEventSink) -> Vec<(FetchKind, FetchKind, Escalation)> {
     sink.events()
         .into_iter()
         .filter_map(|event| match event {
-            ScraperEvent::ModeChanged { from, to, reason } => Some((from, to, reason)),
+            ScrapeEvent::FetchKindChanged { from, to, reason } => Some((from, to, reason)),
             _ => None,
         })
         .collect()
@@ -81,20 +81,20 @@ async fn a_challenge_is_passed_in_chrome_and_the_clearance_is_used_over_http() {
     assert_eq!(fetched.status, 200);
     assert!(fetched.body.contains(REAL_MARKER), "{fetched:?}");
     assert_eq!(fetched.solved, Some(ChallengeKind::JsChallenge));
-    assert_eq!((fetched.mode, fetched.attempts), (Mode::Http, 3));
-    assert_eq!(session.mode(), Mode::Http);
+    assert_eq!((fetched.mode, fetched.attempts), (FetchKind::Http, 3));
+    assert_eq!(session.fetch_kind(), FetchKind::Http);
     assert_eq!(
         changes(&sink),
         [
             (
-                Mode::Http,
-                Mode::Browser,
-                Transition::Escalate(EscalateReason::Challenge(ChallengeKind::JsChallenge))
+                FetchKind::Http,
+                FetchKind::Browser,
+                Escalation::Escalate(EscalateReason::Challenge(ChallengeKind::JsChallenge))
             ),
             (
-                Mode::Browser,
-                Mode::Http,
-                Transition::Demote(DemoteReason::ChallengeSolved)
+                FetchKind::Browser,
+                FetchKind::Http,
+                Escalation::Demote(DemoteReason::ChallengeSolved)
             ),
         ]
     );
@@ -106,8 +106,8 @@ async fn a_challenge_is_passed_in_chrome_and_the_clearance_is_used_over_http() {
         .filter(|event| {
             matches!(
                 event,
-                ScraperEvent::Request {
-                    mode: Mode::Browser,
+                ScrapeEvent::Request {
+                    fetch_kind: FetchKind::Browser,
                     ..
                 }
             )
@@ -192,9 +192,9 @@ async fn a_clearance_near_its_end_is_taken_back_to_chrome_which_loads_the_page_w
     let site = ChallengeSite::start().await;
     let sink = CollectingEventSink::new();
     // An hour of margin against ten minutes of clearance: the next fetch is always "near the end".
-    let policy = SessionPolicy {
+    let policy = EscalationPolicy {
         clearance_margin: Duration::from_secs(3600),
-        ..SessionPolicy::default()
+        ..EscalationPolicy::default()
     };
     let mut session = builder(&site, &sink)
         .policy(policy)
@@ -208,7 +208,7 @@ async fn a_clearance_near_its_end_is_taken_back_to_chrome_which_loads_the_page_w
 
     assert_eq!(
         (again.mode, again.attempts, again.solved),
-        (Mode::Browser, 1, None)
+        (FetchKind::Browser, 1, None)
     );
     assert!(again.body.contains(REAL_MARKER), "{again:?}");
     assert_eq!(
@@ -217,12 +217,12 @@ async fn a_clearance_near_its_end_is_taken_back_to_chrome_which_loads_the_page_w
         "Chrome had the clearance: no new solve"
     );
     let last = changes(&sink).pop().expect("a change");
-    assert_eq!(last.0, Mode::Http);
-    assert_eq!(last.1, Mode::Browser);
+    assert_eq!(last.0, FetchKind::Http);
+    assert_eq!(last.1, FetchKind::Browser);
     assert!(
         matches!(
             last.2,
-            Transition::Escalate(EscalateReason::ClearanceExpiring { remaining_secs })
+            Escalation::Escalate(EscalateReason::ClearanceExpiring { remaining_secs })
                 if remaining_secs <= DEFAULT_TTL_SECS
         ),
         "{last:?}"
@@ -231,7 +231,7 @@ async fn a_clearance_near_its_end_is_taken_back_to_chrome_which_loads_the_page_w
     let over_http = session.fetch(&site.url("/")).await.expect("a page");
     assert_eq!(
         over_http.mode,
-        Mode::Browser,
+        FetchKind::Browser,
         "the policy sends it to Chrome again"
     );
     session.close().await.expect("closes");
@@ -259,7 +259,7 @@ async fn a_new_profile_is_what_the_page_sees_and_the_proxy_stays() {
     );
     let seen_before = site.seen().len();
 
-    session.rotate_profile().await.expect("rotates");
+    session.rotate_fingerprint().await.expect("rotates");
 
     let second = page_view(&session, &site).await;
     assert_eq!(
@@ -267,7 +267,7 @@ async fn a_new_profile_is_what_the_page_sees_and_the_proxy_stays() {
         expected_view(&session),
         "and the new one after the rotation"
     );
-    assert_eq!(session.mode(), Mode::Browser);
+    assert_eq!(session.fetch_kind(), FetchKind::Browser);
     assert!(
         site.seen().len() > seen_before,
         "the new Chrome went through the proxy"

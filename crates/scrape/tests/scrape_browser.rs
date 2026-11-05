@@ -19,8 +19,8 @@ use seleniumbase_rs::SeleniumBaseError;
 use seleniumbase_rs_scrape::challenge::detect::ChallengeKind;
 use seleniumbase_rs_scrape::egress::geo::CountryCode;
 use seleniumbase_rs_scrape::error::ScrapeError;
-use seleniumbase_rs_scrape::ledger::events::{CollectingEventSink, ScraperEvent};
-use seleniumbase_rs_scrape::ledger::state::{InMemoryStateStore, StateStore};
+use seleniumbase_rs_scrape::ledger::events::{CollectingEventSink, ScrapeEvent};
+use seleniumbase_rs_scrape::ledger::state::{InMemoryLedger, Ledger};
 use seleniumbase_rs_scrape::runtime::browser_scraper::{
     BrowserLauncher, BrowserScraper, BrowserScraperBuilder,
 };
@@ -280,7 +280,7 @@ struct World {
     site: Site,
     launcher: Arc<Launcher>,
     sink: CollectingEventSink,
-    store: InMemoryStateStore,
+    store: InMemoryLedger,
     clock: Arc<AtomicU64>,
 }
 
@@ -294,7 +294,7 @@ impl World {
             }),
             site,
             sink: CollectingEventSink::new(),
-            store: InMemoryStateStore::new(),
+            store: InMemoryLedger::new(),
             clock: Arc::new(AtomicU64::new(NOW)),
         }
     }
@@ -303,15 +303,15 @@ impl World {
         let clock = Arc::clone(&self.clock);
         BrowserScraper::builder()
             .launcher(Arc::<Launcher>::clone(&self.launcher))
-            .with_event_sink(Arc::new(self.sink.clone()))
-            .with_state_store(Arc::new(self.store.clone()))
+            .event_sink(Arc::new(self.sink.clone()))
+            .ledger(Arc::new(self.store.clone()))
             .clock(Arc::new(move || clock.load(Ordering::SeqCst)))
             .solve_timeout(BRIEF_SOLVE)
             .seed(7)
     }
 
     fn names(&self) -> Vec<&'static str> {
-        self.sink.events().iter().map(ScraperEvent::name).collect()
+        self.sink.events().iter().map(ScrapeEvent::name).collect()
     }
 }
 
@@ -320,7 +320,7 @@ fn two_proxies(world: &World) -> BrowserScraperBuilder {
     let fr = CountryCode::new("FR").expect("a valid country");
     world
         .builder()
-        .with_geo_proxies([
+        .geo_proxies([
             ("http://ualpha:s3cret@de.proxy.example:8080", de),
             ("http://ubeta:hunter2@fr.proxy.example:8080", fr),
         ])
@@ -335,7 +335,7 @@ async fn a_real_page_is_fetched_and_the_site_is_remembered() {
     let page = scraper.fetch(URL).await.expect("the page is fetched");
 
     assert_eq!((page.status, page.attempts, page.solved), (200, 1, None));
-    assert_eq!(page.detection.kind, ChallengeKind::None);
+    assert_eq!(page.detection.kind, ChallengeKind::Clear);
     assert_eq!(page.url, URL);
     assert_eq!(page.body, NORMAL);
     assert_eq!(world.names(), ["request", "action_chosen"]);
@@ -380,7 +380,7 @@ async fn a_challenge_that_stands_is_reported_as_unsolved_with_the_attempts_made(
     let world = World::new(vec![answer(503, SCRIPT_CHALLENGE)], false);
     let mut scraper = world
         .builder()
-        .with_max_challenge_attempts(3)
+        .max_challenge_attempts(3)
         .build()
         .await
         .expect("the scraper builds");
@@ -440,7 +440,7 @@ async fn a_block_starts_a_cooldown_and_the_next_fetch_is_refused_without_a_reque
 async fn rotations_change_the_egress_and_the_profile_and_keep_what_is_known_of_the_site() {
     let world = World::new(vec![answer(503, SCRIPT_CHALLENGE)], false);
     let mut scraper = two_proxies(&world)
-        .with_max_challenge_attempts(4)
+        .max_challenge_attempts(4)
         .build()
         .await
         .expect("the scraper builds");
@@ -451,7 +451,7 @@ async fn rotations_change_the_egress_and_the_profile_and_keep_what_is_known_of_t
     assert!(matches!(error, ScrapeError::Unsolved { attempts: 4, .. }));
     let names = world.names();
     assert!(
-        names.contains(&"egress_rotated") && names.contains(&"profile_rotated"),
+        names.contains(&"proxy_rotated") && names.contains(&"fingerprint_rotated"),
         "{names:?}"
     );
     assert_eq!(
@@ -460,7 +460,7 @@ async fn rotations_change_the_egress_and_the_profile_and_keep_what_is_known_of_t
         "a probe, the first browser, one for the other country, one for the new profile"
     );
     assert_eq!(
-        scraper.egress().map(|key| key.host.as_str()),
+        scraper.proxy_route().map(|key| key.host.as_str()),
         Some("fr.proxy.example")
     );
     assert_ne!(scraper.seed(), first_seed);
@@ -512,8 +512,8 @@ async fn no_flow_switches_on_a_domain_a_page_can_feel() {
         .expect("the scraper builds");
 
     scraper.fetch(URL).await.expect("the challenge is passed");
-    scraper.rotate_egress().await.expect("the egress rotates");
-    scraper.rotate_profile().await.expect("the profile rotates");
+    scraper.rotate_proxy().await.expect("the egress rotates");
+    scraper.rotate_fingerprint().await.expect("the profile rotates");
     let identity = scraper
         .export_identity()
         .await
@@ -549,7 +549,7 @@ async fn a_proxy_password_a_token_and_a_cookie_never_leave_the_scraper() {
         .fetch("https://shop.example/?token=hunter3")
         .await
         .expect("the challenge is passed");
-    scraper.rotate_egress().await.expect("the egress rotates");
+    scraper.rotate_proxy().await.expect("the egress rotates");
     let identity = scraper
         .export_identity()
         .await

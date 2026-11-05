@@ -1,4 +1,4 @@
-//! The `JsonStateStore`: one state file, written atomically with owner-only permissions.
+//! The `JsonLedger`: one state file, written atomically with owner-only permissions.
 //!
 //! The file holds `{ "schema": 1, "sites": { "<site>": { ... } } }`. A missing file is an empty
 //! store. A file that cannot be read as state is an error and is left alone: it is never reset,
@@ -23,7 +23,7 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 
 use crate::ledger::state::{
-    insert_bounded, DomainState, StateError, StateStore, MAX_STATE_SITES, STATE_SCHEMA,
+    insert_bounded, SiteRecord, LedgerError, Ledger, MAX_STATE_SITES, STATE_SCHEMA,
 };
 
 /// The largest state file that is read. A state file this big holds far more sites than
@@ -47,45 +47,45 @@ struct Header {
 /// The sites of a file.
 #[derive(Deserialize)]
 struct Sites {
-    sites: BTreeMap<String, DomainState>,
+    sites: BTreeMap<String, SiteRecord>,
 }
 
 /// A file as written.
 #[derive(Serialize)]
 struct StateFile<'a> {
     schema: u32,
-    sites: &'a BTreeMap<String, DomainState>,
+    sites: &'a BTreeMap<String, SiteRecord>,
 }
 
 /// A state store backed by one JSON file.
-pub struct JsonStateStore {
+pub struct JsonLedger {
     path: PathBuf,
-    sites: Mutex<BTreeMap<String, DomainState>>,
+    sites: Mutex<BTreeMap<String, SiteRecord>>,
 }
 
-impl fmt::Debug for JsonStateStore {
+impl fmt::Debug for JsonLedger {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("JsonStateStore")
+        f.debug_struct("JsonLedger")
             .field("path", &self.path)
             .finish_non_exhaustive()
     }
 }
 
-impl JsonStateStore {
+impl JsonLedger {
     /// Opens the store at `path`, reading the file if there is one. This reads the file at once
     /// on the calling thread; do it at start-up.
     ///
     /// # Errors
     ///
-    /// Returns [`StateError::Io`] when the file exists and cannot be read, [`StateError::TooLarge`]
-    /// when it is over [`MAX_STATE_FILE_BYTES`], [`StateError::Schema`] when it was written with
-    /// another layout, and [`StateError::Corrupt`] when it is not valid state. A missing file is
+    /// Returns [`LedgerError::Io`] when the file exists and cannot be read, [`LedgerError::TooLarge`]
+    /// when it is over [`MAX_STATE_FILE_BYTES`], [`LedgerError::Schema`] when it was written with
+    /// another layout, and [`LedgerError::Corrupt`] when it is not valid state. A missing file is
     /// not an error: the store is empty, and the file appears with the first change.
-    pub fn open(path: impl Into<PathBuf>) -> Result<Self, StateError> {
+    pub fn open(path: impl Into<PathBuf>) -> Result<Self, LedgerError> {
         Self::open_with_limit(path.into(), MAX_STATE_FILE_BYTES)
     }
 
-    fn open_with_limit(path: PathBuf, limit: u64) -> Result<Self, StateError> {
+    fn open_with_limit(path: PathBuf, limit: u64) -> Result<Self, LedgerError> {
         let sites = load(&path, limit)?;
         Ok(Self {
             path,
@@ -100,8 +100,8 @@ impl JsonStateStore {
     }
 
     /// Writes `sites` to the file, off the async threads.
-    async fn save(&self, sites: &BTreeMap<String, DomainState>) -> Result<(), StateError> {
-        let io_error = |source| StateError::Io {
+    async fn save(&self, sites: &BTreeMap<String, SiteRecord>) -> Result<(), LedgerError> {
+        let io_error = |source| LedgerError::Io {
             path: self.path.clone(),
             source,
         };
@@ -119,14 +119,14 @@ impl JsonStateStore {
 }
 
 #[async_trait]
-impl StateStore for JsonStateStore {
+impl Ledger for JsonLedger {
     #[tracing::instrument(skip_all, fields(site = %site))]
-    async fn get(&self, site: &str) -> Result<Option<DomainState>, StateError> {
+    async fn get(&self, site: &str) -> Result<Option<SiteRecord>, LedgerError> {
         Ok(self.sites.lock().await.get(site).cloned())
     }
 
     #[tracing::instrument(skip_all, fields(site = %state.site))]
-    async fn put(&self, state: DomainState) -> Result<(), StateError> {
+    async fn put(&self, state: SiteRecord) -> Result<(), LedgerError> {
         let mut sites = self.sites.lock().await;
         // The change is written first and kept second, so memory never gets ahead of the file.
         let mut next = sites.clone();
@@ -137,7 +137,7 @@ impl StateStore for JsonStateStore {
     }
 
     #[tracing::instrument(skip_all, fields(site = %site))]
-    async fn remove(&self, site: &str) -> Result<(), StateError> {
+    async fn remove(&self, site: &str) -> Result<(), LedgerError> {
         let mut sites = self.sites.lock().await;
         if !sites.contains_key(site) {
             return Ok(());
@@ -150,18 +150,18 @@ impl StateStore for JsonStateStore {
     }
 
     #[tracing::instrument(skip_all)]
-    async fn sites(&self) -> Result<Vec<String>, StateError> {
+    async fn sites(&self) -> Result<Vec<String>, LedgerError> {
         Ok(self.sites.lock().await.keys().cloned().collect())
     }
 }
 
 /// Reads the state file at `path`: no file is an empty table, anything unreadable is an error.
-fn load(path: &Path, limit: u64) -> Result<BTreeMap<String, DomainState>, StateError> {
-    let io_error = |source| StateError::Io {
+fn load(path: &Path, limit: u64) -> Result<BTreeMap<String, SiteRecord>, LedgerError> {
+    let io_error = |source| LedgerError::Io {
         path: path.to_path_buf(),
         source,
     };
-    let corrupt = |source| StateError::Corrupt {
+    let corrupt = |source| LedgerError::Corrupt {
         path: path.to_path_buf(),
         source,
     };
@@ -175,14 +175,14 @@ fn load(path: &Path, limit: u64) -> Result<BTreeMap<String, DomainState>, StateE
         .read_to_end(&mut bytes)
         .map_err(io_error)?;
     if u64::try_from(bytes.len()).map_or(true, |length| length > limit) {
-        return Err(StateError::TooLarge {
+        return Err(LedgerError::TooLarge {
             path: path.to_path_buf(),
             limit,
         });
     }
     let header: Header = serde_json::from_slice(&bytes).map_err(corrupt)?;
     if header.schema != STATE_SCHEMA {
-        return Err(StateError::Schema(header.schema));
+        return Err(LedgerError::Schema(header.schema));
     }
     let file: Sites = serde_json::from_slice(&bytes).map_err(corrupt)?;
     for (key, state) in &file.sites {
@@ -277,24 +277,24 @@ fn sync_directory(directory: &Path) -> io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::challenge::detect::{ChallengeKind, Detection, Evidence};
-    use crate::challenge::mitigation::Mode;
+    use crate::challenge::detect::{ChallengeKind, Detection, ChallengeEvidence};
+    use crate::challenge::mitigation::FetchKind;
     use crate::egress::geo::CountryCode;
-    use crate::egress::route::EgressKey;
+    use crate::egress::route::ProxyKey;
     use std::sync::Arc;
 
-    fn site(name: &str) -> DomainState {
-        let mut state = DomainState::new(name);
+    fn site(name: &str) -> SiteRecord {
+        let mut state = SiteRecord::new(name);
         state.record(
             &Detection {
                 kind: ChallengeKind::JsChallenge,
-                evidence: Evidence::default(),
+                evidence: ChallengeEvidence::default(),
             },
-            Mode::Http,
+            FetchKind::Http,
             1_000,
         );
         state.start_cooldown(5_000);
-        state.last_egress = Some(EgressKey {
+        state.last_proxy = Some(ProxyKey {
             scheme: "http".to_owned(),
             host: "p1.example".to_owned(),
             port: 8080,
@@ -307,8 +307,8 @@ mod tests {
         dir.path().join("state.json")
     }
 
-    fn open(path: &Path) -> JsonStateStore {
-        JsonStateStore::open(path).expect("opens")
+    fn open(path: &Path) -> JsonLedger {
+        JsonLedger::open(path).expect("opens")
     }
 
     /// The names of the files in `dir`, sorted.
@@ -384,7 +384,7 @@ mod tests {
             serde_json::from_slice(&fs::read(&path).expect("reads")).expect("is json");
         assert_eq!(value["schema"], 1);
         assert_eq!(value["sites"]["a.test"]["site"], "a.test");
-        assert_eq!(value["sites"]["a.test"]["last_egress"]["country"], "DE");
+        assert_eq!(value["sites"]["a.test"]["last_proxy"]["country"], "DE");
     }
 
     #[tokio::test]
@@ -411,9 +411,9 @@ mod tests {
         ];
         for bytes in broken {
             fs::write(&path, bytes).expect("writes");
-            let error = JsonStateStore::open(&path).expect_err("refused");
+            let error = JsonLedger::open(&path).expect_err("refused");
             assert!(
-                matches!(error, StateError::Corrupt { .. }),
+                matches!(error, LedgerError::Corrupt { .. }),
                 "{bytes:?}: {error}"
             );
             assert!(error.to_string().contains("state.json"), "{error}");
@@ -438,8 +438,8 @@ mod tests {
         let whole = fs::read(&path).expect("reads");
         fs::write(&path, &whole[..whole.len() / 2]).expect("cuts");
         assert!(matches!(
-            JsonStateStore::open(&path),
-            Err(StateError::Corrupt { .. })
+            JsonLedger::open(&path),
+            Err(LedgerError::Corrupt { .. })
         ));
     }
 
@@ -452,8 +452,8 @@ mod tests {
             r#"{"schema":1,"sites":{"a.test":{"site":"b.test"}}}"#,
         )
         .expect("writes");
-        let error = JsonStateStore::open(&path).expect_err("refused");
-        assert!(matches!(error, StateError::Corrupt { .. }), "{error}");
+        let error = JsonLedger::open(&path).expect_err("refused");
+        assert!(matches!(error, LedgerError::Corrupt { .. }), "{error}");
         assert!(error.to_string().contains("b.test"), "{error}");
     }
 
@@ -464,8 +464,8 @@ mod tests {
         let deep = format!("{{\"schema\":1,\"sites\":{}", "[".repeat(200_000));
         fs::write(&path, deep).expect("writes");
         assert!(matches!(
-            JsonStateStore::open(&path),
-            Err(StateError::Corrupt { .. })
+            JsonLedger::open(&path),
+            Err(LedgerError::Corrupt { .. })
         ));
     }
 
@@ -479,9 +479,9 @@ mod tests {
             (r#"{"schema":7,"sites":"some other layout"}"#, 7),
         ] {
             fs::write(&path, text).expect("writes");
-            let error = JsonStateStore::open(&path).expect_err("refused");
+            let error = JsonLedger::open(&path).expect_err("refused");
             assert!(
-                matches!(error, StateError::Schema(found) if found == schema),
+                matches!(error, LedgerError::Schema(found) if found == schema),
                 "{text}: {error}"
             );
         }
@@ -496,19 +496,19 @@ mod tests {
             format!("{{\"schema\":1,\"sites\":{{}}}}{}", " ".repeat(100)),
         )
         .expect("writes");
-        let error = JsonStateStore::open_with_limit(path.clone(), 64).expect_err("too big");
+        let error = JsonLedger::open_with_limit(path.clone(), 64).expect_err("too big");
         assert!(
-            matches!(error, StateError::TooLarge { limit: 64, .. }),
+            matches!(error, LedgerError::TooLarge { limit: 64, .. }),
             "{error}"
         );
-        assert!(JsonStateStore::open_with_limit(path, 4096).is_ok());
+        assert!(JsonLedger::open_with_limit(path, 4096).is_ok());
     }
 
     #[test]
     fn a_directory_where_the_file_should_be_is_an_io_error() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let error = JsonStateStore::open(dir.path()).expect_err("refused");
-        assert!(matches!(error, StateError::Io { .. }), "{error}");
+        let error = JsonLedger::open(dir.path()).expect_err("refused");
+        assert!(matches!(error, LedgerError::Io { .. }), "{error}");
     }
 
     #[tokio::test]
@@ -648,7 +648,7 @@ mod tests {
         fs::remove_dir_all(dir.path().join("sub")).expect("rm");
         fs::write(dir.path().join("sub"), "a file").expect("writes");
         let error = store.put(site("b.test")).await.expect_err("cannot write");
-        assert!(matches!(error, StateError::Io { .. }), "{error}");
+        assert!(matches!(error, LedgerError::Io { .. }), "{error}");
         assert_eq!(store.sites().await.expect("reads"), ["a.test"]);
     }
 
@@ -657,7 +657,7 @@ mod tests {
         let dir = tempfile::tempdir().expect("tempdir");
         let store = open(&state_path(&dir));
         let shown = format!("{store:?}");
-        assert!(shown.starts_with("JsonStateStore"), "{shown}");
+        assert!(shown.starts_with("JsonLedger"), "{shown}");
         assert!(shown.contains("state.json"), "{shown}");
     }
 }

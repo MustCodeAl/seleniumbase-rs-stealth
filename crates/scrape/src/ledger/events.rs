@@ -1,6 +1,6 @@
 //! The scraper events and the `EventSink` trait, with every URL and egress in them already redacted.
 //!
-//! A [`ScraperEvent`] can only hold a URL as a [`RedactedUrl`] and a proxy as an [`EgressKey`], so
+//! A [`ScrapeEvent`] can only hold a URL as a [`RedactedUrl`] and a proxy as an [`ProxyKey`], so
 //! a password, a token in a query or any other credential cannot reach a sink by construction.
 //! The other fields are counts, times, kinds and site names. Events serialize as JSON objects with
 //! an `event` field naming the variant in `snake_case`.
@@ -15,11 +15,11 @@ use std::sync::{Arc, Mutex};
 
 use serde::Serialize;
 
-use crate::challenge::detect::{ChallengeKind, Vendor};
-use crate::challenge::mitigation::{Action, Mode};
+use crate::challenge::detect::{ChallengeKind, ProtectionVendor};
+use crate::challenge::mitigation::{Mitigation, FetchKind};
 use crate::egress::redact::RedactedUrl;
-use crate::egress::route::EgressKey;
-use crate::passport::policy::Transition;
+use crate::egress::route::ProxyKey;
+use crate::passport::policy::Escalation;
 use crate::sync::locked;
 
 #[cfg(test)]
@@ -34,7 +34,7 @@ pub const MAX_COLLECTED_EVENTS: usize = 10_000;
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(tag = "event", rename_all = "snake_case")]
 #[non_exhaustive]
-pub enum ScraperEvent {
+pub enum ScrapeEvent {
     /// A request was answered.
     Request {
         /// The URL requested, redacted.
@@ -42,7 +42,7 @@ pub enum ScraperEvent {
         /// The HTTP status of the answer.
         status: u16,
         /// How the request was made.
-        mode: Mode,
+        fetch_kind: FetchKind,
         /// How long it took, in milliseconds.
         elapsed_ms: u64,
     },
@@ -53,9 +53,9 @@ pub enum ScraperEvent {
         /// What the answer asked for.
         kind: ChallengeKind,
         /// The vendor behind it, when known.
-        vendor: Option<Vendor>,
+        vendor: Option<ProtectionVendor>,
         /// How the request was made.
-        mode: Mode,
+        fetch_kind: FetchKind,
     },
     /// A challenge was solved.
     ChallengeSolved {
@@ -73,26 +73,26 @@ pub enum ScraperEvent {
         /// The site the decision is about.
         site: String,
         /// What was chosen.
-        action: Action,
+        action: Mitigation,
     },
     /// The session moved between HTTP and the browser.
-    ModeChanged {
+    FetchKindChanged {
         /// The mode it left.
-        from: Mode,
+        from: FetchKind,
         /// The mode it entered.
-        to: Mode,
+        to: FetchKind,
         /// Why.
-        reason: Transition,
+        reason: Escalation,
     },
     /// The session now leaves through another egress.
-    EgressRotated {
+    ProxyRotated {
         /// The egress it left, `None` for the direct connection.
-        from: Option<EgressKey>,
+        from: Option<ProxyKey>,
         /// The egress it entered, `None` for the direct connection.
-        to: Option<EgressKey>,
+        to: Option<ProxyKey>,
     },
     /// The session now presents another browser profile.
-    ProfileRotated {
+    FingerprintRotated {
         /// The noise seed of the profile it left.
         from_seed: u64,
         /// The noise seed of the profile it entered.
@@ -124,7 +124,7 @@ pub enum ScraperEvent {
     },
 }
 
-impl ScraperEvent {
+impl ScrapeEvent {
     /// The name of the variant in `snake_case`, the value of the `event` field when serialized.
     #[must_use]
     pub const fn name(&self) -> &'static str {
@@ -133,9 +133,9 @@ impl ScraperEvent {
             Self::ChallengeDetected { .. } => "challenge_detected",
             Self::ChallengeSolved { .. } => "challenge_solved",
             Self::ActionChosen { .. } => "action_chosen",
-            Self::ModeChanged { .. } => "mode_changed",
-            Self::EgressRotated { .. } => "egress_rotated",
-            Self::ProfileRotated { .. } => "profile_rotated",
+            Self::FetchKindChanged { .. } => "fetch_kind_changed",
+            Self::ProxyRotated { .. } => "proxy_rotated",
+            Self::FingerprintRotated { .. } => "fingerprint_rotated",
             Self::ClearanceExpiring { .. } => "clearance_expiring",
             Self::CooldownStarted { .. } => "cooldown_started",
             Self::IdentityExported { .. } => "identity_exported",
@@ -150,7 +150,7 @@ impl ScraperEvent {
 /// [`emit`](Self::emit) must not block or do slow I/O.
 pub trait EventSink: Send + Sync {
     /// Takes in one event.
-    fn emit(&self, event: &ScraperEvent);
+    fn emit(&self, event: &ScrapeEvent);
 }
 
 /// A sink that drops every event.
@@ -158,7 +158,7 @@ pub trait EventSink: Send + Sync {
 pub struct NoopEventSink;
 
 impl EventSink for NoopEventSink {
-    fn emit(&self, _event: &ScraperEvent) {}
+    fn emit(&self, _event: &ScrapeEvent) {}
 }
 
 /// A sink that keeps the newest [`MAX_COLLECTED_EVENTS`] events, for tests and short runs.
@@ -166,7 +166,7 @@ impl EventSink for NoopEventSink {
 /// Clones share one list.
 #[derive(Clone, Default)]
 pub struct CollectingEventSink {
-    events: Arc<Mutex<VecDeque<ScraperEvent>>>,
+    events: Arc<Mutex<VecDeque<ScrapeEvent>>>,
 }
 
 impl CollectingEventSink {
@@ -178,13 +178,13 @@ impl CollectingEventSink {
 
     /// The events so far, oldest first.
     #[must_use]
-    pub fn events(&self) -> Vec<ScraperEvent> {
+    pub fn events(&self) -> Vec<ScrapeEvent> {
         locked(&self.events).iter().cloned().collect()
     }
 
     /// The events so far, oldest first, removed from the sink.
     #[must_use]
-    pub fn take(&self) -> Vec<ScraperEvent> {
+    pub fn take(&self) -> Vec<ScrapeEvent> {
         locked(&self.events).drain(..).collect()
     }
 
@@ -210,7 +210,7 @@ impl fmt::Debug for CollectingEventSink {
 }
 
 impl EventSink for CollectingEventSink {
-    fn emit(&self, event: &ScraperEvent) {
+    fn emit(&self, event: &ScrapeEvent) {
         let mut events = locked(&self.events);
         if events.len() >= MAX_COLLECTED_EVENTS {
             events.pop_front();

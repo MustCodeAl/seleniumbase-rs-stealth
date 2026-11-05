@@ -2,11 +2,11 @@
 //! both modes, and that no credential reaches a `Debug`, an event or a saved identity.
 
 use seleniumbase_rs_mimic::stealth_session::{StealthError, StealthSession};
-use seleniumbase_rs_scrape::challenge::mitigation::Mode;
+use seleniumbase_rs_scrape::challenge::mitigation::FetchKind;
 use seleniumbase_rs_scrape::error::ScrapeError;
-use seleniumbase_rs_scrape::ledger::events::ScraperEvent;
-use seleniumbase_rs_scrape::ledger::state::StateStore;
-use seleniumbase_rs_scrape::passport::identity::{IdentityError, StealthIdentity};
+use seleniumbase_rs_scrape::ledger::events::ScrapeEvent;
+use seleniumbase_rs_scrape::ledger::state::Ledger;
+use seleniumbase_rs_scrape::passport::identity::{IdentityError, Identity};
 
 use crate::site::{CLEARANCE, HOST};
 use crate::world::{country, World};
@@ -18,7 +18,7 @@ const DE_PROXY: &str = "http://bob:hunter2@de.proxy.test:8080";
 async fn with_two_proxies(world: &World) -> StealthSession {
     world
         .session()
-        .with_geo_proxies([(US_PROXY, country("US")), (DE_PROXY, country("DE"))])
+        .geo_proxies([(US_PROXY, country("US")), (DE_PROXY, country("DE"))])
         .expect("two proxies")
         .build()
         .await
@@ -31,7 +31,7 @@ fn rotations(world: &World) -> Vec<(Option<String>, Option<String>)> {
         .events()
         .into_iter()
         .filter_map(|event| match event {
-            ScraperEvent::EgressRotated { from, to } => Some((
+            ScrapeEvent::ProxyRotated { from, to } => Some((
                 from.map(|key| key.to_string()),
                 to.map(|key| key.to_string()),
             )),
@@ -53,7 +53,7 @@ async fn an_identity_taken_after_a_solve_holds_the_clearance_and_starts_a_sessio
     assert_eq!(identity.clearances[0].cookie, CLEARANCE);
     assert_eq!(identity.clearances[0].site, HOST);
     let saved = serde_json::to_string(&identity).expect("serializes");
-    let loaded: StealthIdentity = serde_json::from_str(&saved).expect("reads back");
+    let loaded: Identity = serde_json::from_str(&saved).expect("reads back");
     assert_eq!(loaded, identity);
 
     let mut second = world
@@ -67,7 +67,7 @@ async fn an_identity_taken_after_a_solve_holds_the_clearance_and_starts_a_sessio
 
     assert_eq!(
         (fetched.mode, fetched.attempts, fetched.solved),
-        (Mode::Http, 1, None)
+        (FetchKind::Http, 1, None)
     );
     assert_eq!(
         world.launcher.count(),
@@ -86,7 +86,7 @@ async fn a_restored_identity_of_another_egress_is_refused() {
 
     let error = world
         .session()
-        .with_geo_proxies([(US_PROXY, country("US"))])
+        .geo_proxies([(US_PROXY, country("US"))])
         .expect("a proxy")
         .restore(identity)
         .build()
@@ -96,7 +96,7 @@ async fn a_restored_identity_of_another_egress_is_refused() {
     assert!(
         matches!(
             error,
-            StealthError::Scrape(ScrapeError::Identity(IdentityError::EgressMismatch { .. }))
+            StealthError::Scrape(ScrapeError::Identity(IdentityError::ProxyMismatch { .. }))
         ),
         "{error:?}"
     );
@@ -112,7 +112,7 @@ async fn a_restored_identity_picks_its_egress_from_the_pool_whatever_the_order()
     let world = World::new().await;
     let only_de = world
         .session()
-        .with_geo_proxies([(DE_PROXY, country("DE"))])
+        .geo_proxies([(DE_PROXY, country("DE"))])
         .expect("a proxy")
         .build()
         .await
@@ -126,17 +126,17 @@ async fn a_restored_identity_picks_its_egress_from_the_pool_whatever_the_order()
 
     let restored = world
         .session()
-        .with_geo_proxies([(US_PROXY, country("US")), (DE_PROXY, country("DE"))])
+        .geo_proxies([(US_PROXY, country("US")), (DE_PROXY, country("DE"))])
         .expect("two proxies")
         .restore(identity)
         .build()
         .await
         .expect("a session");
 
-    assert_eq!(restored.egress(), Some(&key), "not the first of the pool");
+    assert_eq!(restored.proxy_route(), Some(&key), "not the first of the pool");
     let elsewhere = world
         .session()
-        .with_geo_proxies([(US_PROXY, country("US"))])
+        .geo_proxies([(US_PROXY, country("US"))])
         .expect("a proxy")
         .restore(restored.export_identity().await.expect("an identity"))
         .build()
@@ -153,7 +153,7 @@ async fn importing_an_identity_needs_the_egress_in_use() {
     let world = World::new().await;
     let mut session = with_two_proxies(&world).await;
     let first = session.export_identity().await.expect("an identity");
-    session.rotate_egress().await.expect("rotates");
+    session.rotate_proxy().await.expect("rotates");
 
     let error = session
         .import_identity(&first)
@@ -162,7 +162,7 @@ async fn importing_an_identity_needs_the_egress_in_use() {
     assert!(
         matches!(
             error,
-            StealthError::Scrape(ScrapeError::Identity(IdentityError::EgressMismatch { .. }))
+            StealthError::Scrape(ScrapeError::Identity(IdentityError::ProxyMismatch { .. }))
         ),
         "{error:?}"
     );
@@ -183,21 +183,21 @@ async fn rotating_the_profile_over_http_draws_a_new_one_and_drops_what_the_old_o
     let seed = session.seed();
     assert_ne!(before.clearances.len(), 0, "the identity holds a clearance");
 
-    session.rotate_profile().await.expect("rotates");
+    session.rotate_fingerprint().await.expect("rotates");
 
     let after = session.identity();
     assert_ne!(after.fingerprint, before.fingerprint);
     assert_ne!(session.seed(), seed);
     assert!(after.cookies.is_empty() && after.clearances.is_empty());
     assert_eq!(
-        after.emulation, before.emulation,
+        after.wire_measurement, before.wire_measurement,
         "the same measured Chrome"
     );
     assert!(world
         .sink
         .events()
         .iter()
-        .any(|event| matches!(event, ScraperEvent::ProfileRotated { from_seed, to_seed } if *from_seed != *to_seed)));
+        .any(|event| matches!(event, ScrapeEvent::FingerprintRotated { from_seed, to_seed } if *from_seed != *to_seed)));
     let state = world.store.get(HOST).await.expect("a store");
     assert!(state.is_some(), "what is known of the site stays");
     session.close().await.expect("closes");
@@ -243,13 +243,13 @@ async fn a_new_profile_earns_its_own_clearance_through_the_same_proxy() {
     let world = World::new().await;
     let mut session = world.session().build().await.expect("a session");
     session.fetch(&world.site.url("/")).await.expect("a page");
-    session.rotate_profile().await.expect("rotates");
+    session.rotate_fingerprint().await.expect("rotates");
 
     let fetched = session.fetch(&world.site.url("/")).await.expect("a page");
 
     assert_eq!(
         (fetched.mode, fetched.attempts),
-        (Mode::Http, 3),
+        (FetchKind::Http, 3),
         "no cookie, so a challenge"
     );
     assert_eq!(world.launcher.count(), 2);
@@ -269,9 +269,9 @@ async fn rotating_the_profile_in_the_browser_starts_a_new_chrome_behind_the_same
     session.escalate().await.expect("escalates");
     let before = session.identity().fingerprint.clone();
 
-    session.rotate_profile().await.expect("rotates");
+    session.rotate_fingerprint().await.expect("rotates");
 
-    assert_eq!(session.mode(), Mode::Browser);
+    assert_eq!(session.fetch_kind(), FetchKind::Browser);
     assert_ne!(session.identity().fingerprint, before);
     assert_eq!(world.launcher.count(), 2);
     let (old, new) = (world.launcher.nth(0), world.launcher.nth(1));
@@ -285,12 +285,12 @@ async fn rotating_the_profile_in_the_browser_starts_a_new_chrome_behind_the_same
 async fn rotating_the_egress_over_http_moves_the_identity_and_the_language() {
     let world = World::new().await;
     let mut session = with_two_proxies(&world).await;
-    let from = session.egress().cloned().expect("the first egress");
+    let from = session.proxy_route().cloned().expect("the first egress");
     let language = session.identity().fingerprint.locale().clone();
 
-    session.rotate_egress().await.expect("rotates");
+    session.rotate_proxy().await.expect("rotates");
 
-    let to = session.egress().cloned().expect("the next egress");
+    let to = session.proxy_route().cloned().expect("the next egress");
     assert_ne!(from, to);
     assert_eq!(session.identity().egress, Some(to.clone()));
     assert_ne!(
@@ -312,12 +312,12 @@ async fn rotating_the_egress_in_the_browser_points_the_proxy_at_it_and_reports_o
     let world = World::new().await;
     let mut session = with_two_proxies(&world).await;
     session.escalate().await.expect("escalates");
-    let from = session.egress().cloned().expect("the first egress");
+    let from = session.proxy_route().cloned().expect("the first egress");
 
-    session.rotate_egress().await.expect("rotates");
+    session.rotate_proxy().await.expect("rotates");
 
-    let to = session.egress().cloned().expect("the next egress");
-    assert_eq!(session.mode(), Mode::Browser);
+    let to = session.proxy_route().cloned().expect("the next egress");
+    assert_eq!(session.fetch_kind(), FetchKind::Browser);
     assert_eq!(
         world.launcher.count(),
         2,
@@ -337,22 +337,22 @@ async fn without_another_egress_there_is_nothing_to_rotate_to() {
     let mut direct = world.session().build().await.expect("a session");
     let mut single = world
         .session()
-        .with_geo_proxies([(US_PROXY, country("US"))])
+        .geo_proxies([(US_PROXY, country("US"))])
         .expect("a proxy")
         .build()
         .await
         .expect("a session");
-    let before = single.egress().cloned();
+    let before = single.proxy_route().cloned();
 
     for session in [&mut direct, &mut single] {
-        let error = session.rotate_egress().await.expect_err("nowhere to go");
+        let error = session.rotate_proxy().await.expect_err("nowhere to go");
         assert!(
-            matches!(error, StealthError::Scrape(ScrapeError::NoEgressAvailable)),
+            matches!(error, StealthError::Scrape(ScrapeError::NoProxyLeft)),
             "{error:?}"
         );
     }
 
-    assert_eq!(single.egress().cloned(), before, "the session is as it was");
+    assert_eq!(single.proxy_route().cloned(), before, "the session is as it was");
     assert_eq!(rotations(&world).len(), 0, "nothing rotated");
     direct.close().await.expect("closes");
     single.close().await.expect("closes");
@@ -363,7 +363,7 @@ async fn no_credential_reaches_a_debug_an_event_or_a_saved_identity() {
     let world = World::new().await;
     let mut session = with_two_proxies(&world).await;
     session.escalate().await.expect("escalates");
-    session.rotate_egress().await.expect("rotates");
+    session.rotate_proxy().await.expect("rotates");
     let identity = session.export_identity().await.expect("an identity");
 
     let events = serde_json::to_string(&world.sink.events()).expect("events serialize");

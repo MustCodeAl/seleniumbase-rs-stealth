@@ -9,8 +9,8 @@ use base64::engine::general_purpose::STANDARD;
 use base64::Engine as _;
 use seleniumbase_rs_mimic::mitm::MitmOptions;
 use seleniumbase_rs_mimic::tls_server::ALPN_HTTP1;
-use seleniumbase_rs_scrape::egress::route::EgressRef;
-use seleniumbase_rs_scrape::ledger::events::ScraperEvent;
+use seleniumbase_rs_scrape::egress::route::ProxyRoute;
+use seleniumbase_rs_scrape::ledger::events::ScrapeEvent;
 use tokio::net::TcpStream;
 
 use crate::support::{
@@ -30,7 +30,7 @@ async fn swapping_the_egress_changes_the_route_between_requests_on_one_listener(
     let options = MitmOptions::default()
         .ca(Arc::clone(&ca))
         .trust_upstream_root(origin.root());
-    let egress = EgressRef::parse(&first.spec(Some(("alice", "s3cret"))), None).expect("an egress");
+    let egress = ProxyRoute::parse(&first.spec(Some(("alice", "s3cret"))), None).expect("an egress");
     let (mitm, sink) = start_mitm(Some(egress), options).await;
     let port = mitm.port();
     let client = browser_client(&mitm, &der(&ca));
@@ -47,8 +47,8 @@ async fn swapping_the_egress_changes_the_route_between_requests_on_one_listener(
         "the egress gets its credentials"
     );
 
-    let next = EgressRef::parse(&second.spec(None), None).expect("an egress");
-    let (from, to) = (mitm.egress(), Some(next.key().clone()));
+    let next = ProxyRoute::parse(&second.spec(None), None).expect("an egress");
+    let (from, to) = (mitm.proxy_route(), Some(next.key().clone()));
     mitm.swap_upstream(Some(next)).expect("the swap works");
 
     let answer = client.get(&url).send().await.expect("the second request");
@@ -56,13 +56,13 @@ async fn swapping_the_egress_changes_the_route_between_requests_on_one_listener(
     origin.next(WITHIN).await.expect("the origin saw it");
     assert_eq!((first.tunnels(), second.tunnels()), (1, 1));
     assert_eq!(mitm.port(), port, "the listener stayed");
-    assert_eq!(mitm.egress(), to);
+    assert_eq!(mitm.proxy_route(), to);
     let rotated = sink
         .events()
         .into_iter()
-        .filter(|event| matches!(event, ScraperEvent::EgressRotated { .. }))
+        .filter(|event| matches!(event, ScrapeEvent::ProxyRotated { .. }))
         .collect::<Vec<_>>();
-    assert_eq!(rotated, [ScraperEvent::EgressRotated { from, to }]);
+    assert_eq!(rotated, [ScrapeEvent::ProxyRotated { from, to }]);
     let shown = format!("{mitm:?} {:?}", sink.events());
     assert!(
         !shown.contains("s3cret") && !shown.contains("alice"),

@@ -1,14 +1,14 @@
-//! The stealth identity: fingerprint, emulation, cookies and egress, serialized so that a later run can restore it.
+//! The stealth identity: fingerprint, wire_measurement, cookies and proxy, serialized so that a later run can restore it.
 //!
 //! An identity is what a scrape session presents to a site: the browser fingerprint, the
-//! measured TLS and HTTP/2 emulation it goes with, the cookies it earned, and the egress those
+//! measured TLS and HTTP/2 wire_measurement it goes with, the cookies it earned, and the proxy those
 //! cookies were earned through. A clearance cookie is bound to the address that earned it, so an
-//! identity is only used again through the same egress ([`StealthIdentity::check_egress`]).
+//! identity is only used again through the same proxy ([`Identity::check_proxy`]).
 //!
 //! The identity holds cookies, which are credentials. Its [`Debug`](std::fmt::Debug) prints the
-//! cookie count and the egress key only. Its fingerprint never holds a proxy: a proxy can carry a
-//! password, so [`StealthIdentity::new`] clears it, serialization leaves it out even if it was set
-//! afterwards, and [`StealthIdentity::verify`] refuses an identity that has one.
+//! cookie count and the proxy key only. Its fingerprint never holds a proxy: a proxy can carry a
+//! password, so [`Identity::new`] clears it, serialization leaves it out even if it was set
+//! afterwards, and [`Identity::verify`] refuses an identity that has one.
 //!
 //! This module is pure. The file the identity is saved to is written by
 //! [`identity_file`](crate::runtime::identity_file).
@@ -20,8 +20,8 @@ use serde::ser::Error as _;
 use serde::{Deserialize, Serialize, Serializer};
 use serde_json::error::Category;
 
-use crate::challenge::detect::{clearance_cookie, Vendor};
-use crate::egress::route::EgressKey;
+use crate::challenge::detect::{clearance_cookie, ProtectionVendor};
+use crate::egress::route::ProxyKey;
 use crate::jar::store::{site_of, CookieJar};
 use seleniumbase_rs::evasion::fingerprint::{Fingerprint, FingerprintError, OsType, Spoof};
 use seleniumbase_rs_codec::BrowserKind;
@@ -94,32 +94,32 @@ pub struct Clearance {
     /// The registrable domain the cookie belongs to.
     pub site: String,
     /// The vendor whose challenge was passed.
-    pub vendor: Vendor,
+    pub vendor: ProtectionVendor,
     /// The name of the clearance cookie.
     pub cookie: String,
     /// When the cookie expires, in seconds since the Unix epoch; [`NO_EXPIRY`] for a session cookie.
     pub expires_at: u64,
 }
 
-/// A fingerprint, its emulation, and what the identity earned with them.
+/// A fingerprint, its wire_measurement, and what the identity earned with them.
 #[derive(Clone, PartialEq, Serialize, Deserialize)]
-pub struct StealthIdentity {
+pub struct Identity {
     /// The layout version, [`IDENTITY_SCHEMA`].
     pub schema: u32,
     /// The browser fingerprint. It never serializes a proxy.
     #[serde(serialize_with = "serialize_without_proxy")]
     pub fingerprint: Fingerprint,
     /// The measured browser the wire behaviour comes from.
-    pub emulation: WireMeasurementRef,
+    pub wire_measurement: WireMeasurementRef,
     /// The cookies the identity holds.
     pub cookies: CookieJar,
     /// The client hints each origin asked for with `Accept-CH`.
     #[serde(default)]
     pub accept_ch: BTreeMap<String, Vec<String>>,
-    /// The egress that earned the clearances; `None` for a direct connection.
+    /// The proxy that earned the clearances; `None` for a direct connection.
     #[serde(default)]
-    pub egress: Option<EgressKey>,
-    /// The clearances found in the jar by [`StealthIdentity::refresh_clearances`].
+    pub proxy: Option<ProxyKey>,
+    /// The clearances found in the jar by [`Identity::refresh_clearances`].
     #[serde(default)]
     pub clearances: Vec<Clearance>,
     /// When the identity was made, in seconds since the Unix epoch.
@@ -130,13 +130,13 @@ pub struct StealthIdentity {
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[non_exhaustive]
 pub enum IdentityError {
-    /// The identity is used through an egress other than the one that earned its clearances.
+    /// The identity is used through an proxy other than the one that earned its clearances.
     #[error("the identity belongs to {} but the request leaves through {}", describe(.expected.as_ref()), describe(.found.as_ref()))]
-    EgressMismatch {
-        /// The egress the identity is bound to.
-        expected: Option<EgressKey>,
-        /// The egress the request would leave through.
-        found: Option<EgressKey>,
+    ProxyMismatch {
+        /// The proxy the identity is bound to.
+        expected: Option<ProxyKey>,
+        /// The proxy the request would leave through.
+        found: Option<ProxyKey>,
     },
     /// The identity was written with a layout this version does not know.
     #[error("the identity has schema {0}, which this version cannot read")]
@@ -146,9 +146,9 @@ pub enum IdentityError {
     Incoherent(Vec<String>),
     /// The identity claims another browser version than the one measured.
     #[error(
-        "the identity claims Chrome {identity} but the emulation was measured on Chrome {measured}"
+        "the identity claims Chrome {identity} but the wire_measurement was measured on Chrome {measured}"
     )]
-    EmulationMismatch {
+    WireMeasurementMismatch {
         /// The major version the identity claims.
         identity: u32,
         /// The major version that was measured.
@@ -156,9 +156,9 @@ pub enum IdentityError {
     },
 }
 
-/// The egress as text for a message: `no proxy` or `scheme://host:port`.
-fn describe(egress: Option<&EgressKey>) -> String {
-    egress.map_or_else(|| "no proxy".to_owned(), ToString::to_string)
+/// The proxy as text for a message: `no proxy` or `scheme://host:port`.
+fn describe(proxy: Option<&ProxyKey>) -> String {
+    proxy.map_or_else(|| "no proxy".to_owned(), ToString::to_string)
 }
 
 /// In which way a JSON failure happened, without the text it met: that may be a cookie.
@@ -224,7 +224,7 @@ fn check_saveable(fingerprint: &Fingerprint) -> Result<(), IdentityError> {
 
 /// Whether two egresses are the same exit: equal scheme, host and port, and countries that agree
 /// where both are known.
-fn same_egress(left: Option<&EgressKey>, right: Option<&EgressKey>) -> bool {
+fn same_egress(left: Option<&ProxyKey>, right: Option<&ProxyKey>) -> bool {
     match (left, right) {
         (None, None) => true,
         (Some(left), Some(right)) => {
@@ -241,7 +241,7 @@ fn same_egress(left: Option<&EgressKey>, right: Option<&EgressKey>) -> bool {
     }
 }
 
-impl StealthIdentity {
+impl Identity {
     /// Makes an identity from a fingerprint. See the module documentation for what it refuses.
     ///
     /// # Errors
@@ -251,8 +251,8 @@ impl StealthIdentity {
     /// becomes `null`, for one), or when it cannot be built again without its proxy.
     pub fn new(
         fingerprint: Fingerprint,
-        emulation: WireMeasurementRef,
-        egress: Option<EgressKey>,
+        wire_measurement: WireMeasurementRef,
+        proxy: Option<ProxyKey>,
         now: u64,
     ) -> Result<Self, IdentityError> {
         check_coherent(&fingerprint)?;
@@ -265,10 +265,10 @@ impl StealthIdentity {
         Ok(Self {
             schema: IDENTITY_SCHEMA,
             fingerprint,
-            emulation,
+            wire_measurement,
             cookies: CookieJar::new(),
             accept_ch: BTreeMap::new(),
-            egress,
+            proxy,
             clearances: Vec::new(),
             created_at: now,
         })
@@ -335,21 +335,21 @@ impl StealthIdentity {
             .max_by_key(|clearance| clearance.expires_at)
     }
 
-    /// Checks that a request leaves through the egress this identity belongs to.
+    /// Checks that a request leaves through the proxy this identity belongs to.
     ///
     /// Scheme, host and port must be equal. The countries must be equal when both are known; an
     /// unknown country matches any. `None` is the direct connection and matches only `None`.
     ///
     /// # Errors
     ///
-    /// Returns [`IdentityError::EgressMismatch`] otherwise.
-    pub fn check_egress(&self, egress: Option<&EgressKey>) -> Result<(), IdentityError> {
-        if same_egress(self.egress.as_ref(), egress) {
+    /// Returns [`IdentityError::ProxyMismatch`] otherwise.
+    pub fn check_proxy(&self, proxy: Option<&ProxyKey>) -> Result<(), IdentityError> {
+        if same_egress(self.proxy.as_ref(), proxy) {
             return Ok(());
         }
-        Err(IdentityError::EgressMismatch {
-            expected: self.egress.clone(),
-            found: egress.cloned(),
+        Err(IdentityError::ProxyMismatch {
+            expected: self.proxy.clone(),
+            found: proxy.cloned(),
         })
     }
 
@@ -357,12 +357,12 @@ impl StealthIdentity {
     ///
     /// # Errors
     ///
-    /// Returns [`IdentityError::EmulationMismatch`] for another major version and
+    /// Returns [`IdentityError::WireMeasurementMismatch`] for another major version and
     /// [`IdentityError::Incoherent`] for another browser or operating system.
-    pub fn check_emulation(&self, measured: &WireMeasurementRef) -> Result<(), IdentityError> {
-        let own = &self.emulation;
+    pub fn check_wire_measurement(&self, measured: &WireMeasurementRef) -> Result<(), IdentityError> {
+        let own = &self.wire_measurement;
         if own.major != measured.major {
-            return Err(IdentityError::EmulationMismatch {
+            return Err(IdentityError::WireMeasurementMismatch {
                 identity: own.major,
                 measured: measured.major,
             });
@@ -377,28 +377,28 @@ impl StealthIdentity {
     }
 }
 
-impl fmt::Debug for StealthIdentity {
+impl fmt::Debug for Identity {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("StealthIdentity")
+        f.debug_struct("Identity")
             .field("cookies", &self.cookies.len())
-            .field("egress", &self.egress)
+            .field("proxy", &self.proxy)
             .finish_non_exhaustive()
     }
 }
 
 /// The vendors that have a clearance cookie, so that a cookie name can be traced to its vendor.
-const VENDORS: [Vendor; 7] = [
-    Vendor::Cloudflare,
-    Vendor::DataDome,
-    Vendor::PerimeterX,
-    Vendor::Akamai,
-    Vendor::Imperva,
-    Vendor::Kasada,
-    Vendor::AwsWaf,
+const VENDORS: [ProtectionVendor; 7] = [
+    ProtectionVendor::Cloudflare,
+    ProtectionVendor::DataDome,
+    ProtectionVendor::PerimeterX,
+    ProtectionVendor::Akamai,
+    ProtectionVendor::Imperva,
+    ProtectionVendor::Kasada,
+    ProtectionVendor::AwsWaf,
 ];
 
 /// The vendor whose clearance cookie is called `name`.
-fn vendor_of_cookie(name: &str) -> Option<Vendor> {
+fn vendor_of_cookie(name: &str) -> Option<ProtectionVendor> {
     VENDORS
         .into_iter()
         .find(|&vendor| clearance_cookie(vendor) == Some(name))

@@ -5,12 +5,12 @@ use crate::client::ImpersonationProfile;
 use seleniumbase_rs::evasion::fingerprint::{Fingerprint, OsType};
 use seleniumbase_rs::evasion::humanize::Rng;
 use seleniumbase_rs_codec::BrowserKind;
-use seleniumbase_rs_scrape::challenge::mitigation::Mode;
-use seleniumbase_rs_scrape::egress::route::{EgressKey, EgressRef};
+use seleniumbase_rs_scrape::challenge::mitigation::FetchKind;
+use seleniumbase_rs_scrape::egress::route::{ProxyKey, ProxyRoute};
 use seleniumbase_rs_scrape::error::ScrapeError;
-use seleniumbase_rs_scrape::ledger::events::ScraperEvent;
-use seleniumbase_rs_scrape::passport::identity::{WireMeasurementRef, StealthIdentity};
-use seleniumbase_rs_scrape::runtime::cdp::EgressLocale;
+use seleniumbase_rs_scrape::ledger::events::ScrapeEvent;
+use seleniumbase_rs_scrape::passport::identity::{WireMeasurementRef, Identity};
+use seleniumbase_rs_scrape::runtime::cdp::ProxyLocale;
 
 /// A fresh persona for `os` and `seed` that claims the Chrome `major`, in the locale of `placed`
 /// when there is one.
@@ -18,7 +18,7 @@ pub(super) fn persona_fingerprint(
     os: OsType,
     seed: u64,
     major: u32,
-    placed: Option<&EgressLocale>,
+    placed: Option<&ProxyLocale>,
 ) -> Result<Fingerprint, ScrapeError> {
     let fingerprint = Fingerprint::randomized_with_major(os, seed, major);
     match placed {
@@ -30,13 +30,13 @@ pub(super) fn persona_fingerprint(
 /// Checks that `identity` can be presented through `egress`: that it is valid, that it belongs to
 /// that egress, and that it is for the measured Chrome its fingerprint claims.
 pub(super) fn check_identity(
-    identity: &StealthIdentity,
-    egress: Option<&EgressKey>,
+    identity: &Identity,
+    egress: Option<&ProxyKey>,
 ) -> Result<(), StealthError> {
     identity.verify()?;
-    identity.check_egress(egress)?;
+    identity.check_proxy(egress)?;
     let profile = ImpersonationProfile::from_fingerprint(&identity.fingerprint)?;
-    identity.check_emulation(&WireMeasurementRef {
+    identity.check_wire_measurement(&WireMeasurementRef {
         kind: profile.kind(),
         major: profile.major(),
         os: profile.os(),
@@ -61,7 +61,7 @@ impl StealthSession {
     /// the session is as it was; in browser mode that means a new Chrome with the old profile and
     /// its cookies, or, if even that cannot be started, HTTP mode with the old identity.
     #[tracing::instrument(skip_all)]
-    pub async fn rotate_profile(&mut self) -> Result<(), StealthError> {
+    pub async fn rotate_fingerprint(&mut self) -> Result<(), StealthError> {
         let from_seed = self.persona.seed;
         let to_seed = Rng::new(from_seed).next_u64();
         let placed = self.placed().await?;
@@ -71,16 +71,16 @@ impl StealthSession {
             self.persona.major,
             placed.as_ref(),
         )?;
-        let identity = StealthIdentity::new(
+        let identity = Identity::new(
             fingerprint,
-            self.emulation(),
+            self.wire_measurement(),
             self.egress_key().cloned(),
             self.now(),
         )?;
-        let mode = self.mode();
+        let mode = self.fetch_kind();
         self.enter(mode, identity).await?;
         self.persona.seed = to_seed;
-        self.emit(&ScraperEvent::ProfileRotated { from_seed, to_seed });
+        self.emit(&ScrapeEvent::FingerprintRotated { from_seed, to_seed });
         Ok(())
     }
 
@@ -92,34 +92,34 @@ impl StealthSession {
     /// browser mode the old Chrome is closed before that, so that nothing it holds is sent
     /// through the new address, and a new Chrome is started afterwards, because the fingerprint a
     /// tab carries is written into every document before its own scripts run.
-    /// [`ScraperEvent::EgressRotated`] is emitted once.
+    /// [`ScrapeEvent::ProxyRotated`] is emitted once.
     ///
     /// # Errors
     ///
-    /// Returns [`StealthError::Scrape`] with [`ScrapeError::NoEgressAvailable`] when the pool has
+    /// Returns [`StealthError::Scrape`] with [`ScrapeError::NoProxyLeft`] when the pool has
     /// no other egress that is in rotation, [`StealthError::Mitm`] when the proxy cannot use the
-    /// new egress, and the errors of [`rotate_profile`](Self::rotate_profile). On an error the
+    /// new egress, and the errors of [`rotate_fingerprint`](Self::rotate_fingerprint). On an error the
     /// session is as it was; in browser mode that means a new Chrome through the old egress with
     /// the old cookies, or, if even that cannot be started, HTTP mode with the old identity.
     #[tracing::instrument(skip_all)]
-    pub async fn rotate_egress(&mut self) -> Result<(), StealthError> {
+    pub async fn rotate_proxy(&mut self) -> Result<(), StealthError> {
         let next = self.next_egress()?;
-        let placed = EgressLocale::resolve(&*self.wiring.geo, &next).await?;
+        let placed = ProxyLocale::resolve(&*self.wiring.geo, &next).await?;
         let fingerprint = placed.localize(&self.identity.fingerprint)?;
-        let identity = StealthIdentity::new(
+        let identity = Identity::new(
             fingerprint,
-            self.emulation(),
+            self.wire_measurement(),
             Some(next.key().clone()),
             self.now(),
         )?;
         let from = self.egress_key().cloned();
         let to = next.key().clone();
-        if self.mode() == Mode::Browser {
+        if self.fetch_kind() == FetchKind::Browser {
             // The old Chrome shares the proxy with the new one: it is closed before the proxy
             // is pointed anywhere else.
             let routed = Box::pin(self.replace_browser(identity, Some(next))).await?;
             if !routed {
-                self.emit(&ScraperEvent::EgressRotated { from, to: Some(to) });
+                self.emit(&ScrapeEvent::ProxyRotated { from, to: Some(to) });
             }
             return Ok(());
         }
@@ -131,14 +131,14 @@ impl StealthSession {
                 return Err(error);
             }
         };
-        let mode = self.mode();
+        let mode = self.fetch_kind();
         if let Err(error) = self.enter(mode, identity).await {
             self.egress.current.clone_from(&previous);
             self.undo_route(previous);
             return Err(error);
         }
         if !routed {
-            self.emit(&ScraperEvent::EgressRotated { from, to: Some(to) });
+            self.emit(&ScrapeEvent::ProxyRotated { from, to: Some(to) });
         }
         Ok(())
     }
@@ -150,7 +150,7 @@ impl StealthSession {
     ///
     /// Returns [`StealthError::Scrape`] when the cookies cannot be read from the browser.
     #[tracing::instrument(skip_all)]
-    pub async fn export_identity(&self) -> Result<StealthIdentity, StealthError> {
+    pub async fn export_identity(&self) -> Result<Identity, StealthError> {
         self.snapshot().await
     }
 
@@ -169,14 +169,14 @@ impl StealthSession {
     #[tracing::instrument(skip_all)]
     pub async fn import_identity(
         &mut self,
-        identity: &StealthIdentity,
+        identity: &Identity,
     ) -> Result<(), StealthError> {
         check_identity(identity, self.egress_key())?;
-        let mode = self.mode();
+        let mode = self.fetch_kind();
         self.enter(mode, identity.clone()).await?;
         self.persona.seed = identity.fingerprint.seed();
-        self.persona.major = identity.emulation.major;
-        self.persona.os = identity.emulation.os;
+        self.persona.major = identity.wire_measurement.major;
+        self.persona.os = identity.wire_measurement.os;
         Ok(())
     }
 
@@ -190,33 +190,33 @@ impl StealthSession {
     }
 
     /// The locale of the egress in use, when there is an egress.
-    async fn placed(&self) -> Result<Option<EgressLocale>, StealthError> {
+    async fn placed(&self) -> Result<Option<ProxyLocale>, StealthError> {
         match &self.egress.current {
             Some(egress) => Ok(Some(
-                EgressLocale::resolve(&*self.wiring.geo, egress).await?,
+                ProxyLocale::resolve(&*self.wiring.geo, egress).await?,
             )),
             None => Ok(None),
         }
     }
 
     /// The egress to move to: not the one in use, and in rotation.
-    fn next_egress(&self) -> Result<EgressRef, StealthError> {
+    fn next_egress(&self) -> Result<ProxyRoute, StealthError> {
         let pool = self
             .egress
             .pool
             .as_ref()
-            .ok_or(ScrapeError::NoEgressAvailable)?;
+            .ok_or(ScrapeError::NoProxyLeft)?;
         let site = self.egress.site.as_deref();
         let picked = match self.egress_key() {
             Some(current) => pool.pick_other(current, site, self.now()),
             None => pool.pick(site, self.now()),
         };
-        Ok(picked.ok_or(ScrapeError::NoEgressAvailable)?)
+        Ok(picked.ok_or(ScrapeError::NoProxyLeft)?)
     }
 
     /// Points the MITM proxy at `egress`, when one runs. Returns whether it did, in which case
     /// the proxy has reported the change.
-    pub(super) fn route_proxy(&self, egress: Option<EgressRef>) -> Result<bool, StealthError> {
+    pub(super) fn route_proxy(&self, egress: Option<ProxyRoute>) -> Result<bool, StealthError> {
         match &self.mitm {
             Some(mitm) => {
                 mitm.swap_upstream(egress)?;
@@ -228,7 +228,7 @@ impl StealthSession {
 
     /// Points the proxy back at `egress` after a rotation that did not work. The proxy answers
     /// for the egress it was given before, so a failure here is only logged.
-    pub(super) fn undo_route(&self, egress: Option<EgressRef>) {
+    pub(super) fn undo_route(&self, egress: Option<ProxyRoute>) {
         if let Err(error) = self.route_proxy(egress) {
             tracing::debug!(%error, "the proxy could not be pointed back at the old egress");
         }
@@ -256,13 +256,13 @@ mod tests {
         }
     }
 
-    fn identity_claiming(major: u32, emulated: u32) -> StealthIdentity {
+    fn identity_claiming(major: u32, emulated: u32) -> Identity {
         let fingerprint = Fingerprint::randomized_with_major(OsType::Macos, 3, major);
-        StealthIdentity::new(fingerprint, emulation_of(emulated), None, 0).expect("an identity")
+        Identity::new(fingerprint, emulation_of(emulated), None, 0).expect("an identity")
     }
 
-    fn key(host: &str) -> EgressKey {
-        EgressKey {
+    fn key(host: &str) -> ProxyKey {
+        ProxyKey {
             scheme: "http".to_owned(),
             host: host.to_owned(),
             port: 8080,
@@ -293,7 +293,7 @@ mod tests {
     fn a_persona_takes_the_language_and_time_zone_of_its_egress() {
         let locale = Locale::for_country(CountryCode::new("DE").expect("a country"))
             .expect("Germany has a locale");
-        let placed = EgressLocale {
+        let placed = ProxyLocale {
             locale,
             timezone: "Europe/Berlin".to_owned(),
         };
@@ -318,7 +318,7 @@ mod tests {
         let error = check_identity(&direct, Some(&key("proxy.example"))).expect_err("a proxy");
         assert!(matches!(
             error,
-            StealthError::Scrape(ScrapeError::Identity(IdentityError::EgressMismatch { .. }))
+            StealthError::Scrape(ScrapeError::Identity(IdentityError::ProxyMismatch { .. }))
         ));
         let mut proxied = identity_claiming(measured(), measured());
         proxied.egress = Some(key("proxy.example"));
@@ -343,7 +343,7 @@ mod tests {
             matches!(
                 check_identity(&mislabelled, None),
                 Err(StealthError::Scrape(ScrapeError::Identity(
-                    IdentityError::EmulationMismatch { .. }
+                    IdentityError::WireMeasurementMismatch { .. }
                 )))
             ),
             "it is labelled as another version than it claims"

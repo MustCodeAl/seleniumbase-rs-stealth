@@ -23,9 +23,9 @@ use super::{HttpSession, MAX_REMEMBERED_ORIGINS};
 use crate::client::{ImpersonateError, WireProtocol};
 use crate::convert;
 use seleniumbase_rs_codec::header_spec::RequestShape;
-use seleniumbase_rs_scrape::challenge::mitigation::Mode;
+use seleniumbase_rs_scrape::challenge::mitigation::FetchKind;
 use seleniumbase_rs_scrape::egress::redact::RedactedUrl;
-use seleniumbase_rs_scrape::ledger::events::ScraperEvent;
+use seleniumbase_rs_scrape::ledger::events::ScrapeEvent;
 
 /// The largest buffer reserved for a body before its bytes arrive, whatever the server claims.
 const MAX_PRESIZE_BYTES: usize = 1024 * 1024;
@@ -91,10 +91,10 @@ pub(super) async fn run(session: &HttpSession, prepared: Prepared) -> Result<Htt
 /// Emits the event of a finished request.
 fn announce(session: &HttpSession, reply: &HttpReply) {
     let elapsed_ms = u64::try_from(reply.elapsed.as_millis()).unwrap_or(u64::MAX);
-    session.emit(&ScraperEvent::Request {
+    session.emit(&ScrapeEvent::Request {
         url: reply.redacted_url(),
         status: reply.status,
-        mode: Mode::Http,
+        fetch_kind: FetchKind::Http,
         elapsed_ms,
     });
 }

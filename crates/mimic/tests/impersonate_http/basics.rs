@@ -7,7 +7,7 @@ use seleniumbase_rs_codec::header_spec::RequestShape;
 use seleniumbase_rs_mimic::http_session::{
     HttpError, HttpOptions, HttpSession, Method, ReplyProtocol,
 };
-use seleniumbase_rs_scrape::ledger::events::{CollectingEventSink, ScraperEvent};
+use seleniumbase_rs_scrape::ledger::events::{CollectingEventSink, ScrapeEvent};
 
 use crate::site::{identity, Answer, Site};
 
@@ -229,14 +229,14 @@ async fn the_request_event_is_emitted_with_the_url_redacted() {
     let events = sink.events();
     let request = events
         .iter()
-        .find(|event| matches!(event, ScraperEvent::Request { .. }))
+        .find(|event| matches!(event, ScrapeEvent::Request { .. }))
         .expect("a request event");
     let shown = format!("{request:?}");
     assert!(
         shown.contains("page=2") && !shown.contains("hunter2"),
         "{shown}"
     );
-    assert!(matches!(request, ScraperEvent::Request { status: 200, .. }));
+    assert!(matches!(request, ScrapeEvent::Request { status: 200, .. }));
 }
 
 #[tokio::test]

@@ -23,9 +23,9 @@ const NOW: u64 = 1_800_000_000;
 /// A wait short enough for a test that expects to time out.
 const BRIEF: Duration = Duration::from_millis(60);
 
-fn egress(country: Option<&str>) -> EgressRef {
+fn egress(country: Option<&str>) -> ProxyRoute {
     let country = country.map(|code| CountryCode::new(code).expect("a valid code"));
-    EgressRef::parse("http://proxy.example:8080", country).expect("a valid spec")
+    ProxyRoute::parse("http://proxy.example:8080", country).expect("a valid spec")
 }
 
 /// Makes `Page.navigate` announce `answers`, in order, as main-frame documents and then finish.
@@ -266,7 +266,7 @@ async fn a_challenge_page_is_detected_from_its_status_headers_and_body() {
     let snapshot = detect_page(&page, &answer).await.expect("the page reads");
 
     assert_eq!(snapshot.detection.kind, ChallengeKind::JsChallenge);
-    assert_eq!(snapshot.detection.evidence.vendor, Some(Vendor::Cloudflare));
+    assert_eq!(snapshot.detection.evidence.vendor, Some(ProtectionVendor::Cloudflare));
     assert!(snapshot.body.contains("cloudflare") || snapshot.body.contains("challenge"));
 }
 
@@ -283,12 +283,12 @@ async fn a_normal_page_behind_a_vendor_is_not_a_challenge() {
         .expect("the navigation finishes");
     let snapshot = detect_page(&page, &answer).await.expect("the page reads");
 
-    assert_eq!(snapshot.detection.kind, ChallengeKind::None);
+    assert_eq!(snapshot.detection.kind, ChallengeKind::Clear);
 }
 
 #[tokio::test]
 async fn an_egress_country_gives_its_locale_and_time_zone() {
-    let placed = EgressLocale::resolve(&StaticGeoResolver, &egress(Some("DE")))
+    let placed = ProxyLocale::resolve(&StaticGeoResolver, &egress(Some("DE")))
         .await
         .expect("Germany has a locale");
 
@@ -298,8 +298,8 @@ async fn an_egress_country_gives_its_locale_and_time_zone() {
 
 #[tokio::test]
 async fn an_egress_without_a_country_or_a_locale_is_a_geo_error() {
-    let without_country = EgressLocale::resolve(&StaticGeoResolver, &egress(None)).await;
-    let without_locale = EgressLocale::resolve(&StaticGeoResolver, &egress(Some("ZZ"))).await;
+    let without_country = ProxyLocale::resolve(&StaticGeoResolver, &egress(None)).await;
+    let without_locale = ProxyLocale::resolve(&StaticGeoResolver, &egress(Some("ZZ"))).await;
 
     assert!(matches!(
         without_country,
@@ -316,7 +316,7 @@ struct Vienna;
 
 #[async_trait]
 impl GeoResolver for Vienna {
-    async fn resolve(&self, egress: &EgressRef) -> Result<GeoInfo, GeoError> {
+    async fn resolve(&self, egress: &ProxyRoute) -> Result<GeoInfo, GeoError> {
         let key = egress.key();
         Ok(GeoInfo {
             country: key.country.ok_or_else(|| GeoError::Unknown(key.clone()))?,
@@ -328,7 +328,7 @@ impl GeoResolver for Vienna {
 
 #[tokio::test]
 async fn the_time_zone_a_resolver_reports_wins_over_the_locale_default() {
-    let placed = EgressLocale::resolve(&Vienna, &egress(Some("DE")))
+    let placed = ProxyLocale::resolve(&Vienna, &egress(Some("DE")))
         .await
         .expect("Germany has a locale");
     let before = Fingerprint::randomized(OsType::Macos, 7);
@@ -352,7 +352,7 @@ async fn the_time_zone_a_resolver_reports_wins_over_the_locale_default() {
 #[tokio::test]
 async fn the_locale_override_reaches_the_tab() {
     let (page, mock) = mocked_page().await;
-    let placed = EgressLocale::resolve(&StaticGeoResolver, &egress(Some("FR")))
+    let placed = ProxyLocale::resolve(&StaticGeoResolver, &egress(Some("FR")))
         .await
         .expect("France has a locale");
 
@@ -360,8 +360,8 @@ async fn the_locale_override_reaches_the_tab() {
         .await
         .expect("the overrides apply");
 
-    let locale = mock.calls_to("WireMeasurement.setLocaleOverride");
-    let zone = mock.calls_to("WireMeasurement.setTimezoneOverride");
+    let locale = mock.calls_to("Emulation.setLocaleOverride");
+    let zone = mock.calls_to("Emulation.setTimezoneOverride");
     assert_eq!(locale.len(), 1);
     assert_eq!(locale[0].params, json!({ "locale": "fr-FR" }));
     assert_eq!(zone[0].params, json!({ "timezoneId": "Europe/Paris" }));
@@ -371,8 +371,8 @@ async fn the_locale_override_reaches_the_tab() {
 #[tokio::test]
 async fn a_refused_override_is_a_browser_error() {
     let (page, mock) = mocked_page().await;
-    mock.fail("WireMeasurement.setLocaleOverride", "no such locale");
-    let placed = EgressLocale::resolve(&StaticGeoResolver, &egress(Some("DE")))
+    mock.fail("Emulation.setLocaleOverride", "no such locale");
+    let placed = ProxyLocale::resolve(&StaticGeoResolver, &egress(Some("DE")))
         .await
         .expect("Germany has a locale");
 
@@ -463,9 +463,9 @@ async fn the_clearance_value_is_the_vendors_cookie() {
         ],
     );
 
-    let cloudflare = clearance_value(&page, Some(Vendor::Cloudflare)).await;
-    let datadome = clearance_value(&page, Some(Vendor::DataDome)).await;
-    let kasada = clearance_value(&page, Some(Vendor::Kasada)).await;
+    let cloudflare = clearance_value(&page, Some(ProtectionVendor::Cloudflare)).await;
+    let datadome = clearance_value(&page, Some(ProtectionVendor::DataDome)).await;
+    let kasada = clearance_value(&page, Some(ProtectionVendor::Kasada)).await;
     let unknown = clearance_value(&page, None).await;
 
     assert_eq!(cloudflare.expect("reads").as_deref(), Some("tok"));
@@ -494,7 +494,7 @@ async fn a_clearance_cookie_that_appears_ends_the_wait() {
 
     let cleared = wait_for_clearance(
         &page,
-        Some(Vendor::Cloudflare),
+        Some(ProtectionVendor::Cloudflare),
         None,
         Duration::from_secs(30),
     )
@@ -518,7 +518,7 @@ async fn the_cookie_from_before_the_solve_does_not_count_while_the_challenge_sho
         .await
         .expect("the navigation finishes");
 
-    let cleared = wait_for_clearance(&page, Some(Vendor::Cloudflare), Some("old"), BRIEF)
+    let cleared = wait_for_clearance(&page, Some(ProtectionVendor::Cloudflare), Some("old"), BRIEF)
         .await
         .expect("the cookies read");
 
@@ -544,7 +544,7 @@ async fn an_unchanged_cookie_counts_once_the_page_is_no_longer_a_challenge() {
 
     let cleared = wait_for_clearance(
         &page,
-        Some(Vendor::Cloudflare),
+        Some(ProtectionVendor::Cloudflare),
         Some("set-by-the-script"),
         BRIEF,
     )
@@ -565,7 +565,7 @@ async fn a_changed_cookie_value_counts_even_when_one_was_there() {
         &[cdp_cookie("cf_clearance", "new", ".shop.example", -1.0)],
     );
 
-    let cleared = wait_for_clearance(&page, Some(Vendor::Cloudflare), Some("old"), BRIEF)
+    let cleared = wait_for_clearance(&page, Some(ProtectionVendor::Cloudflare), Some("old"), BRIEF)
         .await
         .expect("the cookies read");
 
@@ -586,13 +586,13 @@ async fn a_vendor_without_a_cookie_is_cleared_when_the_page_stops_being_a_challe
         .await
         .expect("the navigation finishes");
 
-    let still_challenged = wait_for_clearance(&page, Some(Vendor::Kasada), None, BRIEF)
+    let still_challenged = wait_for_clearance(&page, Some(ProtectionVendor::Kasada), None, BRIEF)
         .await
         .expect("the page reads");
     goto_with_response(&page, "https://shop.example/")
         .await
         .expect("the navigation finishes");
-    let cleared = wait_for_clearance(&page, Some(Vendor::Kasada), None, BRIEF)
+    let cleared = wait_for_clearance(&page, Some(ProtectionVendor::Kasada), None, BRIEF)
         .await
         .expect("the page reads");
 
@@ -605,7 +605,7 @@ async fn a_browser_failure_during_the_wait_is_an_error() {
     let (page, mock) = mocked_page().await;
     mock.fail("Network.getAllCookies", "target closed");
 
-    let error = wait_for_clearance(&page, Some(Vendor::Cloudflare), None, BRIEF)
+    let error = wait_for_clearance(&page, Some(ProtectionVendor::Cloudflare), None, BRIEF)
         .await
         .expect_err("the browser failed");
 

@@ -3,12 +3,12 @@
 
 use seleniumbase_rs_mimic::stealth_session::StealthError;
 use seleniumbase_rs_scrape::challenge::detect::ChallengeKind;
-use seleniumbase_rs_scrape::challenge::mitigation::Mode;
+use seleniumbase_rs_scrape::challenge::mitigation::FetchKind;
 use seleniumbase_rs_scrape::error::ScrapeError;
-use seleniumbase_rs_scrape::ledger::events::ScraperEvent;
-use seleniumbase_rs_scrape::ledger::state::StateStore;
+use seleniumbase_rs_scrape::ledger::events::ScrapeEvent;
+use seleniumbase_rs_scrape::ledger::state::Ledger;
 use seleniumbase_rs_scrape::passport::policy::{
-    DemoteReason, EscalateReason, SessionPolicy, Transition,
+    DemoteReason, EscalateReason, EscalationPolicy, Escalation,
 };
 
 use crate::site::{CLEARANCE, HOST, REAL_MARKER};
@@ -23,12 +23,12 @@ const FULL_FLOW: [&str; 14] = [
     "action_chosen",
     "identity_exported",
     "identity_restored",
-    "mode_changed",
+    "fetch_kind_changed",
     "challenge_detected",
     "action_chosen",
     "identity_exported",
     "identity_restored",
-    "mode_changed",
+    "fetch_kind_changed",
     "request",
     "challenge_solved",
 ];
@@ -37,7 +37,7 @@ const FULL_FLOW: [&str; 14] = [
 async fn an_unguarded_page_is_fetched_over_http_and_no_browser_is_started() {
     let world = World::new().await;
     let mut session = world.session().build().await.expect("a session");
-    assert_eq!(session.mode(), Mode::Http);
+    assert_eq!(session.fetch_kind(), FetchKind::Http);
 
     let fetched = session
         .fetch(&world.site.url("/open"))
@@ -45,7 +45,7 @@ async fn an_unguarded_page_is_fetched_over_http_and_no_browser_is_started() {
         .expect("a page");
 
     assert_eq!(fetched.status, 200);
-    assert_eq!((fetched.mode, fetched.attempts), (Mode::Http, 1));
+    assert_eq!((fetched.mode, fetched.attempts), (FetchKind::Http, 1));
     assert!(fetched.body.contains(REAL_MARKER));
     assert_eq!(fetched.solved, None);
     assert_eq!(world.launcher.count(), 0, "no browser is needed");
@@ -57,8 +57,8 @@ async fn an_unguarded_page_is_fetched_over_http_and_no_browser_is_started() {
         .expect("a store")
         .expect("a state");
     assert_eq!(
-        (state.successes, state.preferred_mode),
-        (1, Some(Mode::Http))
+        (state.successes, state.preferred_kind),
+        (1, Some(FetchKind::Http))
     );
     session.close().await.expect("closes");
 }
@@ -73,21 +73,21 @@ async fn a_challenge_over_http_goes_to_the_browser_and_the_clearance_comes_back_
     assert_eq!(fetched.status, 200);
     assert!(fetched.body.contains(REAL_MARKER));
     assert_eq!(fetched.solved, Some(ChallengeKind::JsChallenge));
-    assert_eq!((fetched.mode, fetched.attempts), (Mode::Http, 3));
-    assert_eq!(session.mode(), Mode::Http, "the session went back to HTTP");
+    assert_eq!((fetched.mode, fetched.attempts), (FetchKind::Http, 3));
+    assert_eq!(session.fetch_kind(), FetchKind::Http, "the session went back to HTTP");
     assert_eq!(world.names(), FULL_FLOW);
     assert_eq!(
         world.changes(),
         [
             (
-                Mode::Http,
-                Mode::Browser,
-                Transition::Escalate(EscalateReason::Challenge(ChallengeKind::JsChallenge))
+                FetchKind::Http,
+                FetchKind::Browser,
+                Escalation::Escalate(EscalateReason::Challenge(ChallengeKind::JsChallenge))
             ),
             (
-                Mode::Browser,
-                Mode::Http,
-                Transition::Demote(DemoteReason::ChallengeSolved)
+                FetchKind::Browser,
+                FetchKind::Http,
+                Escalation::Demote(DemoteReason::ChallengeSolved)
             ),
         ]
     );
@@ -141,7 +141,7 @@ async fn what_the_site_learns_is_kept_and_a_solved_site_is_fetched_over_http_nex
 
     assert_eq!(
         (again.mode, again.attempts, again.solved),
-        (Mode::Http, 1, None)
+        (FetchKind::Http, 1, None)
     );
     assert_eq!(
         world.launcher.count(),
@@ -155,7 +155,7 @@ async fn what_the_site_learns_is_kept_and_a_solved_site_is_fetched_over_http_nex
         .expect("a store")
         .expect("a state");
     assert_eq!(state.challenges, 2, "one over HTTP, one in the browser");
-    assert_eq!(state.preferred_mode, Some(Mode::Http));
+    assert_eq!(state.preferred_kind, Some(FetchKind::Http));
     assert_eq!(state.consecutive_challenges, 0);
     session.close().await.expect("closes");
 }
@@ -163,9 +163,9 @@ async fn what_the_site_learns_is_kept_and_a_solved_site_is_fetched_over_http_nex
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_session_that_prefers_the_browser_starts_in_it_and_stays_after_a_solve() {
     let world = World::new().await;
-    let policy = SessionPolicy {
-        prefer: Mode::Browser,
-        ..SessionPolicy::default()
+    let policy = EscalationPolicy {
+        prefer: FetchKind::Browser,
+        ..EscalationPolicy::default()
     };
     let mut session = world
         .session()
@@ -173,12 +173,12 @@ async fn a_session_that_prefers_the_browser_starts_in_it_and_stays_after_a_solve
         .build()
         .await
         .expect("a session");
-    assert_eq!(session.mode(), Mode::Browser);
+    assert_eq!(session.fetch_kind(), FetchKind::Browser);
     assert_eq!(world.launcher.count(), 1);
 
     let fetched = session.fetch(&world.site.url("/")).await.expect("a page");
 
-    assert_eq!((fetched.mode, fetched.attempts), (Mode::Browser, 2));
+    assert_eq!((fetched.mode, fetched.attempts), (FetchKind::Browser, 2));
     assert_eq!(fetched.solved, Some(ChallengeKind::JsChallenge));
     assert!(fetched.body.contains(REAL_MARKER));
     assert!(
@@ -200,26 +200,26 @@ async fn escalate_and_demote_by_hand_say_why_and_do_nothing_twice() {
 
     session.escalate().await.expect("escalates");
     session.escalate().await.expect("already there");
-    assert_eq!((session.mode(), world.launcher.count()), (Mode::Browser, 1));
+    assert_eq!((session.fetch_kind(), world.launcher.count()), (FetchKind::Browser, 1));
     assert!(session.page().is_some() && session.http().is_none());
 
     session.demote().await.expect("demotes");
     session.demote().await.expect("already there");
-    assert_eq!(session.mode(), Mode::Http);
+    assert_eq!(session.fetch_kind(), FetchKind::Http);
     assert!(session.http().is_some() && session.page().is_none());
     assert!(!world.launcher.last().browser.is_connected());
     assert_eq!(
         world.changes(),
         [
             (
-                Mode::Http,
-                Mode::Browser,
-                Transition::Escalate(EscalateReason::Manual)
+                FetchKind::Http,
+                FetchKind::Browser,
+                Escalation::Escalate(EscalateReason::Manual)
             ),
             (
-                Mode::Browser,
-                Mode::Http,
-                Transition::Demote(DemoteReason::Manual)
+                FetchKind::Browser,
+                FetchKind::Http,
+                Escalation::Demote(DemoteReason::Manual)
             ),
         ]
     );
@@ -249,7 +249,7 @@ async fn a_browser_that_died_does_not_trap_the_session_in_it() {
         .await
         .expect("back to HTTP with the last known identity");
 
-    assert_eq!(session.mode(), Mode::Http);
+    assert_eq!(session.fetch_kind(), FetchKind::Http);
     let fetched = session
         .fetch(&world.site.url("/open"))
         .await
@@ -268,7 +268,7 @@ async fn a_clearance_near_its_end_sends_the_next_fetch_to_the_browser() {
     // 600 s of clearance, a margin of 120 s: still good at 200 s left.
     world.advance(400);
     let early = session.fetch(&world.site.url("/")).await.expect("a page");
-    assert_eq!((early.mode, world.launcher.count()), (Mode::Http, 1));
+    assert_eq!((early.mode, world.launcher.count()), (FetchKind::Http, 1));
 
     // 115 s left: the policy does not wait for the site to refuse.
     world.advance(85);
@@ -276,7 +276,7 @@ async fn a_clearance_near_its_end_sends_the_next_fetch_to_the_browser() {
 
     assert_eq!(
         (late.mode, late.attempts, late.solved),
-        (Mode::Browser, 1, None)
+        (FetchKind::Browser, 1, None)
     );
     assert_eq!(world.launcher.count(), 2);
     assert!(world
@@ -288,9 +288,9 @@ async fn a_clearance_near_its_end_sends_the_next_fetch_to_the_browser() {
     assert_eq!(
         last,
         (
-            Mode::Http,
-            Mode::Browser,
-            Transition::Escalate(EscalateReason::ClearanceExpiring {
+            FetchKind::Http,
+            FetchKind::Browser,
+            Escalation::Escalate(EscalateReason::ClearanceExpiring {
                 remaining_secs: 115
             })
         )
@@ -299,7 +299,7 @@ async fn a_clearance_near_its_end_sends_the_next_fetch_to_the_browser() {
         .sink
         .events()
         .into_iter()
-        .filter(|event| matches!(event, ScraperEvent::ClearanceExpiring { .. }))
+        .filter(|event| matches!(event, ScrapeEvent::ClearanceExpiring { .. }))
         .count();
     assert_eq!(expiring, 1);
     session.close().await.expect("closes");
@@ -314,7 +314,7 @@ async fn a_fresh_challenge_after_a_clearance_goes_to_the_browser_again() {
     world.site.revoke();
     let again = session.fetch(&world.site.url("/")).await.expect("a page");
 
-    assert_eq!((again.mode, again.attempts), (Mode::Http, 3));
+    assert_eq!((again.mode, again.attempts), (FetchKind::Http, 3));
     assert_eq!(again.solved, Some(ChallengeKind::JsChallenge));
     assert_eq!(
         world.launcher.count(),
@@ -358,8 +358,8 @@ async fn a_challenge_that_cannot_be_solved_gives_up_after_the_attempts_allowed()
         "{error:?}"
     );
     assert_eq!(
-        session.mode(),
-        Mode::Browser,
+        session.fetch_kind(),
+        FetchKind::Browser,
         "no clearance, so nothing to carry over HTTP"
     );
     session.close().await.expect("closes");
@@ -396,19 +396,19 @@ async fn a_block_with_no_other_egress_starts_a_cooldown() {
 async fn challenges_in_a_row_climb_the_ladder_from_solving_to_a_new_egress_to_a_new_profile() {
     let world = World::new().await;
     world.launcher.never_solve();
-    let policy = SessionPolicy {
-        prefer: Mode::Browser,
-        ..SessionPolicy::default()
+    let policy = EscalationPolicy {
+        prefer: FetchKind::Browser,
+        ..EscalationPolicy::default()
     };
     let mut session = world
         .session()
         .policy(policy)
-        .with_geo_proxies([
+        .geo_proxies([
             ("http://one.proxy.test:8080", crate::world::country("US")),
             ("http://two.proxy.test:8080", crate::world::country("DE")),
         ])
         .expect("two proxies")
-        .with_max_challenge_attempts(6)
+        .max_challenge_attempts(6)
         .solve_timeout(crate::world::BRIEF_SOLVE)
         .build()
         .await
@@ -428,12 +428,12 @@ async fn challenges_in_a_row_climb_the_ladder_from_solving_to_a_new_egress_to_a_
     );
     let count = |name: &str| world.names().iter().filter(|seen| **seen == name).count();
     assert_eq!(
-        count("egress_rotated"),
+        count("proxy_rotated"),
         1,
         "the second challenge in a row changes the egress"
     );
     assert_eq!(
-        count("profile_rotated"),
+        count("fingerprint_rotated"),
         3,
         "from the third on, the profile"
     );
@@ -514,7 +514,7 @@ async fn a_browser_that_is_not_the_measured_chrome_is_refused_and_the_session_st
         ),
         "{error:?}"
     );
-    assert_eq!(session.mode(), Mode::Http);
+    assert_eq!(session.fetch_kind(), FetchKind::Http);
     assert!(
         !world.launcher.last().browser.is_connected(),
         "the browser was closed"

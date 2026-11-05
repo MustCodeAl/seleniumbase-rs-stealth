@@ -8,15 +8,15 @@ use super::{Leg, StealthError, StealthSession};
 use crate::http_session::{Attempt, Fetched, HttpReply, HttpSession};
 use seleniumbase_rs::utils::urls::normalize_page_url;
 use seleniumbase_rs_scrape::challenge::detect::{ChallengeKind, Detection};
-use seleniumbase_rs_scrape::challenge::mitigation::{Action, AttemptContext, GiveUpReason, Mode};
-use seleniumbase_rs_scrape::egress::pool::EgressOutcome;
+use seleniumbase_rs_scrape::challenge::mitigation::{Mitigation, AttemptContext, GiveUpReason, FetchKind};
+use seleniumbase_rs_scrape::egress::pool::ProxyOutcome;
 use seleniumbase_rs_scrape::egress::redact::RedactedUrl;
-use seleniumbase_rs_scrape::egress::route::EgressKey;
+use seleniumbase_rs_scrape::egress::route::ProxyKey;
 use seleniumbase_rs_scrape::error::ScrapeError;
 use seleniumbase_rs_scrape::jar::store::site_of;
-use seleniumbase_rs_scrape::ledger::events::ScraperEvent;
-use seleniumbase_rs_scrape::ledger::state::DomainState;
-use seleniumbase_rs_scrape::passport::policy::{EscalateReason, Transition};
+use seleniumbase_rs_scrape::ledger::events::ScrapeEvent;
+use seleniumbase_rs_scrape::ledger::state::SiteRecord;
+use seleniumbase_rs_scrape::passport::policy::{EscalateReason, Escalation};
 use seleniumbase_rs_scrape::runtime::cdp::{NavResponse, PageSnapshot};
 
 /// Why a URL is refused without echoing it.
@@ -36,17 +36,17 @@ pub struct StealthFetch {
     pub headers: Vec<(String, String)>,
     /// The page: the body of the response in HTTP mode, the rendered page in browser mode.
     pub body: String,
-    /// What detection found. The kind is [`ChallengeKind::None`] for a page returned by a fetch.
+    /// What detection found. The kind is [`ChallengeKind::Clear`] for a page returned by a fetch.
     pub detection: Detection,
     /// The mode the page was got in. A page that took a challenge to reach is usually an HTTP
     /// page: the browser earned the clearance and the session went back to HTTP to use it.
-    pub mode: Mode,
+    pub fetch_kind: FetchKind,
     /// How many loads the fetch took, counting from one.
     pub attempts: u32,
     /// The challenge that was solved on the way, if one was.
     pub solved: Option<ChallengeKind>,
     /// The egress the page came through; `None` for the direct connection.
-    pub egress: Option<EgressKey>,
+    pub proxy: Option<ProxyKey>,
 }
 
 impl fmt::Debug for StealthFetch {
@@ -69,14 +69,14 @@ impl fmt::Debug for StealthFetch {
 impl StealthFetch {
     /// A page got over HTTP. A body that is not UTF-8 is read lossily: the bytes of a page that
     /// is not text are not what a fetch is for.
-    fn from_reply(reply: &HttpReply, detection: Detection, egress: Option<EgressKey>) -> Self {
+    fn from_reply(reply: &HttpReply, detection: Detection, egress: Option<ProxyKey>) -> Self {
         Self {
             url: reply.url().as_str().to_owned(),
             status: reply.status(),
             headers: reply.headers().as_pairs().to_vec(),
             body: String::from_utf8_lossy(reply.bytes()).into_owned(),
             detection,
-            mode: Mode::Http,
+            fetch_kind: FetchKind::Http,
             attempts: 0,
             solved: None,
             egress,
@@ -84,14 +84,14 @@ impl StealthFetch {
     }
 
     /// A page got through the browser.
-    fn from_page(response: NavResponse, snapshot: PageSnapshot, egress: Option<EgressKey>) -> Self {
+    fn from_page(response: NavResponse, snapshot: PageSnapshot, egress: Option<ProxyKey>) -> Self {
         Self {
             url: response.url,
             status: response.status,
             headers: response.headers,
             body: snapshot.body,
             detection: snapshot.detection,
-            mode: Mode::Browser,
+            fetch_kind: FetchKind::Browser,
             attempts: 0,
             solved: None,
             egress,
@@ -143,9 +143,9 @@ struct Progress {
 /// One load and what the policies made of it.
 struct Loaded {
     fetch: StealthFetch,
-    action: Action,
+    action: Mitigation,
     /// What the session policy said about the load: only an HTTP verdict carries one.
-    transition: Transition,
+    transition: Escalation,
 }
 
 /// What a loop does after an action was carried out.
@@ -191,7 +191,7 @@ impl StealthSession {
             .store
             .get(&target.site)
             .await?
-            .unwrap_or_else(|| DomainState::new(&target.site));
+            .unwrap_or_else(|| SiteRecord::new(&target.site));
         let now = self.now();
         if let Some(until) = state.cooldown_until.filter(|until| now < *until) {
             return Err(ScrapeError::CoolingDown {
@@ -212,7 +212,7 @@ impl StealthSession {
     async fn attempts(
         &mut self,
         target: &Target,
-        state: &mut DomainState,
+        state: &mut SiteRecord,
     ) -> Result<StealthFetch, StealthError> {
         self.preflight(target, state).await?;
         let mut progress = Progress::default();
@@ -230,16 +230,16 @@ impl StealthSession {
     async fn preflight(
         &mut self,
         target: &Target,
-        state: &DomainState,
+        state: &SiteRecord,
     ) -> Result<(), StealthError> {
         let transition = match &self.leg {
             Leg::Http(http) => {
                 http.preflight(&target.url, &self.identity, Some(state), &self.wiring.rules)?
             }
-            Leg::Browser(_) => Transition::Stay,
+            Leg::Browser(_) => Escalation::Stay,
         };
-        if matches!(transition, Transition::Escalate(_)) {
-            self.switch_to(Mode::Browser, transition).await?;
+        if matches!(transition, Escalation::Escalate(_)) {
+            self.switch_to(FetchKind::Browser, transition).await?;
         }
         Ok(())
     }
@@ -248,7 +248,7 @@ impl StealthSession {
     async fn load_once(
         &mut self,
         target: &Target,
-        state: &mut DomainState,
+        state: &mut SiteRecord,
         attempt: u32,
     ) -> Result<Loaded, StealthError> {
         let raw = match &mut self.leg {
@@ -267,13 +267,13 @@ impl StealthSession {
         &mut self,
         http: &HttpSession,
         target: &Target,
-        state: &mut DomainState,
+        state: &mut SiteRecord,
         attempt: u32,
     ) -> Result<Loaded, StealthError> {
         let context = Attempt {
             number: attempt,
             previous_challenges: state.consecutive_challenges,
-            can_rotate_egress: self.egress.size > 1,
+            can_rotate_proxy: self.egress.size > 1,
             can_escalate: true,
         };
         let fetched = http
@@ -282,12 +282,12 @@ impl StealthSession {
         let Fetched { reply, verdict } = match fetched {
             Ok(fetched) => fetched,
             Err(error) => {
-                self.report(EgressOutcome::ConnectError);
+                self.report(ProxyOutcome::ConnectError);
                 return Err(error.into());
             }
         };
-        state.record(&verdict.detection, Mode::Http, self.now());
-        state.last_egress = self.egress_key().cloned();
+        state.record(&verdict.detection, FetchKind::Http, self.now());
+        state.last_proxy = self.egress_key().cloned();
         self.report(outcome_of(verdict.detection.kind));
         Ok(Loaded {
             fetch: StealthFetch::from_reply(
@@ -306,25 +306,25 @@ impl StealthSession {
         &mut self,
         loaded: Result<(NavResponse, PageSnapshot), ScrapeError>,
         target: &Target,
-        state: &mut DomainState,
+        state: &mut SiteRecord,
         attempt: u32,
     ) -> Result<Loaded, StealthError> {
         let (response, snapshot) = match loaded {
             Ok(page) => page,
             Err(error) => {
-                self.report(EgressOutcome::ConnectError);
+                self.report(ProxyOutcome::ConnectError);
                 return Err(error.into());
             }
         };
         let detection = &snapshot.detection;
-        state.record(detection, Mode::Browser, self.now());
-        state.last_egress = self.egress_key().cloned();
-        if detection.kind != ChallengeKind::None {
-            self.emit(&ScraperEvent::ChallengeDetected {
+        state.record(detection, FetchKind::Browser, self.now());
+        state.last_proxy = self.egress_key().cloned();
+        if detection.kind != ChallengeKind::Clear {
+            self.emit(&ScrapeEvent::ChallengeDetected {
                 url: target.redacted.clone(),
                 kind: detection.kind,
                 vendor: detection.evidence.vendor,
-                mode: Mode::Browser,
+                fetch_kind: FetchKind::Browser,
             });
         }
         self.report(outcome_of(detection.kind));
@@ -332,7 +332,7 @@ impl StealthSession {
         Ok(Loaded {
             fetch: StealthFetch::from_page(response, snapshot, self.egress_key().cloned()),
             action,
-            transition: Transition::Stay,
+            transition: Escalation::Stay,
         })
     }
 
@@ -340,20 +340,20 @@ impl StealthSession {
     fn decide_in_browser(
         &self,
         target: &Target,
-        state: &DomainState,
+        state: &SiteRecord,
         detection: &Detection,
         attempt: u32,
-    ) -> Action {
+    ) -> Mitigation {
         let context = AttemptContext {
             attempt,
-            mode: Mode::Browser,
+            fetch_kind: FetchKind::Browser,
             consecutive_challenges: state.consecutive_challenges,
-            can_rotate_egress: self.egress.size > 1,
+            can_rotate_proxy: self.egress.size > 1,
             can_escalate: false,
             now: self.now(),
         };
         let action = self.wiring.rules.mitigation.decide(detection, &context);
-        self.emit(&ScraperEvent::ActionChosen {
+        self.emit(&ScrapeEvent::ActionChosen {
             site: target.site.clone(),
             action,
         });
@@ -365,7 +365,7 @@ impl StealthSession {
         &mut self,
         loaded: Loaded,
         target: &Target,
-        state: &mut DomainState,
+        state: &mut SiteRecord,
         progress: &mut Progress,
     ) -> Result<Step, StealthError> {
         let Loaded {
@@ -376,18 +376,18 @@ impl StealthSession {
         let detection = &fetch.detection;
         let attempt = progress.attempt;
         match action {
-            Action::Proceed => {
+            Mitigation::Proceed => {
                 return Ok(Step::Finish(Box::new(
                     self.finished(target, fetch, progress),
                 )));
             }
-            Action::Solve => self.solve(detection, progress).await?,
-            Action::Escalate => self.hand_over(state, detection, transition).await?,
-            Action::Retry { after } => tokio::time::sleep(after).await,
-            Action::RotateEgress => self.rotate_or_give_up(target, detection, attempt).await?,
-            Action::RotateProfile => self.rotate_profile().await?,
-            Action::Cooldown { until } => return Err(self.cool_down(target, state, until)),
-            Action::GiveUp(reason) => {
+            Mitigation::Solve => self.solve(detection, progress).await?,
+            Mitigation::Escalate => self.hand_over(state, detection, transition).await?,
+            Mitigation::Retry { after } => tokio::time::sleep(after).await,
+            Mitigation::RotateProxy => self.rotate_or_give_up(target, detection, attempt).await?,
+            Mitigation::RotateFingerprint => self.rotate_fingerprint().await?,
+            Mitigation::Cooldown { until } => return Err(self.cool_down(target, state, until)),
+            Mitigation::GiveUp(reason) => {
                 return Err(give_up(target, detection, reason, attempt).into());
             }
             // The policy lives in the scrape crate and may learn an action this session does not
@@ -420,13 +420,13 @@ impl StealthSession {
         leg.solve(detection, seed, timeout).await?;
         let identity = self.synced_identity().await?;
         let transition = self.wiring.rules.session.after_fetch(
-            Mode::Browser,
+            FetchKind::Browser,
             detection,
-            &Action::Solve,
+            &Mitigation::Solve,
             &identity,
         );
-        if matches!(transition, Transition::Demote(_)) {
-            self.move_to(identity, Mode::Http, transition).await?;
+        if matches!(transition, Escalation::Demote(_)) {
+            self.move_to(identity, FetchKind::Http, transition).await?;
         }
         Ok(())
     }
@@ -437,19 +437,19 @@ impl StealthSession {
     /// should count against the browser.
     async fn hand_over(
         &mut self,
-        state: &mut DomainState,
+        state: &mut SiteRecord,
         detection: &Detection,
-        transition: Transition,
+        transition: Escalation,
     ) -> Result<(), StealthError> {
-        if self.mode() == Mode::Browser {
+        if self.fetch_kind() == FetchKind::Browser {
             return Ok(());
         }
         let reason = match transition {
-            Transition::Escalate(reason) => reason,
+            Escalation::Escalate(reason) => reason,
             _ => EscalateReason::Challenge(detection.kind),
         };
         state.consecutive_challenges = 0;
-        self.switch_to(Mode::Browser, Transition::Escalate(reason))
+        self.switch_to(FetchKind::Browser, Escalation::Escalate(reason))
             .await
     }
 
@@ -460,8 +460,8 @@ impl StealthSession {
         detection: &Detection,
         attempt: u32,
     ) -> Result<(), StealthError> {
-        match self.rotate_egress().await {
-            Err(StealthError::Scrape(ScrapeError::NoEgressAvailable)) => {
+        match self.rotate_proxy().await {
+            Err(StealthError::Scrape(ScrapeError::NoProxyLeft)) => {
                 Err(give_up(target, detection, GiveUpReason::NoEgressLeft, attempt).into())
             }
             other => other,
@@ -469,9 +469,9 @@ impl StealthSession {
     }
 
     /// Leaves the site alone until `until`, and says so.
-    fn cool_down(&self, target: &Target, state: &mut DomainState, until: u64) -> StealthError {
+    fn cool_down(&self, target: &Target, state: &mut SiteRecord, until: u64) -> StealthError {
         state.start_cooldown(until);
-        self.emit(&ScraperEvent::CooldownStarted {
+        self.emit(&ScrapeEvent::CooldownStarted {
             site: target.site.clone(),
             until,
         });
@@ -490,7 +490,7 @@ impl StealthSession {
         progress: &Progress,
     ) -> StealthFetch {
         if let Some(solved) = &progress.solved {
-            self.emit(&ScraperEvent::ChallengeSolved {
+            self.emit(&ScrapeEvent::ChallengeSolved {
                 url: target.redacted.clone(),
                 kind: solved.kind,
                 attempts: progress.attempt,
@@ -503,7 +503,7 @@ impl StealthSession {
     }
 
     /// Tells the pool how the egress in use fared.
-    fn report(&self, outcome: EgressOutcome) {
+    fn report(&self, outcome: ProxyOutcome) {
         if let (Some(pool), Some(current)) = (&self.egress.pool, &self.egress.current) {
             pool.report(current.key(), outcome, self.now());
         }
@@ -511,11 +511,11 @@ impl StealthSession {
 }
 
 /// How the egress fared, by what the site answered.
-fn outcome_of(kind: ChallengeKind) -> EgressOutcome {
+fn outcome_of(kind: ChallengeKind) -> ProxyOutcome {
     match kind {
-        ChallengeKind::None => EgressOutcome::Success,
-        ChallengeKind::Blocked => EgressOutcome::Blocked,
-        _ => EgressOutcome::Challenged,
+        ChallengeKind::Clear => ProxyOutcome::Success,
+        ChallengeKind::Blocked => ProxyOutcome::Blocked,
+        _ => ProxyOutcome::Challenged,
     }
 }
 
@@ -551,14 +551,14 @@ fn elapsed_ms(started: Instant) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use seleniumbase_rs_scrape::challenge::detect::Evidence;
+    use seleniumbase_rs_scrape::challenge::detect::ChallengeEvidence;
 
     const SECRET_URL: &str = "https://alice:s3cret@www.shop.co.uk/cart?token=hunter2&page=2";
 
     fn detection(kind: ChallengeKind) -> Detection {
         Detection {
             kind,
-            evidence: Evidence::default(),
+            evidence: ChallengeEvidence::default(),
         }
     }
 
@@ -632,8 +632,8 @@ mod tests {
 
     #[test]
     fn the_egress_fares_by_what_the_site_answered() {
-        assert_eq!(outcome_of(ChallengeKind::None), EgressOutcome::Success);
-        assert_eq!(outcome_of(ChallengeKind::Blocked), EgressOutcome::Blocked);
+        assert_eq!(outcome_of(ChallengeKind::Clear), ProxyOutcome::Success);
+        assert_eq!(outcome_of(ChallengeKind::Blocked), ProxyOutcome::Blocked);
         for kind in [
             ChallengeKind::JsChallenge,
             ChallengeKind::Interactive,
@@ -641,7 +641,7 @@ mod tests {
                 retry_after_secs: None,
             },
         ] {
-            assert_eq!(outcome_of(kind), EgressOutcome::Challenged);
+            assert_eq!(outcome_of(kind), ProxyOutcome::Challenged);
         }
     }
 
@@ -652,8 +652,8 @@ mod tests {
             status: 200,
             headers: vec![("set-cookie".to_owned(), "cf_clearance=s3cret".to_owned())],
             body: "<p>hunter2</p>".to_owned(),
-            detection: detection(ChallengeKind::None),
-            mode: Mode::Http,
+            detection: detection(ChallengeKind::Clear),
+            fetch_kind: FetchKind::Http,
             attempts: 1,
             solved: None,
             egress: None,

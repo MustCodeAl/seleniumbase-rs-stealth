@@ -20,15 +20,15 @@ use seleniumbase_rs_scrape::challenge::mitigation::{
 };
 use seleniumbase_rs_scrape::egress::geo::{CountryCode, GeoResolver, StaticGeoResolver};
 use seleniumbase_rs_scrape::egress::pool::{ProxyPool, RotationStrategy};
-use seleniumbase_rs_scrape::egress::route::EgressRef;
+use seleniumbase_rs_scrape::egress::route::ProxyRoute;
 use seleniumbase_rs_scrape::ledger::events::EventSink;
-use seleniumbase_rs_scrape::ledger::state::{InMemoryStateStore, StateStore};
-use seleniumbase_rs_scrape::passport::identity::{WireMeasurementRef, StealthIdentity};
-use seleniumbase_rs_scrape::passport::policy::SessionPolicy;
+use seleniumbase_rs_scrape::ledger::state::{InMemoryLedger, Ledger};
+use seleniumbase_rs_scrape::passport::identity::{WireMeasurementRef, Identity};
+use seleniumbase_rs_scrape::passport::policy::EscalationPolicy;
 use seleniumbase_rs_scrape::runtime::browser_scraper::{
     BrowserLauncher, ChromeLauncher, DEFAULT_SOLVE_TIMEOUT,
 };
-use seleniumbase_rs_scrape::runtime::cdp::EgressLocale;
+use seleniumbase_rs_scrape::runtime::cdp::ProxyLocale;
 use seleniumbase_rs_scrape::runtime::tracing_sink::TracingEventSink;
 
 /// How many loads of one URL a session fetch makes before it gives up, unless told otherwise.
@@ -48,18 +48,18 @@ pub const MITM_SHUTDOWN_GRACE: Duration = Duration::from_secs(5);
 pub struct StealthSessionBuilder {
     launch: LaunchOptionsBuilder,
     launcher: Option<Arc<dyn BrowserLauncher>>,
-    egresses: Vec<EgressRef>,
+    egresses: Vec<ProxyRoute>,
     strategy: RotationStrategy,
     attempts: Option<u32>,
     mitigation: Option<MitigationPolicy>,
-    policy: SessionPolicy,
-    store: Option<Arc<dyn StateStore>>,
+    policy: EscalationPolicy,
+    store: Option<Arc<dyn Ledger>>,
     sink: Option<Arc<dyn EventSink>>,
     geo: Option<Arc<dyn GeoResolver>>,
     limits: Option<(usize, Duration)>,
     seed: Option<u64>,
     fingerprint: Option<Fingerprint>,
-    restore: Option<StealthIdentity>,
+    restore: Option<Identity>,
     http: HttpOptions,
     mitm: MitmOptions,
     solve_timeout: Duration,
@@ -88,7 +88,7 @@ impl StealthSessionBuilder {
             strategy: RotationStrategy::RoundRobin,
             attempts: None,
             mitigation: None,
-            policy: SessionPolicy::default(),
+            policy: EscalationPolicy::default(),
             store: None,
             sink: None,
             geo: None,
@@ -126,14 +126,14 @@ impl StealthSessionBuilder {
     ///
     /// Returns [`StealthError::Scrape`] for a spec that is not `scheme://[user:password@]host:port`
     /// with a scheme of http, https, socks5 or socks5h. The error never echoes the credentials.
-    pub fn with_geo_proxies<I, S>(mut self, proxies: I) -> Result<Self, StealthError>
+    pub fn geo_proxies<I, S>(mut self, proxies: I) -> Result<Self, StealthError>
     where
         I: IntoIterator<Item = (S, CountryCode)>,
         S: AsRef<str>,
     {
         for (spec, country) in proxies {
             self.egresses
-                .push(EgressRef::parse(spec.as_ref(), Some(country))?);
+                .push(ProxyRoute::parse(spec.as_ref(), Some(country))?);
         }
         Ok(self)
     }
@@ -147,13 +147,13 @@ impl StealthSessionBuilder {
 
     /// How many loads of one URL a fetch may make before it gives up. Zero is read as one.
     #[must_use]
-    pub fn with_max_challenge_attempts(mut self, attempts: u32) -> Self {
+    pub fn max_challenge_attempts(mut self, attempts: u32) -> Self {
         self.attempts = Some(attempts);
         self
     }
 
     /// The whole mitigation policy: when to rotate, how long to cool down. The attempts set by
-    /// [`with_max_challenge_attempts`](Self::with_max_challenge_attempts) still apply on top;
+    /// [`max_challenge_attempts`](Self::max_challenge_attempts) still apply on top;
     /// without either, the attempts are [`DEFAULT_ATTEMPTS`].
     #[must_use]
     pub fn mitigation(mut self, policy: MitigationPolicy) -> Self {
@@ -164,14 +164,14 @@ impl StealthSessionBuilder {
     /// When the session changes mode: the mode it prefers, whether HTTP needs a clearance, how
     /// close to its end a clearance may get, and whether a solve sends the session back to HTTP.
     #[must_use]
-    pub fn policy(mut self, policy: SessionPolicy) -> Self {
+    pub fn policy(mut self, policy: EscalationPolicy) -> Self {
         self.policy = policy;
         self
     }
 
     /// Where what is learned about each site is kept between fetches.
     #[must_use]
-    pub fn with_state_store(mut self, store: Arc<dyn StateStore>) -> Self {
+    pub fn ledger(mut self, store: Arc<dyn Ledger>) -> Self {
         self.store = Some(store);
         self
     }
@@ -179,7 +179,7 @@ impl StealthSessionBuilder {
     /// Where the session reports what it does. The HTTP session and the MITM proxy report to it
     /// as well.
     #[must_use]
-    pub fn with_event_sink(mut self, sink: Arc<dyn EventSink>) -> Self {
+    pub fn event_sink(mut self, sink: Arc<dyn EventSink>) -> Self {
         self.sink = Some(sink);
         self
     }
@@ -194,7 +194,7 @@ impl StealthSessionBuilder {
     /// At most `calls` fetches of one site in `window`, in either mode. The limit is per site,
     /// not global.
     #[must_use]
-    pub fn per_site_rate(mut self, calls: usize, window: Duration) -> Self {
+    pub fn rate_limit(mut self, calls: usize, window: Duration) -> Self {
         self.limits = Some((calls, window));
         self
     }
@@ -223,7 +223,7 @@ impl StealthSessionBuilder {
     /// The identity must belong to one of the proxies added, or to the direct connection when
     /// none was: [`build`](Self::build) refuses an identity of another egress.
     #[must_use]
-    pub fn restore(mut self, identity: StealthIdentity) -> Self {
+    pub fn restore(mut self, identity: Identity) -> Self {
         self.restore = Some(identity);
         self
     }
@@ -298,8 +298,8 @@ impl StealthSessionBuilder {
                 } else {
                     start.seed
                 },
-                major: identity.emulation.major,
-                os: identity.emulation.os,
+                major: identity.wire_measurement.major,
+                os: identity.wire_measurement.os,
             },
             wiring,
             identity,
@@ -330,7 +330,7 @@ impl StealthSessionBuilder {
             launcher: self.launcher.unwrap_or_else(|| Arc::new(ChromeLauncher)),
             store: self
                 .store
-                .unwrap_or_else(|| Arc::new(InMemoryStateStore::new())),
+                .unwrap_or_else(|| Arc::new(InMemoryLedger::new())),
             geo: self.geo.unwrap_or_else(|| Arc::new(StaticGeoResolver)),
             rules: Rules {
                 mitigation,
@@ -361,10 +361,10 @@ impl StealthSessionBuilder {
 
 /// The settings that only matter while the session starts.
 struct Start {
-    egresses: Vec<EgressRef>,
+    egresses: Vec<ProxyRoute>,
     strategy: RotationStrategy,
     fingerprint: Option<Fingerprint>,
-    restore: Option<StealthIdentity>,
+    restore: Option<Identity>,
     seed: u64,
 }
 
@@ -374,7 +374,7 @@ fn first_egress(
     start: &Start,
     pool: Option<&ProxyPool>,
     now: u64,
-) -> Result<Option<EgressRef>, StealthError> {
+) -> Result<Option<ProxyRoute>, StealthError> {
     let Some(identity) = &start.restore else {
         return Ok(pool.and_then(|pool| pool.pick(None, now)));
     };
@@ -389,7 +389,7 @@ fn first_egress(
     // An identity that names no egress that is held is checked against the first one: it belongs
     // to the direct connection or to a proxy that is not in this pool, and the check says so.
     let against = found.as_ref().or_else(|| start.egresses.first());
-    check_identity(identity, against.map(EgressRef::key))?;
+    check_identity(identity, against.map(ProxyRoute::key))?;
     Ok(found)
 }
 
@@ -398,9 +398,9 @@ fn first_egress(
 async fn start_identity(
     wiring: &Wiring,
     start: &Start,
-    current: Option<&EgressRef>,
+    current: Option<&ProxyRoute>,
     now: u64,
-) -> Result<StealthIdentity, StealthError> {
+) -> Result<Identity, StealthError> {
     if let Some(identity) = &start.restore {
         return Ok(identity.clone());
     }
@@ -411,7 +411,7 @@ async fn start_identity(
         persona_fingerprint(host_os(), start.seed, major, None)?
     };
     if let Some(egress) = current {
-        fingerprint = EgressLocale::resolve(&*wiring.geo, egress)
+        fingerprint = ProxyLocale::resolve(&*wiring.geo, egress)
             .await?
             .localize(&fingerprint)?;
     }
@@ -421,7 +421,7 @@ async fn start_identity(
         major: measured_major(os)?,
         os,
     };
-    Ok(StealthIdentity::new(
+    Ok(Identity::new(
         fingerprint,
         emulation,
         current.map(|egress| egress.key().clone()),
@@ -464,7 +464,7 @@ fn random_seed() -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use seleniumbase_rs_scrape::challenge::mitigation::Mode;
+    use seleniumbase_rs_scrape::challenge::mitigation::FetchKind;
 
     #[test]
     fn a_fetch_that_needs_a_browser_gets_one_more_attempt_than_a_browser_alone() {
@@ -474,14 +474,14 @@ mod tests {
     #[test]
     fn the_session_prefers_http_and_the_browser_is_not_started_unasked() {
         let builder = StealthSessionBuilder::new();
-        assert_eq!(builder.policy.prefer, Mode::Http);
+        assert_eq!(builder.policy.prefer, FetchKind::Http);
         assert!(builder.restore.is_none());
     }
 
     #[test]
     fn the_builder_shows_counts_and_no_proxy() {
         let builder = StealthSessionBuilder::new()
-            .with_geo_proxies([(
+            .geo_proxies([(
                 "http://alice:s3cret@proxy.example:8080",
                 CountryCode::new("DE").expect("a country"),
             )])
@@ -496,7 +496,7 @@ mod tests {
     #[test]
     fn a_proxy_spec_that_is_not_valid_is_refused_without_echoing_it() {
         let error = StealthSessionBuilder::new()
-            .with_geo_proxies([(
+            .geo_proxies([(
                 "ftp://alice:s3cret@proxy.example:21",
                 CountryCode::new("DE").expect("a country"),
             )])

@@ -37,7 +37,7 @@
 //!   mitigation and session policies ([`HttpSession::fetch`], [`HttpSession::assess`]), so a
 //!   caller learns whether to carry on, wait, rotate, or hand the URL to a browser.
 //! - **Identity**: [`HttpSession::export_identity`] puts the session's cookies back into a
-//!   `StealthIdentity`, and [`HttpSession::from_identity`] refuses an identity that belongs to
+//!   `Identity`, and [`HttpSession::from_identity`] refuses an identity that belongs to
 //!   another egress or another Chrome version.
 //!
 //! # What it does not do
@@ -86,10 +86,10 @@ pub use self::request::HttpRequest;
 use self::cookies::SessionJar;
 use self::pace::SitePacer;
 use crate::client::{ImpersonationProfile, WireProtocol};
-use seleniumbase_rs_scrape::egress::route::{EgressKey, EgressRef};
+use seleniumbase_rs_scrape::egress::route::{ProxyKey, ProxyRoute};
 use seleniumbase_rs_scrape::jar::store::CookieJar;
-use seleniumbase_rs_scrape::ledger::events::{EventSink, ScraperEvent};
-use seleniumbase_rs_scrape::passport::identity::{WireMeasurementRef, IdentityError, StealthIdentity};
+use seleniumbase_rs_scrape::ledger::events::{EventSink, ScrapeEvent};
+use seleniumbase_rs_scrape::passport::identity::{WireMeasurementRef, IdentityError, Identity};
 
 /// The most origins whose protocol is remembered. Past it the table starts over.
 const MAX_REMEMBERED_ORIGINS: usize = 1024;
@@ -109,7 +109,7 @@ struct Inner {
     client: wreq::Client,
     profile: ImpersonationProfile,
     jar: SessionJar,
-    egress: Option<EgressRef>,
+    egress: Option<ProxyRoute>,
     limits: Limits,
     pacer: Option<SitePacer>,
     sink: Arc<dyn EventSink>,
@@ -142,7 +142,7 @@ impl fmt::Debug for HttpSession {
 /// Maps the mismatch of an identity's emulation to the session's version error.
 fn emulation_error(error: IdentityError) -> HttpError {
     match error {
-        IdentityError::EmulationMismatch { identity, measured } => HttpError::VersionMismatch {
+        IdentityError::WireMeasurementMismatch { identity, measured } => HttpError::VersionMismatch {
             browser: identity,
             measured,
         },
@@ -164,23 +164,23 @@ impl HttpSession {
     /// measured one, [`HttpError::Impersonate`] for a system that was not measured, and
     /// [`HttpError::Options`] or [`HttpError::Client`] when the options or the proxy are refused.
     pub fn from_identity(
-        identity: &StealthIdentity,
-        egress: Option<EgressRef>,
+        identity: &Identity,
+        egress: Option<ProxyRoute>,
         options: HttpOptions,
     ) -> Result<Self, HttpError> {
         options.validate()?;
         identity.verify()?;
-        identity.check_egress(egress.as_ref().map(EgressRef::key))?;
+        identity.check_proxy(egress.as_ref().map(ProxyRoute::key))?;
         let profile = ImpersonationProfile::from_fingerprint(&identity.fingerprint)?;
         identity
-            .check_emulation(&WireMeasurementRef {
+            .check_wire_measurement(&WireMeasurementRef {
                 kind: profile.kind(),
                 major: profile.major(),
                 os: profile.os(),
             })
             .map_err(emulation_error)?;
         let session = Self::assemble(profile, identity.cookies.clone(), egress, options)?;
-        session.emit(&ScraperEvent::IdentityRestored {
+        session.emit(&ScrapeEvent::IdentityRestored {
             cookies: session.inner.jar.len(),
         });
         Ok(session)
@@ -190,7 +190,7 @@ impl HttpSession {
     fn assemble(
         profile: ImpersonationProfile,
         jar: CookieJar,
-        egress: Option<EgressRef>,
+        egress: Option<ProxyRoute>,
         options: HttpOptions,
     ) -> Result<Self, HttpError> {
         if let Some(installed) = options.installed_major
@@ -252,8 +252,8 @@ impl HttpSession {
     /// The exit the requests leave through; `None` for a direct connection. It carries no
     /// credentials.
     #[must_use]
-    pub fn egress(&self) -> Option<&EgressKey> {
-        self.inner.egress.as_ref().map(EgressRef::key)
+    pub fn proxy_route(&self) -> Option<&ProxyKey> {
+        self.inner.egress.as_ref().map(ProxyRoute::key)
     }
 
     /// How many cookies the jar holds.
@@ -268,7 +268,7 @@ impl HttpSession {
     }
 
     /// Hands an event to the sink.
-    fn emit(&self, event: &ScraperEvent) {
+    fn emit(&self, event: &ScrapeEvent) {
         self.inner.sink.emit(event);
     }
 
@@ -288,7 +288,7 @@ mod tests {
 
     #[test]
     fn an_emulation_mismatch_of_an_identity_is_a_version_mismatch_and_nothing_else_is() {
-        let version = emulation_error(IdentityError::EmulationMismatch {
+        let version = emulation_error(IdentityError::WireMeasurementMismatch {
             identity: 154,
             measured: 155,
         });
@@ -310,7 +310,7 @@ mod tests {
     fn a_session_from_a_profile_shows_counts_and_the_egress_key_only() {
         let profile = ImpersonationProfile::measured(BrowserKind::Chrome).expect("measured");
         let egress =
-            EgressRef::parse("http://alice:s3cret@proxy.example:8080", None).expect("a spec");
+            ProxyRoute::parse("http://alice:s3cret@proxy.example:8080", None).expect("a spec");
         let session =
             HttpSession::assemble(profile, CookieJar::new(), Some(egress), HttpOptions::new())
                 .expect("a session");
@@ -322,7 +322,7 @@ mod tests {
         for secret in ["s3cret", "alice"] {
             assert!(!shown.contains(secret), "{secret} in {shown}");
         }
-        assert_eq!(session.egress().map(|key| key.port), Some(8080));
+        assert_eq!(session.proxy_route().map(|key| key.port), Some(8080));
         assert_eq!(session.cookie_count(), 0);
     }
 

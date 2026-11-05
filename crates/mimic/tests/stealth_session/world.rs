@@ -8,11 +8,11 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use seleniumbase_rs::evasion::fingerprint::{Fingerprint, OsType};
 use seleniumbase_rs_codec::{emulation, BrowserKind};
 use seleniumbase_rs_mimic::stealth_session::{StealthSession, StealthSessionBuilder};
-use seleniumbase_rs_scrape::challenge::mitigation::Mode;
+use seleniumbase_rs_scrape::challenge::mitigation::FetchKind;
 use seleniumbase_rs_scrape::egress::geo::CountryCode;
-use seleniumbase_rs_scrape::ledger::events::{CollectingEventSink, ScraperEvent};
-use seleniumbase_rs_scrape::ledger::state::InMemoryStateStore;
-use seleniumbase_rs_scrape::passport::policy::Transition;
+use seleniumbase_rs_scrape::ledger::events::{CollectingEventSink, ScrapeEvent};
+use seleniumbase_rs_scrape::ledger::state::InMemoryLedger;
+use seleniumbase_rs_scrape::passport::policy::Escalation;
 
 use crate::browser::ScriptedLauncher;
 use crate::site::ChallengeSite;
@@ -56,7 +56,7 @@ pub struct World {
     pub site: ChallengeSite,
     pub launcher: Arc<ScriptedLauncher>,
     pub sink: CollectingEventSink,
-    pub store: InMemoryStateStore,
+    pub store: InMemoryLedger,
     pub clock: Arc<AtomicU64>,
 }
 
@@ -75,7 +75,7 @@ impl World {
             site,
             launcher,
             sink: CollectingEventSink::new(),
-            store: InMemoryStateStore::new(),
+            store: InMemoryLedger::new(),
             clock,
         }
     }
@@ -87,8 +87,8 @@ impl World {
         let launcher = Arc::clone(&self.launcher);
         StealthSession::builder()
             .launcher(launcher)
-            .with_event_sink(Arc::new(self.sink.clone()))
-            .with_state_store(Arc::new(self.store.clone()))
+            .event_sink(Arc::new(self.sink.clone()))
+            .ledger(Arc::new(self.store.clone()))
             .clock(Arc::new(move || clock.load(Ordering::SeqCst)))
             .http_options(self.site.http_options())
             .mitm_options(self.site.mitm_options())
@@ -103,16 +103,16 @@ impl World {
 
     /// The names of the events so far, oldest first.
     pub fn names(&self) -> Vec<&'static str> {
-        self.sink.events().iter().map(ScraperEvent::name).collect()
+        self.sink.events().iter().map(ScrapeEvent::name).collect()
     }
 
     /// The changes of mode so far, oldest first.
-    pub fn changes(&self) -> Vec<(Mode, Mode, Transition)> {
+    pub fn changes(&self) -> Vec<(FetchKind, FetchKind, Escalation)> {
         self.sink
             .events()
             .into_iter()
             .filter_map(|event| match event {
-                ScraperEvent::ModeChanged { from, to, reason } => Some((from, to, reason)),
+                ScrapeEvent::FetchKindChanged { from, to, reason } => Some((from, to, reason)),
                 _ => None,
             })
             .collect()

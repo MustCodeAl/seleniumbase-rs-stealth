@@ -24,7 +24,7 @@ use crate::tls_server::EphemeralCa;
 use seleniumbase_rs::sb_cdp::LaunchOptions;
 use seleniumbase_rs_codec::{emulation, BrowserKind};
 use seleniumbase_rs_scrape::egress::redact::Secret;
-use seleniumbase_rs_scrape::egress::route::EgressRef;
+use seleniumbase_rs_scrape::egress::route::ProxyRoute;
 use seleniumbase_rs_scrape::ledger::events::NoopEventSink;
 
 /// A header map in the order given.
@@ -487,7 +487,7 @@ fn a_socks5_egress_is_given_to_the_client_as_socks5h_so_names_resolve_at_the_pro
         "socks5h://alice:s3cret@10.0.0.1:1080",
         "socks5://10.0.0.1:1080",
     ] {
-        let egress = EgressRef::parse(spec, None).expect(spec);
+        let egress = ProxyRoute::parse(spec, None).expect(spec);
         let shown = format!("{:?}", egress_proxy(&egress).expect(spec));
         assert!(shown.contains("socks5h://"), "{spec}: {shown}");
         assert!(!shown.contains("socks5://"), "{spec}: {shown}");
@@ -501,7 +501,7 @@ fn an_http_egress_keeps_its_credentials_out_of_the_proxy_address() {
         "http://alice:s3cret@proxy.example:8080",
         "https://alice:s3cret@proxy.example:8443",
     ] {
-        let egress = EgressRef::parse(spec, None).expect(spec);
+        let egress = ProxyRoute::parse(spec, None).expect(spec);
         let shown = format!("{:?}", egress_proxy(&egress).expect(spec));
         assert!(
             !shown.contains("s3cret") && !shown.contains("alice"),
@@ -520,7 +520,7 @@ fn every_scheme_an_egress_may_have_makes_a_proxy() {
         "http://[2001:db8::1]:3128",
         "socks5://[2001:db8::1]:1080",
     ] {
-        let egress = EgressRef::parse(spec, None).expect(spec);
+        let egress = ProxyRoute::parse(spec, None).expect(spec);
         assert!(egress_proxy(&egress).is_ok(), "{spec}");
     }
 }

@@ -10,7 +10,7 @@ use std::fmt;
 use async_trait::async_trait;
 use tokio::sync::Mutex;
 
-use crate::egress::route::EgressRef;
+use crate::egress::route::ProxyRoute;
 use crate::error::ScrapeError;
 use seleniumbase_rs::sb_cdp::{Browser, BrowserContext, ContextOptions, Page};
 
@@ -22,7 +22,7 @@ mod tests;
 /// An implementation gives back a tab that goes through the new egress and has none of the state
 /// of the old one. The shipped implementation is [`ContextProxySwitch`].
 #[async_trait]
-pub trait EgressSwitch: Send + Sync {
+pub trait ProxySwitch: Send + Sync {
     /// Opens a tab in `browser` that leaves through `egress`, or directly when `egress` is `None`.
     ///
     /// # Errors
@@ -32,11 +32,11 @@ pub trait EgressSwitch: Send + Sync {
     async fn switch(
         &self,
         browser: &Browser,
-        egress: Option<&EgressRef>,
+        egress: Option<&ProxyRoute>,
     ) -> Result<Page, ScrapeError>;
 }
 
-/// An [`EgressSwitch`] that opens a new browser context with its own proxy and drops the one it
+/// An [`ProxySwitch`] that opens a new browser context with its own proxy and drops the one it
 /// opened before.
 ///
 /// The new context is made first, so a failure leaves the old one in place. A proxy with a user
@@ -69,11 +69,11 @@ impl fmt::Debug for ContextProxySwitch {
 }
 
 #[async_trait]
-impl EgressSwitch for ContextProxySwitch {
+impl ProxySwitch for ContextProxySwitch {
     async fn switch(
         &self,
         browser: &Browser,
-        egress: Option<&EgressRef>,
+        egress: Option<&ProxyRoute>,
     ) -> Result<Page, ScrapeError> {
         let options = egress.map_or_else(ContextOptions::new, |egress| {
             ContextOptions::new().proxy(egress.proxy().clone())

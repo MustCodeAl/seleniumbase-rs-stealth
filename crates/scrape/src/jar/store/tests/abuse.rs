@@ -21,7 +21,7 @@ fn a_supercookie_on_a_public_suffix_is_refused() {
     assert!(jar.is_empty());
     assert_eq!(
         store(&mut jar, "https://github.io/", "a=1; Domain=github.io"),
-        StoreOutcome::Stored
+        SetCookieOutcome::Stored
     );
     assert!(
         only(&jar).host_only,
@@ -55,7 +55,7 @@ fn ip_hosts_take_only_host_only_cookies() {
     let at = "http://192.168.0.1/";
     assert_eq!(
         store(&mut jar, at, "a=1; Domain=192.168.0.1"),
-        StoreOutcome::Stored
+        SetCookieOutcome::Stored
     );
     assert!(only(&jar).host_only);
     for domain in ["168.0.1", "0.1", "example.com"] {
@@ -70,11 +70,11 @@ fn ip_hosts_take_only_host_only_cookies() {
     assert_eq!(outcome, ignored(IgnoreReason::IpLiteralDomain));
     assert_eq!(
         store(&mut jar, "http://127.0.0.1/", "d=1; Domain=127.1"),
-        StoreOutcome::Stored
+        SetCookieOutcome::Stored
     );
     assert_eq!(
         store(&mut jar, "https://[::1]/", "e=1; Domain=[::0:1]"),
-        StoreOutcome::Stored
+        SetCookieOutcome::Stored
     );
     assert_eq!(header(&mut jar, "https://[::1]/").as_deref(), Some("e=1"));
     assert_eq!(
@@ -92,7 +92,7 @@ fn hosts_and_domains_in_upper_case_are_lowered() {
         "https://WWW.Example.COM/",
         "a=1; Domain=EXAMPLE.com",
     );
-    assert_eq!(outcome, StoreOutcome::Stored);
+    assert_eq!(outcome, SetCookieOutcome::Stored);
     assert_eq!(only(&jar).domain, "example.com");
     assert_eq!(
         header(&mut jar, "https://Sub.EXAMPLE.Com/").as_deref(),
@@ -151,7 +151,7 @@ fn an_oversize_cookie_is_refused() {
     let fits = format!("n={}", "v".repeat(4095));
     assert_eq!(
         store(&mut jar, "https://example.com/", &fits),
-        StoreOutcome::Stored
+        SetCookieOutcome::Stored
     );
 }
 
@@ -162,7 +162,7 @@ fn a_secure_cookie_needs_a_secure_origin() {
     assert_eq!(outcome, ignored(IgnoreReason::SecureFromInsecure));
     assert_eq!(
         store(&mut jar, "https://example.com/", "a=1; Secure"),
-        StoreOutcome::Stored
+        SetCookieOutcome::Stored
     );
     assert_eq!(
         header(&mut jar, "http://example.com/"),
@@ -177,7 +177,7 @@ fn a_secure_cookie_needs_a_secure_origin() {
         let outcome = store(&mut jar, loopback, "s=1; Secure");
         assert_eq!(
             outcome,
-            StoreOutcome::Stored,
+            SetCookieOutcome::Stored,
             "loopback is trustworthy: {loopback}"
         );
     }
@@ -189,7 +189,7 @@ fn an_insecure_origin_cannot_overwrite_or_shadow_a_secure_cookie() {
     let secure = "sid=good; Secure; Domain=example.com; Path=/";
     assert_eq!(
         store(&mut jar, "https://www.example.com/", secure),
-        StoreOutcome::Stored
+        SetCookieOutcome::Stored
     );
     for attack in [
         "sid=evil",
@@ -205,12 +205,12 @@ fn an_insecure_origin_cannot_overwrite_or_shadow_a_secure_cookie() {
     }
     assert_eq!(
         store(&mut jar, "http://www.example.com/", "other=1"),
-        StoreOutcome::Stored
+        SetCookieOutcome::Stored
     );
     let renewed = "sid=new; Secure; Domain=example.com; Path=/";
     assert_eq!(
         store(&mut jar, "https://www.example.com/", renewed),
-        StoreOutcome::Replaced
+        SetCookieOutcome::Replaced
     );
     assert_eq!(
         header(&mut jar, "https://www.example.com/").as_deref(),
@@ -232,7 +232,7 @@ fn the_secure_prefix_needs_secure() {
     );
     assert_eq!(
         store(&mut jar, at, "__Secure-a=1; Secure"),
-        StoreOutcome::Stored
+        SetCookieOutcome::Stored
     );
     let http = store(&mut jar, "http://example.com/", "__Secure-b=1; Secure");
     assert_eq!(http, ignored(IgnoreReason::SecureFromInsecure));
@@ -262,7 +262,7 @@ fn the_host_prefix_needs_secure_root_path_and_no_domain() {
     }
     assert_eq!(
         store(&mut jar, at, "__Host-a=1; Secure; Path=/"),
-        StoreOutcome::Stored
+        SetCookieOutcome::Stored
     );
     assert!(only(&jar).host_only);
 }
@@ -277,7 +277,7 @@ fn same_site_none_needs_secure() {
         "https://example.com/",
         "a=1; SameSite=None; Secure",
     );
-    assert_eq!(outcome, StoreOutcome::Stored);
+    assert_eq!(outcome, SetCookieOutcome::Stored);
 }
 
 #[test]
@@ -291,7 +291,7 @@ fn path_traversal_in_path_never_widens_the_scope() {
     ] {
         assert_eq!(
             store(&mut jar, at, header_text),
-            StoreOutcome::Stored,
+            SetCookieOutcome::Stored,
             "{header_text}"
         );
     }
@@ -304,7 +304,7 @@ fn path_traversal_in_path_never_widens_the_scope() {
     ] {
         assert_eq!(header(&mut jar, to), None, "{to}");
     }
-    assert_eq!(store(&mut jar, at, "d=1; Path=admin"), StoreOutcome::Stored);
+    assert_eq!(store(&mut jar, at, "d=1; Path=admin"), SetCookieOutcome::Stored);
     assert_eq!(
         jar.cookies()[3].path,
         "/app",

@@ -9,9 +9,9 @@ use crate::http_session::HttpError;
 use crate::mitm::MitmError;
 use seleniumbase_rs::error::SeleniumBaseError;
 use seleniumbase_rs_scrape::egress::geo::GeoError;
-use seleniumbase_rs_scrape::egress::route::EgressError;
+use seleniumbase_rs_scrape::egress::route::ProxyRouteError;
 use seleniumbase_rs_scrape::error::ScrapeError;
-use seleniumbase_rs_scrape::ledger::state::StateError;
+use seleniumbase_rs_scrape::ledger::state::LedgerError;
 use seleniumbase_rs_scrape::passport::identity::IdentityError;
 
 /// Why a [`StealthSession`](super::StealthSession) could not be made, moved or fetch a page.
@@ -46,9 +46,9 @@ macro_rules! through_scrape {
 }
 
 through_scrape!(
-    EgressError,
+    ProxyRouteError,
     GeoError,
-    StateError,
+    LedgerError,
     IdentityError,
     SeleniumBaseError
 );
@@ -85,7 +85,7 @@ mod tests {
             Ok(())
         }
         fn egress() -> Result<(), StealthError> {
-            seleniumbase_rs_scrape::egress::route::EgressRef::parse(
+            seleniumbase_rs_scrape::egress::route::ProxyRoute::parse(
                 "ftp://proxy.example:21",
                 None,
             )?;
@@ -107,7 +107,7 @@ mod tests {
         ));
         assert!(matches!(
             egress(),
-            Err(StealthError::Scrape(ScrapeError::Egress(_)))
+            Err(StealthError::Scrape(ScrapeError::Proxy(_)))
         ));
         assert!(matches!(
             http(),

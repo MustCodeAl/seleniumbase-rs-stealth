@@ -5,8 +5,8 @@
 use std::sync::{Arc, Mutex, PoisonError};
 
 use seleniumbase_rs_mimic::stealth_session::StealthSession;
-use seleniumbase_rs_scrape::challenge::mitigation::Mode;
-use seleniumbase_rs_scrape::ledger::events::{CollectingEventSink, EventSink, ScraperEvent};
+use seleniumbase_rs_scrape::challenge::mitigation::FetchKind;
+use seleniumbase_rs_scrape::ledger::events::{CollectingEventSink, EventSink, ScrapeEvent};
 
 use crate::browser::ScriptedLauncher;
 use crate::world::{country, World};
@@ -42,8 +42,8 @@ impl SwapWitness {
 }
 
 impl EventSink for SwapWitness {
-    fn emit(&self, event: &ScraperEvent) {
-        if matches!(event, ScraperEvent::EgressRotated { .. }) {
+    fn emit(&self, event: &ScrapeEvent) {
+        if matches!(event, ScrapeEvent::ProxyRotated { .. }) {
             let started = self.launcher.count();
             let connected = (0..started)
                 .filter(|index| self.launcher.nth(*index).browser.is_connected())
@@ -63,8 +63,8 @@ async fn in_the_browser_with_two_proxies(
 ) -> StealthSession {
     let mut session = world
         .session()
-        .with_event_sink(Arc::clone(witness) as Arc<dyn EventSink>)
-        .with_geo_proxies([(US_PROXY, country("US")), (DE_PROXY, country("DE"))])
+        .event_sink(Arc::clone(witness) as Arc<dyn EventSink>)
+        .geo_proxies([(US_PROXY, country("US")), (DE_PROXY, country("DE"))])
         .expect("two proxies")
         .build()
         .await
@@ -79,7 +79,7 @@ fn rotations(world: &World) -> Vec<(Option<String>, Option<String>)> {
         .events()
         .into_iter()
         .filter_map(|event| match event {
-            ScraperEvent::EgressRotated { from, to } => Some((
+            ScrapeEvent::ProxyRotated { from, to } => Some((
                 from.map(|key| key.to_string()),
                 to.map(|key| key.to_string()),
             )),
@@ -94,7 +94,7 @@ async fn the_old_chrome_is_closed_before_the_proxy_is_pointed_at_the_new_egress(
     let witness = SwapWitness::new(&world);
     let mut session = in_the_browser_with_two_proxies(&world, &witness).await;
 
-    session.rotate_egress().await.expect("rotates");
+    session.rotate_proxy().await.expect("rotates");
 
     assert_eq!(
         witness.swaps(),
@@ -117,7 +117,7 @@ async fn the_old_chrome_is_closed_before_the_proxy_takes_the_new_profile() {
     let mut session = world.session().build().await.expect("a session");
     session.escalate().await.expect("escalates");
 
-    session.rotate_profile().await.expect("rotates");
+    session.rotate_fingerprint().await.expect("rotates");
 
     assert_eq!(world.launcher.count(), 2);
     assert_eq!(
@@ -147,18 +147,18 @@ async fn a_rotation_whose_new_chrome_cannot_start_brings_the_old_egress_and_a_br
     let world = World::new().await;
     let witness = SwapWitness::new(&world);
     let mut session = in_the_browser_with_two_proxies(&world, &witness).await;
-    let from = session.egress().cloned().expect("the first egress");
+    let from = session.proxy_route().cloned().expect("the first egress");
     let seed = session.seed();
     world.launcher.fail_next_launches(1);
 
     let error = session
-        .rotate_egress()
+        .rotate_proxy()
         .await
         .expect_err("the new Chrome cannot start");
 
-    assert_eq!(session.egress().cloned(), Some(from.clone()));
+    assert_eq!(session.proxy_route().cloned(), Some(from.clone()));
     assert_eq!(session.seed(), seed);
-    assert_eq!(session.mode(), Mode::Browser);
+    assert_eq!(session.fetch_kind(), FetchKind::Browser);
     assert!(session.page().is_some(), "the session has a browser again");
     assert_eq!(
         world.launcher.count(),
@@ -188,12 +188,12 @@ async fn when_even_the_old_chrome_cannot_come_back_the_session_goes_on_over_http
     world.launcher.fail_next_launches(2);
 
     session
-        .rotate_profile()
+        .rotate_fingerprint()
         .await
         .expect_err("no Chrome starts");
 
     assert_eq!(session.seed(), seed, "the profile is the old one");
-    assert_eq!(session.mode(), Mode::Http);
+    assert_eq!(session.fetch_kind(), FetchKind::Http);
     assert!(session.http().is_some() && session.page().is_none());
     let fetched = session
         .fetch(&world.site.url("/"))
@@ -201,7 +201,7 @@ async fn when_even_the_old_chrome_cannot_come_back_the_session_goes_on_over_http
         .expect("the session still works");
     assert_eq!(
         (fetched.mode, fetched.attempts),
-        (Mode::Http, 3),
+        (FetchKind::Http, 3),
         "a challenge over HTTP, a solve in a new browser, and the clearance used over HTTP"
     );
     assert_eq!(

@@ -31,7 +31,7 @@ use seleniumbase_rs_codec::client_hello::ext_id;
 use seleniumbase_rs_codec::emulation;
 use seleniumbase_rs_codec::header_spec::RequestShape;
 use seleniumbase_rs_codec::tls_spec::TlsSpec;
-use seleniumbase_rs_scrape::egress::route::{EgressKey, EgressRef};
+use seleniumbase_rs_scrape::egress::route::{ProxyKey, ProxyRoute};
 
 /// How `Host` is spelled on HTTP/1.1, where the client writes it first.
 const HOST_SPELLING: &str = "Host";
@@ -105,7 +105,7 @@ pub(super) struct Upstream {
     /// The profile whose TLS, HTTP/2 and spelling the client sends.
     profile: ImpersonationProfile,
     /// The egress, `None` for a direct connection.
-    egress: Option<EgressRef>,
+    egress: Option<ProxyRoute>,
     /// Measured spelling of header names, for HTTP/1.1 upstreams.
     spelling: HashMap<HeaderName, String>,
     /// Origins that answered over HTTP/1.1, which get no `priority` header.
@@ -126,7 +126,7 @@ impl Upstream {
     /// Builds the client for `profile` through `egress`.
     pub(super) fn build(
         profile: ImpersonationProfile,
-        egress: Option<EgressRef>,
+        egress: Option<ProxyRoute>,
         options: &MitmOptions,
     ) -> Result<Self, MitmError> {
         let client = client(&profile, egress.as_ref(), options)?;
@@ -155,7 +155,7 @@ impl Upstream {
     }
 
     /// The egress key, `None` for a direct connection.
-    pub(super) fn egress_key(&self) -> Option<EgressKey> {
+    pub(super) fn egress_key(&self) -> Option<ProxyKey> {
         self.egress.as_ref().map(|egress| egress.key().clone())
     }
 
@@ -304,7 +304,7 @@ impl Upstream {
 /// The impersonating client for a proxy.
 fn client(
     profile: &ImpersonationProfile,
-    egress: Option<&EgressRef>,
+    egress: Option<&ProxyRoute>,
     options: &MitmOptions,
 ) -> Result<wreq::Client, MitmError> {
     finish(impersonation_client(profile)?, egress, options)
@@ -325,7 +325,7 @@ pub(super) fn websocket_spec(profile: &ImpersonationProfile) -> Option<TlsSpec> 
 /// same proxy settings as [`client`].
 fn websocket_client(
     spec: &TlsSpec,
-    egress: Option<&EgressRef>,
+    egress: Option<&ProxyRoute>,
     options: &MitmOptions,
 ) -> Result<wreq::Client, MitmError> {
     let tls = convert::tls_options(spec).map_err(ImpersonateError::from)?;
@@ -340,7 +340,7 @@ fn websocket_client(
 /// bounded phases, the egress or none, the upstream roots, and the destination filter.
 fn finish(
     builder: wreq::ClientBuilder,
-    egress: Option<&EgressRef>,
+    egress: Option<&ProxyRoute>,
     options: &MitmOptions,
 ) -> Result<wreq::Client, MitmError> {
     let mut builder = builder
@@ -410,7 +410,7 @@ fn basic_auth(user: &str, password: &str) -> Result<HeaderValue, MitmError> {
 /// and never in the proxy address, which the client prints in its trace logs. A SOCKS proxy
 /// takes them in the address, because its handshake has no header; that address is never logged
 /// by this crate.
-pub(super) fn egress_proxy(egress: &EgressRef) -> Result<wreq::Proxy, MitmError> {
+pub(super) fn egress_proxy(egress: &ProxyRoute) -> Result<wreq::Proxy, MitmError> {
     let key = egress.key();
     let host = if key.host.contains(':') {
         format!("[{}]", key.host)
@@ -503,9 +503,9 @@ impl UpstreamSlot {
     /// the egress keys before and after.
     pub(super) fn swap_egress(
         &self,
-        egress: Option<EgressRef>,
+        egress: Option<ProxyRoute>,
         options: &MitmOptions,
-    ) -> Result<(Option<EgressKey>, Option<EgressKey>), MitmError> {
+    ) -> Result<(Option<ProxyKey>, Option<ProxyKey>), MitmError> {
         let _swapping = locked(&self.swapping);
         let old = self.current();
         let next = Upstream::build(old.profile.clone(), egress, options)?;

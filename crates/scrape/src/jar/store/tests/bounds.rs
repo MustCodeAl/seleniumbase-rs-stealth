@@ -34,7 +34,7 @@ fn a_default_path_at_the_bound_is_kept_and_one_byte_more_is_refused() {
     let mut jar = CookieJar::new();
     let fits = format!("/{}", "a".repeat(MAX_PATH_BYTES - 1));
     let at = format!("https://example.com{fits}/x");
-    assert_eq!(store(&mut jar, &at, "a=1"), StoreOutcome::Stored);
+    assert_eq!(store(&mut jar, &at, "a=1"), SetCookieOutcome::Stored);
     assert_eq!(only(&jar).path, fits);
     let too_long = format!("/{}", "a".repeat(MAX_PATH_BYTES));
     let at = format!("https://example.com{too_long}/x");
@@ -49,12 +49,12 @@ fn a_path_attribute_at_the_bound_is_kept_and_a_longer_one_falls_back_to_the_defa
     let fits = format!("/{}", "p".repeat(MAX_PATH_BYTES - 1));
     assert_eq!(
         store(&mut jar, at, &format!("a=1; Path={fits}")),
-        StoreOutcome::Stored
+        SetCookieOutcome::Stored
     );
     let longer = format!("/{}", "p".repeat(MAX_PATH_BYTES));
     assert_eq!(
         store(&mut jar, at, &format!("b=1; Path={longer}")),
-        StoreOutcome::Stored
+        SetCookieOutcome::Stored
     );
     assert_eq!(jar.cookies()[0].path, fits);
     assert_eq!(jar.cookies()[1].path, "/app");
@@ -66,7 +66,7 @@ fn a_host_name_over_the_dns_bound_is_refused() {
     let fits = host_of(MAX_DOMAIN_BYTES);
     assert_eq!(
         store(&mut jar, &format!("https://{fits}/"), "a=1"),
-        StoreOutcome::Stored
+        SetCookieOutcome::Stored
     );
     let too_long = host_of(MAX_DOMAIN_BYTES + 1);
     assert_eq!(

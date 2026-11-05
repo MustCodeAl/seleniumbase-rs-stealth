@@ -8,11 +8,11 @@ use super::{Leg, StealthError, StealthSession, Wiring};
 use crate::client::ImpersonationProfile;
 use crate::http_session::HttpSession;
 use crate::mitm::MitmProxy;
-use seleniumbase_rs_scrape::challenge::mitigation::Mode;
-use seleniumbase_rs_scrape::egress::route::EgressRef;
-use seleniumbase_rs_scrape::ledger::events::ScraperEvent;
-use seleniumbase_rs_scrape::passport::identity::StealthIdentity;
-use seleniumbase_rs_scrape::passport::policy::{DemoteReason, EscalateReason, Transition};
+use seleniumbase_rs_scrape::challenge::mitigation::FetchKind;
+use seleniumbase_rs_scrape::egress::route::ProxyRoute;
+use seleniumbase_rs_scrape::ledger::events::ScrapeEvent;
+use seleniumbase_rs_scrape::passport::identity::Identity;
+use seleniumbase_rs_scrape::passport::policy::{DemoteReason, EscalateReason, Escalation};
 
 /// Starts the leg for `mode` presenting `identity` through `egress`.
 ///
@@ -23,27 +23,27 @@ use seleniumbase_rs_scrape::passport::policy::{DemoteReason, EscalateReason, Tra
 pub(super) async fn open_leg(
     wiring: &Wiring,
     mitm: &mut Option<MitmProxy>,
-    mode: Mode,
-    identity: &StealthIdentity,
-    egress: Option<&EgressRef>,
+    mode: FetchKind,
+    identity: &Identity,
+    egress: Option<&ProxyRoute>,
 ) -> Result<Leg, StealthError> {
     match mode {
-        Mode::Http => Ok(Leg::Http(HttpSession::from_identity(
+        FetchKind::Http => Ok(Leg::Http(HttpSession::from_identity(
             identity,
             egress.cloned(),
             wiring.http.clone(),
         )?)),
-        Mode::Browser => {
+        FetchKind::Browser => {
             let profile = ImpersonationProfile::from_fingerprint(&identity.fingerprint)?;
             let claimed = profile.major();
             let proxy = proxy_for(wiring, mitm, profile, egress).await?;
             let leg = BrowserLeg::launch(wiring, &proxy, identity, claimed).await?;
-            wiring.sink.emit(&ScraperEvent::IdentityRestored {
+            wiring.sink.emit(&ScrapeEvent::IdentityRestored {
                 cookies: identity.cookies.len(),
             });
             Ok(Leg::Browser(leg))
         }
-        // `Mode` lives in the scrape crate and may gain a mode this session has no leg for.
+        // `FetchKind` lives in the scrape crate and may gain a mode this session has no leg for.
         other => Err(seleniumbase_rs::SeleniumBaseError::stealth(format!(
             "the stealth session has no leg for the mode {other:?}"
         ))
@@ -56,7 +56,7 @@ async fn proxy_for(
     wiring: &Wiring,
     mitm: &mut Option<MitmProxy>,
     profile: ImpersonationProfile,
-    egress: Option<&EgressRef>,
+    egress: Option<&ProxyRoute>,
 ) -> Result<MitmProxy, StealthError> {
     if let Some(running) = mitm.as_ref() {
         running.swap_profile(profile)?;
@@ -78,7 +78,7 @@ impl StealthSession {
     ///
     /// A session already in the browser is left as it is. The cookies of the HTTP session move
     /// into the browser, which starts behind the MITM proxy with the same fingerprint and egress.
-    /// [`ScraperEvent::ModeChanged`] is emitted with [`EscalateReason::Manual`].
+    /// [`ScrapeEvent::FetchKindChanged`] is emitted with [`EscalateReason::Manual`].
     ///
     /// # Errors
     ///
@@ -87,16 +87,16 @@ impl StealthSession {
     /// when no browser can be started. On an error the session is as it was.
     #[tracing::instrument(skip_all)]
     pub async fn escalate(&mut self) -> Result<(), StealthError> {
-        if self.mode() == Mode::Browser {
+        if self.fetch_kind() == FetchKind::Browser {
             return Ok(());
         }
-        self.switch_to(Mode::Browser, Transition::Escalate(EscalateReason::Manual))
+        self.switch_to(FetchKind::Browser, Escalation::Escalate(EscalateReason::Manual))
             .await
     }
 
     /// Goes back to plain HTTP now, with the cookies the browser holds, and closes the browser.
     ///
-    /// A session already in HTTP mode is left as it is. [`ScraperEvent::ModeChanged`] is emitted
+    /// A session already in HTTP mode is left as it is. [`ScrapeEvent::FetchKindChanged`] is emitted
     /// with [`DemoteReason::Manual`].
     ///
     /// A browser that cannot be read any more (it crashed, say) does not trap the session: the
@@ -108,7 +108,7 @@ impl StealthSession {
     /// the session is as it was.
     #[tracing::instrument(skip_all)]
     pub async fn demote(&mut self) -> Result<(), StealthError> {
-        if self.mode() == Mode::Http {
+        if self.fetch_kind() == FetchKind::Http {
             return Ok(());
         }
         let identity = match self.synced_identity().await {
@@ -120,8 +120,8 @@ impl StealthSession {
         };
         self.move_to(
             identity,
-            Mode::Http,
-            Transition::Demote(DemoteReason::Manual),
+            FetchKind::Http,
+            Escalation::Demote(DemoteReason::Manual),
         )
         .await
     }
@@ -129,23 +129,23 @@ impl StealthSession {
     /// Takes the identity out of the leg now in use, moves to `mode`, and says why.
     pub(super) async fn switch_to(
         &mut self,
-        mode: Mode,
-        reason: Transition,
+        mode: FetchKind,
+        reason: Escalation,
     ) -> Result<(), StealthError> {
         let identity = self.synced_identity().await?;
         self.move_to(identity, mode, reason).await
     }
 
-    /// Presents `identity` in `mode` and emits [`ScraperEvent::ModeChanged`].
+    /// Presents `identity` in `mode` and emits [`ScrapeEvent::FetchKindChanged`].
     pub(super) async fn move_to(
         &mut self,
-        identity: StealthIdentity,
-        mode: Mode,
-        reason: Transition,
+        identity: Identity,
+        mode: FetchKind,
+        reason: Escalation,
     ) -> Result<(), StealthError> {
-        let from = self.mode();
+        let from = self.fetch_kind();
         self.enter(mode, identity).await?;
-        self.emit(&ScraperEvent::ModeChanged {
+        self.emit(&ScrapeEvent::FetchKindChanged {
             from,
             to: mode,
             reason,
@@ -160,10 +160,10 @@ impl StealthSession {
     /// so it is closed first ([`replace_browser`](Self::replace_browser)).
     pub(super) async fn enter(
         &mut self,
-        mode: Mode,
-        identity: StealthIdentity,
+        mode: FetchKind,
+        identity: Identity,
     ) -> Result<(), StealthError> {
-        if mode == Mode::Browser && self.mode() == Mode::Browser {
+        if mode == FetchKind::Browser && self.fetch_kind() == FetchKind::Browser {
             // Boxed: the future holds a stand-in leg and two launches, and the fetch loop that
             // reaches it through its mitigation steps would otherwise carry all of it.
             Box::pin(self.replace_browser(identity, None)).await?;
@@ -199,15 +199,15 @@ impl StealthSession {
     /// stays: the session goes on over HTTP with its old identity.
     pub(super) async fn replace_browser(
         &mut self,
-        identity: StealthIdentity,
-        reroute: Option<EgressRef>,
+        identity: Identity,
+        reroute: Option<ProxyRoute>,
     ) -> Result<bool, StealthError> {
         let old_identity = self.identity_with_cookies().await;
         let old_egress = self.egress.current.clone();
         let standby = open_leg(
             &self.wiring,
             &mut self.mitm,
-            Mode::Http,
+            FetchKind::Http,
             &old_identity,
             old_egress.as_ref(),
         )
@@ -228,7 +228,7 @@ impl StealthSession {
         let started = open_leg(
             &self.wiring,
             &mut self.mitm,
-            Mode::Browser,
+            FetchKind::Browser,
             &identity,
             self.egress.current.as_ref(),
         )
@@ -251,12 +251,12 @@ impl StealthSession {
 
     /// Puts the egress back and starts a browser again for `identity` after a replacement failed.
     /// If that fails too, the HTTP stand-in stays the leg in use.
-    async fn bring_back(&mut self, identity: StealthIdentity, egress: Option<EgressRef>) {
+    async fn bring_back(&mut self, identity: Identity, egress: Option<ProxyRoute>) {
         self.egress.current.clone_from(&egress);
         let started = open_leg(
             &self.wiring,
             &mut self.mitm,
-            Mode::Browser,
+            FetchKind::Browser,
             &identity,
             egress.as_ref(),
         )
@@ -272,7 +272,7 @@ impl StealthSession {
 
     /// The identity as it stands with the cookies the browser in use holds now. Nothing is emitted
     /// and nothing fails: a browser that cannot be read leaves the identity as it was.
-    async fn identity_with_cookies(&self) -> StealthIdentity {
+    async fn identity_with_cookies(&self) -> Identity {
         let now = self.now();
         let mut identity = self.identity.clone();
         if let Leg::Browser(leg) = &self.leg {
@@ -290,15 +290,15 @@ impl StealthSession {
     }
 
     /// The identity with the cookies the leg in use holds now, and its clearances refreshed. The
-    /// session keeps it as its identity. Emits [`ScraperEvent::IdentityExported`].
-    pub(super) async fn synced_identity(&mut self) -> Result<StealthIdentity, StealthError> {
+    /// session keeps it as its identity. Emits [`ScrapeEvent::IdentityExported`].
+    pub(super) async fn synced_identity(&mut self) -> Result<Identity, StealthError> {
         let identity = self.snapshot().await?;
         self.identity = identity.clone();
         Ok(identity)
     }
 
     /// Like [`synced_identity`](Self::synced_identity), without keeping the result.
-    pub(super) async fn snapshot(&self) -> Result<StealthIdentity, StealthError> {
+    pub(super) async fn snapshot(&self) -> Result<Identity, StealthError> {
         let now = self.now();
         match &self.leg {
             Leg::Http(http) => Ok(http.export_identity(&self.identity)),
@@ -306,7 +306,7 @@ impl StealthSession {
                 let mut identity = self.identity.clone();
                 identity.cookies = leg.cookies(now).await?;
                 identity.refresh_clearances(now);
-                self.emit(&ScraperEvent::IdentityExported {
+                self.emit(&ScrapeEvent::IdentityExported {
                     cookies: identity.cookies.len(),
                 });
                 Ok(identity)

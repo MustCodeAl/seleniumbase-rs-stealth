@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
 use seleniumbase_rs_mimic::http_session::{HttpError, HttpSession, Method};
-use seleniumbase_rs_scrape::ledger::events::{CollectingEventSink, ScraperEvent};
+use seleniumbase_rs_scrape::ledger::events::{CollectingEventSink, ScrapeEvent};
 use url::Url;
 
 use crate::site::{identity, now, Answer, Site};
@@ -177,8 +177,8 @@ async fn the_cookies_of_the_identity_are_sent_and_the_session_exports_the_new_on
     assert_eq!(exported.cookies.len(), 2);
     assert_eq!(base.cookies.len(), 1, "the base identity is not changed");
     let events = sink.events();
-    assert!(events.contains(&ScraperEvent::IdentityRestored { cookies: 1 }));
-    assert!(events.contains(&ScraperEvent::IdentityExported { cookies: 2 }));
+    assert!(events.contains(&ScrapeEvent::IdentityRestored { cookies: 1 }));
+    assert!(events.contains(&ScrapeEvent::IdentityExported { cookies: 2 }));
     let session_again =
         HttpSession::from_identity(&exported, None, site.options(&[HOST])).expect("a session");
     session_again

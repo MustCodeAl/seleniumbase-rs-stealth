@@ -14,8 +14,8 @@ use seleniumbase_rs_codec::measurement::{self, WireMeasurement};
 use seleniumbase_rs_codec::ja4::{Ja4, Ja4AField};
 use seleniumbase_rs_codec::BrowserKind;
 use seleniumbase_rs_mimic::mitm::{MitmOptions, MitmProxy};
-use seleniumbase_rs_scrape::egress::route::EgressRef;
-use seleniumbase_rs_scrape::ledger::events::{CollectingEventSink, ScraperEvent};
+use seleniumbase_rs_scrape::egress::route::ProxyRoute;
+use seleniumbase_rs_scrape::ledger::events::{CollectingEventSink, ScrapeEvent};
 use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt as _};
 use tokio::net::TcpStream;
 use tokio_btls::SslStream;
@@ -135,7 +135,7 @@ async fn a_websocket_echoes_through_the_proxy_with_the_accept_key_untouched() {
     assert_eq!((stats.websockets, stats.forwarded), (1, 1), "{stats:?}");
     assert!(sink.events().iter().any(|event| matches!(
         event,
-        ScraperEvent::Request { status: 101, url, .. } if url.as_str().contains(ECHO_PATH)
+        ScrapeEvent::Request { status: 101, url, .. } if url.as_str().contains(ECHO_PATH)
     )));
     assert!(eventually(|| origin.closed() == 1).await);
 }
@@ -513,7 +513,7 @@ async fn a_websocket_leaves_through_the_egress_with_its_credentials() {
         .ca(Arc::clone(&ca))
         .trust_upstream_root(origin.root());
     let egress =
-        EgressRef::parse(&egress_proxy.spec(Some(("alice", "s3cret"))), None).expect("an egress");
+        ProxyRoute::parse(&egress_proxy.spec(Some(("alice", "s3cret"))), None).expect("an egress");
     let (mitm, _sink) = start_mitm(Some(egress), options).await;
     let mut tls = open_echo(&mitm, &der(&ca), origin.addr().port()).await;
 
@@ -665,7 +665,7 @@ async fn a_plain_ws_handshake_in_a_tunnel_is_relayed_without_tls_and_echoes() {
     assert!(
         sink.events().iter().any(|event| matches!(
             event,
-            ScraperEvent::Request { status: 101, url: reported, .. } if reported.as_str() == url
+            ScrapeEvent::Request { status: 101, url: reported, .. } if reported.as_str() == url
         )),
         "{:?}",
         sink.events()

@@ -8,7 +8,7 @@ use tracing_subscriber::fmt::MakeWriter;
 
 use super::*;
 use crate::ledger::events::fixtures::{every_event, SECRETS};
-use crate::passport::identity::fixtures::egress;
+use crate::passport::identity::fixtures::proxy;
 
 /// A writer that keeps what the subscriber prints.
 #[derive(Clone, Default)]
@@ -37,7 +37,7 @@ impl<'a> MakeWriter<'a> for Buffer {
 }
 
 /// What a subscriber that lets events up to `level` through prints for `event`.
-fn log_at(level: Level, event: &ScraperEvent) -> String {
+fn log_at(level: Level, event: &ScrapeEvent) -> String {
     let buffer = Buffer::default();
     let subscriber = tracing_subscriber::fmt()
         .with_writer(buffer.clone())
@@ -50,7 +50,7 @@ fn log_at(level: Level, event: &ScraperEvent) -> String {
     String::from_utf8(bytes).expect("the output is text")
 }
 
-fn log(event: &ScraperEvent) -> String {
+fn log(event: &ScrapeEvent) -> String {
     log_at(Level::TRACE, event)
 }
 
@@ -135,8 +135,8 @@ fn a_filtered_level_prints_nothing() {
 
 #[test]
 fn an_egress_change_names_the_proxies_and_the_direct_connection() {
-    let rotated = ScraperEvent::EgressRotated {
-        from: Some(egress("p1.example")),
+    let rotated = ScrapeEvent::ProxyRotated {
+        from: Some(proxy("p1.example")),
         to: None,
     };
     let line = log(&rotated);
@@ -147,7 +147,7 @@ fn an_egress_change_names_the_proxies_and_the_direct_connection() {
 #[test]
 fn the_values_of_an_event_are_fields() {
     let line = log(&every_event()[0]);
-    for field in ["status=200", "elapsed_ms=31", "mode=Http"] {
+    for field in ["status=200", "elapsed_ms=31", "fetch_kind=Http"] {
         assert!(line.contains(field), "{field} missing from {line}");
     }
     let changed = log(&every_event()[4]);

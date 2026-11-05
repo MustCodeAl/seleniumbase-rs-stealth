@@ -2,12 +2,12 @@
 
 use std::time::Duration;
 
-use super::ScraperEvent;
-use crate::challenge::detect::{ChallengeKind, Vendor};
-use crate::challenge::mitigation::{Action, Mode};
+use super::ScrapeEvent;
+use crate::challenge::detect::{ChallengeKind, ProtectionVendor};
+use crate::challenge::mitigation::{Mitigation, FetchKind};
 use crate::egress::redact::RedactedUrl;
-use crate::passport::identity::fixtures::egress;
-use crate::passport::policy::{EscalateReason, Transition};
+use crate::passport::identity::fixtures::proxy;
+use crate::passport::policy::{EscalateReason, Escalation};
 
 /// A URL with userinfo, a sensitive query value and a fragment, each marked with a word the
 /// tests look for.
@@ -22,54 +22,54 @@ fn url() -> RedactedUrl {
 }
 
 /// One event of every variant, in the order of the enum.
-pub(crate) fn every_event() -> Vec<ScraperEvent> {
+pub(crate) fn every_event() -> Vec<ScrapeEvent> {
     vec![
-        ScraperEvent::Request {
+        ScrapeEvent::Request {
             url: url(),
             status: 200,
-            mode: Mode::Http,
+            fetch_kind: FetchKind::Http,
             elapsed_ms: 31,
         },
-        ScraperEvent::ChallengeDetected {
+        ScrapeEvent::ChallengeDetected {
             url: url(),
             kind: ChallengeKind::JsChallenge,
-            vendor: Some(Vendor::Cloudflare),
-            mode: Mode::Http,
+            vendor: Some(ProtectionVendor::Cloudflare),
+            fetch_kind: FetchKind::Http,
         },
-        ScraperEvent::ChallengeSolved {
+        ScrapeEvent::ChallengeSolved {
             url: url(),
             kind: ChallengeKind::Interactive,
             attempts: 2,
             elapsed_ms: 4_500,
         },
-        ScraperEvent::ActionChosen {
+        ScrapeEvent::ActionChosen {
             site: "example.com".to_owned(),
-            action: Action::Retry {
+            action: Mitigation::Retry {
                 after: Duration::from_millis(1_500),
             },
         },
-        ScraperEvent::ModeChanged {
-            from: Mode::Http,
-            to: Mode::Browser,
-            reason: Transition::Escalate(EscalateReason::Challenge(ChallengeKind::JsChallenge)),
+        ScrapeEvent::FetchKindChanged {
+            from: FetchKind::Http,
+            to: FetchKind::Browser,
+            reason: Escalation::Escalate(EscalateReason::Challenge(ChallengeKind::JsChallenge)),
         },
-        ScraperEvent::EgressRotated {
-            from: Some(egress("p1.example")),
+        ScrapeEvent::ProxyRotated {
+            from: Some(proxy("p1.example")),
             to: None,
         },
-        ScraperEvent::ProfileRotated {
+        ScrapeEvent::FingerprintRotated {
             from_seed: 7,
             to_seed: 8,
         },
-        ScraperEvent::ClearanceExpiring {
+        ScrapeEvent::ClearanceExpiring {
             site: "example.com".to_owned(),
             remaining_secs: 90,
         },
-        ScraperEvent::CooldownStarted {
+        ScrapeEvent::CooldownStarted {
             site: "example.com".to_owned(),
             until: 1_800_000_900,
         },
-        ScraperEvent::IdentityExported { cookies: 3 },
-        ScraperEvent::IdentityRestored { cookies: 3 },
+        ScrapeEvent::IdentityExported { cookies: 3 },
+        ScrapeEvent::IdentityRestored { cookies: 3 },
     ]
 }

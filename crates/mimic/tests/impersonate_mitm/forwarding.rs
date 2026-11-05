@@ -9,7 +9,7 @@ use seleniumbase_rs_codec::header_spec::RequestShape;
 use seleniumbase_rs_codec::ja4::Ja4;
 use seleniumbase_rs_mimic::mitm::{MitmOptions, MitmProxy};
 use seleniumbase_rs_mimic::tls_server::ALPN_HTTP1;
-use seleniumbase_rs_scrape::ledger::events::{CollectingEventSink, ScraperEvent};
+use seleniumbase_rs_scrape::ledger::events::{CollectingEventSink, ScrapeEvent};
 use tokio::net::TcpStream;
 
 use crate::support::{
@@ -81,7 +81,7 @@ async fn a_forwarded_request_carries_the_measured_ja4_and_akamai_string() {
     assert_eq!(preface.header(":path"), Some("/page?q=1"));
     assert!(sink.events().iter().any(|event| matches!(
         event,
-        ScraperEvent::Request { status: 200, url, .. } if url.as_str().contains("/page")
+        ScrapeEvent::Request { status: 200, url, .. } if url.as_str().contains("/page")
     )));
     assert_eq!(mitm.stats().forwarded, 1);
 }
@@ -227,7 +227,7 @@ async fn an_origin_with_an_untrusted_certificate_gets_an_empty_502() {
     assert!(sink
         .events()
         .iter()
-        .any(|event| matches!(event, ScraperEvent::Request { status: 502, .. })));
+        .any(|event| matches!(event, ScrapeEvent::Request { status: 502, .. })));
 }
 
 /// Sends `request` through a fresh tunnel and returns the status; the origin must see nothing.

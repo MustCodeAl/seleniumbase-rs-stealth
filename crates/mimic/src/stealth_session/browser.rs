@@ -17,7 +17,7 @@ use seleniumbase_rs::sb_cdp::{Browser, Page};
 use seleniumbase_rs_scrape::challenge::detect::{ChallengeKind, Detection};
 use seleniumbase_rs_scrape::error::ScrapeError;
 use seleniumbase_rs_scrape::jar::store::CookieJar;
-use seleniumbase_rs_scrape::passport::identity::StealthIdentity;
+use seleniumbase_rs_scrape::passport::identity::Identity;
 use seleniumbase_rs_scrape::runtime::cdp::{self, NavResponse, PageSnapshot};
 
 /// The protocol command that names the browser product and version.
@@ -48,7 +48,7 @@ impl BrowserLeg {
     pub(super) async fn launch(
         wiring: &Wiring,
         mitm: &MitmProxy,
-        identity: &StealthIdentity,
+        identity: &Identity,
         measured: u32,
     ) -> Result<Self, StealthError> {
         let options = mitm
@@ -71,7 +71,7 @@ impl BrowserLeg {
     /// Checks the version of a browser that just started, opens its tab and sets the cookies.
     async fn settle(
         browser: &Browser,
-        identity: &StealthIdentity,
+        identity: &Identity,
         measured: u32,
         now: u64,
     ) -> Result<Page, StealthError> {

@@ -48,7 +48,7 @@ fn a_clock_that_steps_back_leaves_a_jar_that_still_loads() {
         "sending never lowers the last access"
     );
     let outcome = jar.store(&at, "b=2; Max-Age=999999999", NOW + 3);
-    assert_eq!(outcome, StoreOutcome::Replaced);
+    assert_eq!(outcome, SetCookieOutcome::Replaced);
     let json = serde_json::to_string(&jar).expect("serializes");
     let back: CookieJar = serde_json::from_str(&json).expect("a jar the library wrote loads");
     assert_eq!(back, jar);

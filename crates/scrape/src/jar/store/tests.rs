@@ -19,11 +19,11 @@ fn url(text: &str) -> Url {
     Url::parse(text).unwrap_or_else(|e| panic!("bad test URL {text}: {e}"))
 }
 
-fn store_at(jar: &mut CookieJar, at: &str, header: &str, now: u64) -> StoreOutcome {
+fn store_at(jar: &mut CookieJar, at: &str, header: &str, now: u64) -> SetCookieOutcome {
     jar.store(&url(at), header, now)
 }
 
-fn store(jar: &mut CookieJar, at: &str, header: &str) -> StoreOutcome {
+fn store(jar: &mut CookieJar, at: &str, header: &str) -> SetCookieOutcome {
     store_at(jar, at, header, NOW)
 }
 
@@ -31,8 +31,8 @@ fn header(jar: &mut CookieJar, at: &str) -> Option<String> {
     jar.header_for(&url(at), SAME, NOW)
 }
 
-fn ignored(reason: IgnoreReason) -> StoreOutcome {
-    StoreOutcome::Ignored(reason)
+fn ignored(reason: IgnoreReason) -> SetCookieOutcome {
+    SetCookieOutcome::Ignored(reason)
 }
 
 fn only(jar: &CookieJar) -> &StoredCookie {
@@ -45,7 +45,7 @@ fn a_host_only_cookie_goes_to_its_host_alone() {
     let mut jar = CookieJar::new();
     assert_eq!(
         store(&mut jar, "https://www.example.com/", "a=1"),
-        StoreOutcome::Stored
+        SetCookieOutcome::Stored
     );
     let cookie = only(&jar);
     assert!(cookie.host_only);
@@ -69,7 +69,7 @@ fn a_domain_cookie_reaches_subdomains_but_not_look_alikes() {
         "https://www.example.com/",
         "a=1; Domain=example.com",
     );
-    assert_eq!(outcome, StoreOutcome::Stored);
+    assert_eq!(outcome, SetCookieOutcome::Stored);
     assert!(!only(&jar).host_only);
     for to in [
         "https://example.com/",
@@ -92,7 +92,7 @@ fn the_default_path_comes_from_the_request() {
     let mut jar = CookieJar::new();
     assert_eq!(
         store(&mut jar, "https://example.com/app/page", "a=1"),
-        StoreOutcome::Stored
+        SetCookieOutcome::Stored
     );
     assert_eq!(only(&jar).path, "/app");
     for to in ["https://example.com/app", "https://example.com/app/x/y"] {
@@ -109,9 +109,9 @@ fn expired_cookies_are_purged_and_deletions_remove() {
     let at = "https://example.com/";
     assert_eq!(
         store(&mut jar, at, "short=1; Max-Age=10"),
-        StoreOutcome::Stored
+        SetCookieOutcome::Stored
     );
-    assert_eq!(store(&mut jar, at, "keep=1"), StoreOutcome::Stored);
+    assert_eq!(store(&mut jar, at, "keep=1"), SetCookieOutcome::Stored);
     let later = jar.header_for(&url(at), SAME, NOW + 10);
     assert_eq!(
         later.as_deref(),
@@ -121,7 +121,7 @@ fn expired_cookies_are_purged_and_deletions_remove() {
     assert_eq!(jar.len(), 1, "header_for purged the expired cookie");
     assert_eq!(
         store(&mut jar, at, "keep=1; Max-Age=0"),
-        StoreOutcome::Deleted
+        SetCookieOutcome::Deleted
     );
     assert!(jar.is_empty());
     assert_eq!(
@@ -130,7 +130,7 @@ fn expired_cookies_are_purged_and_deletions_remove() {
             at,
             "gone=1; Expires=Thu, 01 Jan 1970 00:00:01 GMT"
         ),
-        StoreOutcome::Deleted
+        SetCookieOutcome::Deleted
     );
     assert!(jar.is_empty(), "an expired cookie is never stored");
     store(&mut jar, at, "x=1; Max-Age=5");
@@ -143,11 +143,11 @@ fn expired_cookies_are_purged_and_deletions_remove() {
 fn an_overwrite_keeps_the_creation_time() {
     let mut jar = CookieJar::new();
     let at = "https://example.com/";
-    assert_eq!(store_at(&mut jar, at, "a=1", NOW), StoreOutcome::Stored);
-    assert_eq!(store_at(&mut jar, at, "b=2", NOW + 5), StoreOutcome::Stored);
+    assert_eq!(store_at(&mut jar, at, "a=1", NOW), SetCookieOutcome::Stored);
+    assert_eq!(store_at(&mut jar, at, "b=2", NOW + 5), SetCookieOutcome::Stored);
     assert_eq!(
         store_at(&mut jar, at, "a=3; HttpOnly", NOW + 10),
-        StoreOutcome::Replaced
+        SetCookieOutcome::Replaced
     );
     let a = &jar.cookies()[0];
     assert_eq!(
@@ -157,7 +157,7 @@ fn an_overwrite_keeps_the_creation_time() {
     assert_eq!(header(&mut jar, at).as_deref(), Some("a=3; b=2"));
     assert_eq!(
         store(&mut jar, at, "a=4; Path=/x"),
-        StoreOutcome::Stored,
+        SetCookieOutcome::Stored,
         "another path is another cookie"
     );
 }
@@ -174,7 +174,7 @@ fn the_cookie_header_puts_longer_paths_first_then_older_cookies() {
     ] {
         assert_eq!(
             store_at(&mut jar, at, header_text, NOW - 3 + offset),
-            StoreOutcome::Stored
+            SetCookieOutcome::Stored
         );
     }
     let sent = header(&mut jar, at);
@@ -193,11 +193,11 @@ fn a_nameless_cookie_is_sent_as_its_value() {
     let mut jar = CookieJar::new();
     assert_eq!(
         store(&mut jar, "https://example.com/", "token"),
-        StoreOutcome::Stored
+        SetCookieOutcome::Stored
     );
     assert_eq!(
         store(&mut jar, "https://example.com/", "x=1"),
-        StoreOutcome::Stored
+        SetCookieOutcome::Stored
     );
     assert_eq!(
         header(&mut jar, "https://example.com/").as_deref(),
@@ -215,7 +215,7 @@ fn same_site_follows_the_request_context() {
         "default=1",
         "none=1; SameSite=None; Secure",
     ] {
-        assert_eq!(store(&mut jar, at, header_text), StoreOutcome::Stored);
+        assert_eq!(store(&mut jar, at, header_text), SetCookieOutcome::Stored);
     }
     let mut sent = |context| jar.header_for(&url(at), context, NOW);
     let all = Some("strict=1; lax=1; default=1; none=1".to_owned());
@@ -252,7 +252,7 @@ fn urls_that_cannot_carry_cookies_are_refused() {
 fn fill(jar: &mut CookieJar, host: &str, tag: &str, count: usize, start: u64) {
     for (i, at) in (start..).take(count).enumerate() {
         let outcome = store_at(jar, &format!("https://{host}/"), &format!("{tag}{i}=1"), at);
-        assert_eq!(outcome, StoreOutcome::Stored);
+        assert_eq!(outcome, SetCookieOutcome::Stored);
     }
 }
 
@@ -271,11 +271,11 @@ fn the_per_site_bound_evicts_insecure_least_recently_used_cookies_first() {
     let at = NOW + 2_000;
     assert_eq!(
         store_at(&mut jar, "https://www.example.com/", "c0=again", at),
-        StoreOutcome::Replaced
+        SetCookieOutcome::Replaced
     );
     assert_eq!(
         store_at(&mut jar, "https://example.com/", "new=1", at),
-        StoreOutcome::Stored
+        SetCookieOutcome::Stored
     );
     let names: Vec<&str> = jar.cookies().iter().map(|c| c.name.as_str()).collect();
     assert_eq!(
@@ -605,7 +605,7 @@ fn generated_exchanges_keep_every_invariant() {
         let (at, header_text) = random_exchange(&mut rng);
         let origin_host = url(&at).host_str().expect("host").to_owned();
         let outcome = jar.store(&url(&at), &header_text, now);
-        if outcome == StoreOutcome::Stored {
+        if outcome == SetCookieOutcome::Stored {
             // A new cookie is pushed last and is never the one evicted.
             let latest = jar.cookies().last().expect("stored");
             let reachable = if latest.host_only {

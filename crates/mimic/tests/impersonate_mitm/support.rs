@@ -34,7 +34,7 @@ use seleniumbase_rs_mimic::mitm::{MitmOptions, MitmProxy};
 use seleniumbase_rs_mimic::tls_server::{
     accept, acceptor, EphemeralCa, ALPN_HTTP1, DEFAULT_HANDSHAKE_TIMEOUT,
 };
-use seleniumbase_rs_scrape::egress::route::EgressRef;
+use seleniumbase_rs_scrape::egress::route::ProxyRoute;
 use seleniumbase_rs_scrape::ledger::events::CollectingEventSink;
 use seleniumbase_rs_scrape::runtime::capture::stream::{
     http1_response, read_h2c_preface, read_http1_request, Http1Request,
@@ -79,7 +79,7 @@ pub fn der(ca: &EphemeralCa) -> Vec<u8> {
 
 /// A started proxy and the sink it reports to.
 pub async fn start_mitm(
-    egress: Option<EgressRef>,
+    egress: Option<ProxyRoute>,
     options: MitmOptions,
 ) -> (MitmProxy, CollectingEventSink) {
     let sink = CollectingEventSink::new();

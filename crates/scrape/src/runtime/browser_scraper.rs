@@ -1,4 +1,4 @@
-//! `BrowserScraper`, the browser-only scraper that fetches, solves challenges, and rotates profile and egress.
+//! `BrowserScraper`, the browser-only scraper that fetches, solves challenges, and rotates profile and proxy.
 //!
 //! A [`BrowserScraper`] drives one real Chrome through [`sb_cdp`](seleniumbase_rs::sb_cdp). It does no TLS
 //! spoofing: Chrome's own handshake leaves the machine, so the page sees a genuine browser. What
@@ -12,21 +12,21 @@
 //! - a real page ends the loop;
 //! - a challenge is solved in the browser ([`solve_challenge`](BrowserScraper::solve_challenge)),
 //!   then the page is loaded again with the clearance it earned;
-//! - repeated challenges change the egress ([`rotate_egress`](BrowserScraper::rotate_egress)) and
-//!   then the whole browser profile ([`rotate_profile`](BrowserScraper::rotate_profile));
+//! - repeated challenges change the proxy ([`rotate_proxy`](BrowserScraper::rotate_proxy)) and
+//!   then the whole browser profile ([`rotate_fingerprint`](BrowserScraper::rotate_fingerprint));
 //! - a block or a rate limit starts a cooldown for the site, which the next fetch respects;
 //! - when the attempts allowed run out the fetch fails with [`ScrapeError`].
 //!
-//! What each site did is kept in a [`StateStore`], and what the scraper does is reported to an
+//! What each site did is kept in a [`Ledger`], and what the scraper does is reported to an
 //! [`EventSink`], with every URL and proxy redacted.
 //!
 //! # Egress and profile
 //!
-//! Proxies are given as `(spec, country)` pairs. The browser leaves through one egress at a time,
+//! Proxies are given as `(spec, country)` pairs. The browser leaves through one proxy at a time,
 //! in a browser context of its own, and the fingerprint, language and time zone follow the country
-//! of that egress. An egress changes only when a rotation is asked for or the policy asks for one;
-//! a clearance cookie belongs to the address that earned it, so the cookies stay with the egress.
-//! An egress in the same country is a new context; one in another country also starts the browser
+//! of that proxy. An proxy changes only when a rotation is asked for or the policy asks for one;
+//! a clearance cookie belongs to the address that earned it, so the cookies stay with the proxy.
+//! An proxy in the same country is a new context; one in another country also starts the browser
 //! again, with the profile in that country's language and time zone.
 //!
 //! # Lifetime
@@ -42,8 +42,8 @@
 //!
 //! # async fn demo() -> Result<(), seleniumbase_rs_scrape::error::ScrapeError> {
 //! let mut scraper = BrowserScraper::builder()
-//!     .with_geo_proxies([("http://user:pass@de.proxy.example:8080", CountryCode::new("DE")?)])?
-//!     .with_max_challenge_attempts(4)
+//!     .geo_proxies([("http://user:pass@de.proxy.example:8080", CountryCode::new("DE")?)])?
+//!     .max_challenge_attempts(4)
 //!     .build()
 //!     .await?;
 //! let page = scraper.fetch("https://example.com/").await?;
@@ -62,15 +62,15 @@ use crate::challenge::mitigation::MitigationPolicy;
 use crate::egress::geo::GeoResolver;
 use crate::egress::pool::ProxyPool;
 use crate::egress::redact::RedactedUrl;
-use crate::egress::route::{EgressKey, EgressRef};
+use crate::egress::route::{ProxyKey, ProxyRoute};
 use crate::error::ScrapeError;
-use crate::ledger::events::{EventSink, ScraperEvent};
-use crate::ledger::state::StateStore;
+use crate::ledger::events::{EventSink, ScrapeEvent};
+use crate::ledger::state::Ledger;
 use seleniumbase_rs::evasion::fingerprint::Fingerprint;
 use seleniumbase_rs::sb_cdp::{Browser, LaunchOptionsBuilder, Page, SessionStore};
 
-use super::cdp::{EgressLocale, NavResponse};
-use super::egress_switch::EgressSwitch;
+use super::cdp::{ProxyLocale, NavResponse};
+use super::proxy_switch::ProxySwitch;
 
 mod builder;
 mod fetch;
@@ -87,8 +87,8 @@ pub use launcher::{BrowserLauncher, ChromeLauncher};
 struct Wiring {
     launch: LaunchOptionsBuilder,
     launcher: Arc<dyn BrowserLauncher>,
-    switch: Box<dyn EgressSwitch>,
-    store: Arc<dyn StateStore>,
+    switch: Box<dyn ProxySwitch>,
+    store: Arc<dyn Ledger>,
     sink: Arc<dyn EventSink>,
     geo: Arc<dyn GeoResolver>,
     policy: MitigationPolicy,
@@ -107,7 +107,7 @@ impl Wiring {
         current: Option<&Current>,
     ) -> Result<Page, ScrapeError> {
         match current {
-            Some(current) => self.switch.switch(browser, Some(&current.egress)).await,
+            Some(current) => self.switch.switch(browser, Some(&current.proxy)).await,
             None => Ok(browser.default_page().await?),
         }
     }
@@ -121,19 +121,19 @@ struct Persona {
     major: Option<u32>,
 }
 
-/// The egress the browser leaves through now, with the locale of its country.
+/// The proxy the browser leaves through now, with the locale of its country.
 #[derive(Clone)]
 struct Current {
-    egress: EgressRef,
-    placed: EgressLocale,
+    proxy: ProxyRoute,
+    placed: ProxyLocale,
 }
 
-/// The egress pool and the egress in use.
+/// The proxy pool and the proxy in use.
 struct Egress {
     pool: Option<ProxyPool>,
     size: usize,
     current: Option<Current>,
-    /// The site fetched last, so a rotation can keep a site on one egress when the pool does.
+    /// The site fetched last, so a rotation can keep a site on one proxy when the pool does.
     site: Option<String>,
 }
 
@@ -148,14 +148,14 @@ pub struct BrowserFetch {
     pub headers: Vec<(String, String)>,
     /// The rendered page, with the changes scripts made.
     pub body: String,
-    /// What detection found. The kind is [`ChallengeKind::None`] for a page returned by a fetch.
+    /// What detection found. The kind is [`ChallengeKind::Clear`] for a page returned by a fetch.
     pub detection: Detection,
     /// How many loads the fetch took, counting from one.
     pub attempts: u32,
     /// The challenge that was solved on the way, if one was.
     pub solved: Option<ChallengeKind>,
-    /// The egress the page came through; `None` for the direct connection.
-    pub egress: Option<EgressKey>,
+    /// The proxy the page came through; `None` for the direct connection.
+    pub proxy: Option<ProxyKey>,
 }
 
 impl fmt::Debug for BrowserFetch {
@@ -169,7 +169,7 @@ impl fmt::Debug for BrowserFetch {
             .field("detection", &self.detection.kind)
             .field("attempts", &self.attempts)
             .field("solved", &self.solved)
-            .field("egress", &self.egress)
+            .field("proxy", &self.proxy)
             .finish()
     }
 }
@@ -180,19 +180,19 @@ pub struct BrowserScraper {
     page: Page,
     wiring: Wiring,
     persona: Persona,
-    egress: Egress,
+    proxy: Egress,
     /// The answer to the navigation that led to the page now open.
     last: Option<NavResponse>,
 }
 
 impl fmt::Debug for BrowserScraper {
-    /// The tab, the seed and the egress key; never a proxy credential or a cookie.
+    /// The tab, the seed and the proxy key; never a proxy credential or a cookie.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("BrowserScraper")
             .field("page", &self.page.id())
             .field("seed", &self.persona.seed)
-            .field("egress", &self.current_key())
-            .field("egresses", &self.egress.size)
+            .field("proxy", &self.current_key())
+            .field("egresses", &self.proxy.size)
             .finish_non_exhaustive()
     }
 }
@@ -204,7 +204,7 @@ impl BrowserScraper {
         BrowserScraperBuilder::new()
     }
 
-    /// The tab the scraper loads pages in. It changes when the egress or the profile does.
+    /// The tab the scraper loads pages in. It changes when the proxy or the profile does.
     #[must_use]
     pub fn page(&self) -> &Page {
         &self.page
@@ -228,18 +228,18 @@ impl BrowserScraper {
         self.persona.seed
     }
 
-    /// The egress the browser leaves through; `None` for the direct connection.
+    /// The proxy the browser leaves through; `None` for the direct connection.
     #[must_use]
-    pub fn egress(&self) -> Option<&EgressKey> {
-        self.egress
+    pub fn proxy_route(&self) -> Option<&ProxyKey> {
+        self.proxy
             .current
             .as_ref()
-            .map(|current| current.egress.key())
+            .map(|current| current.proxy.key())
     }
 
     /// The sessions saved with [`save_session`](Self::save_session).
     #[must_use]
-    pub fn sessions(&self) -> &SessionStore {
+    pub fn session_store(&self) -> &SessionStore {
         &self.wiring.sessions
     }
 
@@ -260,12 +260,12 @@ impl BrowserScraper {
     }
 
     /// Hands an event to the sink.
-    fn emit(&self, event: &ScraperEvent) {
+    fn emit(&self, event: &ScrapeEvent) {
         self.wiring.sink.emit(event);
     }
 
-    /// The key of the egress in use, owned.
-    fn current_key(&self) -> Option<EgressKey> {
-        self.egress().cloned()
+    /// The key of the proxy in use, owned.
+    fn current_key(&self) -> Option<ProxyKey> {
+        self.proxy_route().cloned()
     }
 }

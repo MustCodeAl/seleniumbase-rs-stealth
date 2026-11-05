@@ -17,12 +17,12 @@ use super::request::parse_url;
 use super::HttpSession;
 use seleniumbase_rs_scrape::challenge::detect::{ChallengeKind, Detection};
 use seleniumbase_rs_scrape::challenge::mitigation::{
-    Action, AttemptContext, MitigationPolicy, Mode,
+    Mitigation, AttemptContext, MitigationPolicy, FetchKind,
 };
-use seleniumbase_rs_scrape::ledger::events::ScraperEvent;
-use seleniumbase_rs_scrape::ledger::state::DomainState;
-use seleniumbase_rs_scrape::passport::identity::StealthIdentity;
-use seleniumbase_rs_scrape::passport::policy::{EscalateReason, SessionPolicy, Transition};
+use seleniumbase_rs_scrape::ledger::events::ScrapeEvent;
+use seleniumbase_rs_scrape::ledger::state::SiteRecord;
+use seleniumbase_rs_scrape::passport::identity::Identity;
+use seleniumbase_rs_scrape::passport::policy::{EscalateReason, EscalationPolicy, Escalation};
 
 /// Where a fetch stands, as the mitigation policy needs to know it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -32,7 +32,7 @@ pub struct Attempt {
     /// The challenges the site showed in a row before this reply.
     pub previous_challenges: u32,
     /// Whether another egress is available.
-    pub can_rotate_egress: bool,
+    pub can_rotate_proxy: bool,
     /// Whether a browser is available to take over.
     pub can_escalate: bool,
 }
@@ -43,7 +43,7 @@ impl Default for Attempt {
         Self {
             number: 1,
             previous_challenges: 0,
-            can_rotate_egress: false,
+            can_rotate_proxy: false,
             can_escalate: true,
         }
     }
@@ -55,7 +55,7 @@ pub struct Rules {
     /// What to do about a challenge.
     pub mitigation: MitigationPolicy,
     /// When the session changes mode.
-    pub session: SessionPolicy,
+    pub session: EscalationPolicy,
 }
 
 /// What a reply means for the session.
@@ -64,16 +64,16 @@ pub struct Verdict {
     /// Whether the reply is a challenge, and the evidence.
     pub detection: Detection,
     /// What the mitigation policy chose.
-    pub action: Action,
+    pub action: Mitigation,
     /// Whether the session changes mode because of it.
-    pub transition: Transition,
+    pub transition: Escalation,
 }
 
 impl Verdict {
     /// Whether the reply is a real answer: it is not a challenge, a block or a rate limit.
     #[must_use]
     pub fn is_clear(&self) -> bool {
-        self.detection.kind == ChallengeKind::None
+        self.detection.kind == ChallengeKind::Clear
     }
 }
 
@@ -99,32 +99,32 @@ impl HttpSession {
         reply: &HttpReply,
         attempt: &Attempt,
         rules: &Rules,
-        identity: &StealthIdentity,
+        identity: &Identity,
     ) -> Verdict {
         let detection = reply.detect();
-        let challenged = detection.kind != ChallengeKind::None;
+        let challenged = detection.kind != ChallengeKind::Clear;
         let context = AttemptContext {
             attempt: attempt.number,
-            mode: Mode::Http,
+            fetch_kind: FetchKind::Http,
             consecutive_challenges: attempt
                 .previous_challenges
                 .saturating_add(u32::from(challenged)),
-            can_rotate_egress: attempt.can_rotate_egress,
+            can_rotate_proxy: attempt.can_rotate_proxy,
             can_escalate: attempt.can_escalate,
             now: self.now(),
         };
         let action = rules.mitigation.decide(&detection, &context);
         let transition = rules
             .session
-            .after_fetch(Mode::Http, &detection, &action, identity);
+            .after_fetch(FetchKind::Http, &detection, &action, identity);
         if challenged {
-            self.emit(&ScraperEvent::ChallengeDetected {
+            self.emit(&ScrapeEvent::ChallengeDetected {
                 url: reply.redacted_url(),
                 kind: detection.kind,
                 vendor: detection.evidence.vendor,
-                mode: Mode::Http,
+                fetch_kind: FetchKind::Http,
             });
-            self.emit(&ScraperEvent::ActionChosen {
+            self.emit(&ScrapeEvent::ActionChosen {
                 site: site_name(reply.url()),
                 action,
             });
@@ -147,7 +147,7 @@ impl HttpSession {
         url: &str,
         attempt: &Attempt,
         rules: &Rules,
-        identity: &StealthIdentity,
+        identity: &Identity,
     ) -> Result<Fetched, HttpError> {
         let reply = self.request(Method::GET, url).send().await?;
         let verdict = self.assess(&reply, attempt, rules, identity);
@@ -167,21 +167,21 @@ impl HttpSession {
     pub fn preflight(
         &self,
         url: &str,
-        identity: &StealthIdentity,
-        state: Option<&DomainState>,
+        identity: &Identity,
+        state: Option<&SiteRecord>,
         rules: &Rules,
-    ) -> Result<Transition, HttpError> {
+    ) -> Result<Escalation, HttpError> {
         let url = parse_url(url)?;
         let site = site_name(&url);
         let now = self.now();
         let current = self.identity_at(identity, now);
         let transition = rules
             .session
-            .before_fetch(Mode::Http, &current, &site, state, now);
-        if let Transition::Escalate(EscalateReason::ClearanceExpiring { remaining_secs }) =
+            .before_fetch(FetchKind::Http, &current, &site, state, now);
+        if let Escalation::Escalate(EscalateReason::ClearanceExpiring { remaining_secs }) =
             transition
         {
-            self.emit(&ScraperEvent::ClearanceExpiring {
+            self.emit(&ScrapeEvent::ClearanceExpiring {
                 site,
                 remaining_secs,
             });
@@ -192,9 +192,9 @@ impl HttpSession {
     /// The identity `base` with the cookies of this session in it, and the clearances found in
     /// them. Emits `IdentityExported`.
     #[must_use]
-    pub fn export_identity(&self, base: &StealthIdentity) -> StealthIdentity {
+    pub fn export_identity(&self, base: &Identity) -> Identity {
         let exported = self.identity_at(base, self.now());
-        self.emit(&ScraperEvent::IdentityExported {
+        self.emit(&ScrapeEvent::IdentityExported {
             cookies: exported.cookies.len(),
         });
         exported
@@ -205,7 +205,7 @@ impl HttpSession {
     /// A clearance that ended by the clock since `base` recorded it stays on the list, so the
     /// policy sees an ended clearance and sends the session to the browser, instead of seeing no
     /// clearance at all. One the site removed early is gone from the jar and from the list.
-    fn identity_at(&self, base: &StealthIdentity, now: u64) -> StealthIdentity {
+    fn identity_at(&self, base: &Identity, now: u64) -> Identity {
         let mut identity = base.clone();
         identity.cookies = self.inner().jar.snapshot();
         let earlier = std::mem::take(&mut identity.clearances);

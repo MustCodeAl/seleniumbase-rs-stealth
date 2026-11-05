@@ -26,7 +26,7 @@ use seleniumbase_rs::sb_cdp::{Browser, LaunchOptions, Page};
 use seleniumbase_rs_codec::BrowserKind;
 use seleniumbase_rs_mimic::client::ImpersonationProfile;
 use seleniumbase_rs_mimic::http_session::{HttpError, HttpOptions, HttpSession};
-use seleniumbase_rs_scrape::egress::route::EgressRef;
+use seleniumbase_rs_scrape::egress::route::ProxyRoute;
 use serde_json::json;
 
 #[allow(
@@ -66,7 +66,7 @@ async fn announce_as_measured(page: &Page) -> String {
         .user_agent()
         .to_owned();
     page.execute(
-        "WireMeasurement.setUserAgentOverride",
+        "Emulation.setUserAgentOverride",
         json!({ "userAgent": agent, "acceptLanguage": LANGUAGES, "platform": "MacIntel" }),
     )
     .await
@@ -178,7 +178,7 @@ async fn a_browser_started_with_a_proxy_is_not_taken_for_a_direct_one_launched_o
 
     let launched_none = HttpSession::from_page(&page, None, HttpOptions::new()).await;
     let attached_none = HttpSession::from_page(&tab, None, HttpOptions::new()).await;
-    let real = EgressRef::parse(proxy, None).expect("an egress");
+    let real = ProxyRoute::parse(proxy, None).expect("an egress");
     let named = HttpSession::from_page(&page, Some(real.clone()), HttpOptions::new()).await;
     let direct = HttpSession::from_page(
         &page,
@@ -195,8 +195,8 @@ async fn a_browser_started_with_a_proxy_is_not_taken_for_a_direct_one_launched_o
             "{error}"
         );
     }
-    assert_eq!(named.expect("egress named").egress(), Some(real.key()));
-    assert_eq!(direct.expect("said to be direct").egress(), None);
+    assert_eq!(named.expect("egress named").proxy_route(), Some(real.key()));
+    assert_eq!(direct.expect("said to be direct").proxy_route(), None);
 }
 
 #[tokio::test]

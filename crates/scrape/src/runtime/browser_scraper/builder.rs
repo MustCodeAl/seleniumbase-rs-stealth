@@ -12,12 +12,12 @@ use super::{BrowserScraper, Current, Egress, Persona, Wiring};
 use crate::challenge::mitigation::MitigationPolicy;
 use crate::egress::geo::{CountryCode, GeoResolver, StaticGeoResolver};
 use crate::egress::pool::{ProxyPool, RotationStrategy};
-use crate::egress::route::EgressRef;
+use crate::egress::route::ProxyRoute;
 use crate::error::ScrapeError;
 use crate::ledger::events::EventSink;
-use crate::ledger::state::{InMemoryStateStore, StateStore};
-use crate::runtime::cdp::EgressLocale;
-use crate::runtime::egress_switch::{ContextProxySwitch, EgressSwitch};
+use crate::ledger::state::{InMemoryLedger, Ledger};
+use crate::runtime::cdp::ProxyLocale;
+use crate::runtime::proxy_switch::{ContextProxySwitch, ProxySwitch};
 use crate::runtime::tracing_sink::TracingEventSink;
 use seleniumbase_rs::evasion::fingerprint::Fingerprint;
 use seleniumbase_rs::sb_cdp::{LaunchOptionsBuilder, SessionStore};
@@ -35,17 +35,17 @@ pub type Clock = Arc<dyn Fn() -> u64 + Send + Sync>;
 /// random seed.
 pub struct BrowserScraperBuilder {
     launch: LaunchOptionsBuilder,
-    egresses: Vec<EgressRef>,
+    egresses: Vec<ProxyRoute>,
     strategy: RotationStrategy,
     attempts: Option<u32>,
     policy: MitigationPolicy,
-    store: Option<Arc<dyn StateStore>>,
+    store: Option<Arc<dyn Ledger>>,
     sink: Option<Arc<dyn EventSink>>,
     geo: Option<Arc<dyn GeoResolver>>,
     limits: Option<(usize, Duration)>,
     seed: Option<u64>,
     fingerprint: Option<Fingerprint>,
-    switch: Option<Box<dyn EgressSwitch>>,
+    switch: Option<Box<dyn ProxySwitch>>,
     launcher: Option<Arc<dyn BrowserLauncher>>,
     sessions: Option<SessionStore>,
     solve_timeout: Duration,
@@ -98,21 +98,21 @@ impl BrowserScraperBuilder {
     ///
     /// # Errors
     ///
-    /// Returns [`ScrapeError::Egress`] for a spec that is not `scheme://[user:password@]host:port`
+    /// Returns [`ScrapeError::Proxy`] for a spec that is not `scheme://[user:password@]host:port`
     /// with a scheme of http, https, socks5 or socks5h. The error never echoes the credentials.
-    pub fn with_geo_proxies<I, S>(mut self, proxies: I) -> Result<Self, ScrapeError>
+    pub fn geo_proxies<I, S>(mut self, proxies: I) -> Result<Self, ScrapeError>
     where
         I: IntoIterator<Item = (S, CountryCode)>,
         S: AsRef<str>,
     {
         for (spec, country) in proxies {
             self.egresses
-                .push(EgressRef::parse(spec.as_ref(), Some(country))?);
+                .push(ProxyRoute::parse(spec.as_ref(), Some(country))?);
         }
         Ok(self)
     }
 
-    /// How the pool picks an egress when one is needed: at the start and at each rotation.
+    /// How the pool picks an proxy when one is needed: at the start and at each rotation.
     #[must_use]
     pub fn proxy_strategy(mut self, strategy: RotationStrategy) -> Self {
         self.strategy = strategy;
@@ -121,13 +121,13 @@ impl BrowserScraperBuilder {
 
     /// How many loads of one URL a fetch may make before it gives up. Zero is read as one.
     #[must_use]
-    pub fn with_max_challenge_attempts(mut self, attempts: u32) -> Self {
+    pub fn max_challenge_attempts(mut self, attempts: u32) -> Self {
         self.attempts = Some(attempts);
         self
     }
 
     /// The whole mitigation policy: when to rotate, how long to cool down. The attempts set by
-    /// [`with_max_challenge_attempts`](Self::with_max_challenge_attempts) still apply on top.
+    /// [`max_challenge_attempts`](Self::max_challenge_attempts) still apply on top.
     #[must_use]
     pub fn mitigation(mut self, policy: MitigationPolicy) -> Self {
         self.policy = policy;
@@ -136,19 +136,19 @@ impl BrowserScraperBuilder {
 
     /// Where what is learned about each site is kept between fetches.
     #[must_use]
-    pub fn with_state_store(mut self, store: Arc<dyn StateStore>) -> Self {
+    pub fn ledger(mut self, store: Arc<dyn Ledger>) -> Self {
         self.store = Some(store);
         self
     }
 
     /// Where the scraper reports what it does.
     #[must_use]
-    pub fn with_event_sink(mut self, sink: Arc<dyn EventSink>) -> Self {
+    pub fn event_sink(mut self, sink: Arc<dyn EventSink>) -> Self {
         self.sink = Some(sink);
         self
     }
 
-    /// How the country, time zone and language of an egress are found.
+    /// How the country, time zone and language of an proxy are found.
     #[must_use]
     pub fn geo_resolver(mut self, geo: Arc<dyn GeoResolver>) -> Self {
         self.geo = Some(geo);
@@ -157,7 +157,7 @@ impl BrowserScraperBuilder {
 
     /// At most `calls` fetches of one site in `window`. The limit is per site, not global.
     #[must_use]
-    pub fn per_site_rate(mut self, calls: usize, window: Duration) -> Self {
+    pub fn rate_limit(mut self, calls: usize, window: Duration) -> Self {
         self.limits = Some((calls, window));
         self
     }
@@ -178,9 +178,9 @@ impl BrowserScraperBuilder {
         self
     }
 
-    /// How the egress is changed. The default opens a browser context behind the new proxy.
+    /// How the proxy is changed. The default opens a browser context behind the new proxy.
     #[must_use]
-    pub fn egress_switch(mut self, switch: Box<dyn EgressSwitch>) -> Self {
+    pub fn proxy_switch(mut self, switch: Box<dyn ProxySwitch>) -> Self {
         self.switch = Some(switch);
         self
     }
@@ -219,12 +219,12 @@ impl BrowserScraperBuilder {
     /// Unless a [`fingerprint`](Self::fingerprint) was given, a browser is started once to learn
     /// which Chrome is installed (headless, and closed again), so the profile can claim that
     /// version. The browser that is kept starts with the profile, in the locale of the first
-    /// egress, and in a context behind that egress's proxy when there is one.
+    /// proxy, and in a context behind that proxy's proxy when there is one.
     ///
     /// # Errors
     ///
     /// Returns [`ScrapeError::Browser`] when no browser can be started, and [`ScrapeError::Geo`]
-    /// when the country of an egress has no locale.
+    /// when the country of an proxy has no locale.
     #[tracing::instrument(skip_all)]
     pub async fn build(self) -> Result<BrowserScraper, ScrapeError> {
         let (wiring, start) = self.into_parts();
@@ -234,21 +234,21 @@ impl BrowserScraperBuilder {
             .as_ref()
             .and_then(|pool| pool.pick(None, (wiring.clock)()));
         let current = match first {
-            Some(egress) => {
-                let placed = EgressLocale::resolve(&*wiring.geo, &egress).await?;
-                Some(Current { egress, placed })
+            Some(proxy) => {
+                let placed = ProxyLocale::resolve(&*wiring.geo, &proxy).await?;
+                Some(Current { proxy, placed })
             }
             None => None,
         };
         let persona =
             start_persona(&wiring, start.fingerprint, start.seed, current.as_ref()).await?;
-        let egress = Egress {
+        let proxy = Egress {
             pool,
             size,
             current,
             site: None,
         };
-        start_browser(wiring, persona, egress).await
+        start_browser(wiring, persona, proxy).await
     }
 
     /// Fills the defaults and splits the builder into the fixed wiring and the start settings.
@@ -265,7 +265,7 @@ impl BrowserScraperBuilder {
                 .unwrap_or_else(|| Box::new(ContextProxySwitch::new())),
             store: self
                 .store
-                .unwrap_or_else(|| Arc::new(InMemoryStateStore::new())),
+                .unwrap_or_else(|| Arc::new(InMemoryLedger::new())),
             sink: self.sink.unwrap_or_else(|| Arc::new(TracingEventSink)),
             geo: self.geo.unwrap_or_else(|| Arc::new(StaticGeoResolver)),
             policy,
@@ -286,15 +286,15 @@ impl BrowserScraperBuilder {
     }
 }
 
-/// Starts the browser that stays, in the first egress's context when there is one.
+/// Starts the browser that stays, in the first proxy's context when there is one.
 async fn start_browser(
     wiring: Wiring,
     mut persona: Persona,
-    egress: Egress,
+    proxy: Egress,
 ) -> Result<BrowserScraper, ScrapeError> {
     let options = wiring.launch.clone().fingerprint(&persona.fingerprint);
     let browser = wiring.launcher.launch(options.build()?).await?;
-    let page = match wiring.open_page(&browser, egress.current.as_ref()).await {
+    let page = match wiring.open_page(&browser, proxy.current.as_ref()).await {
         Ok(page) => page,
         Err(error) => {
             if let Err(close) = browser.close().await {
@@ -311,21 +311,21 @@ async fn start_browser(
         page,
         wiring,
         persona,
-        egress,
+        proxy,
         last: None,
     })
 }
 
 /// The settings that only matter while the scraper starts.
 struct Start {
-    egresses: Vec<EgressRef>,
+    egresses: Vec<ProxyRoute>,
     strategy: RotationStrategy,
     fingerprint: Option<Fingerprint>,
     seed: u64,
 }
 
 /// The profile the scraper starts with: the one given, or one generated for this machine that
-/// claims the installed Chrome's version, in the locale of the first egress.
+/// claims the installed Chrome's version, in the locale of the first proxy.
 async fn start_persona(
     wiring: &Wiring,
     explicit: Option<Fingerprint>,

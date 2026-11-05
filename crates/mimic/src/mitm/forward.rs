@@ -28,9 +28,9 @@ use super::destination;
 use super::upstream::Outbound;
 use super::websocket::{self, Ask, RelaySlot};
 use super::{Counters, MitmError, MitmOptions, Shared, PRIME_HOST};
-use seleniumbase_rs_scrape::challenge::mitigation::Mode;
+use seleniumbase_rs_scrape::challenge::mitigation::FetchKind;
 use seleniumbase_rs_scrape::egress::redact::RedactedUrl;
-use seleniumbase_rs_scrape::ledger::events::ScraperEvent;
+use seleniumbase_rs_scrape::ledger::events::ScrapeEvent;
 
 /// The error of a body in either direction.
 pub(super) type BoxError = Box<dyn std::error::Error + Send + Sync>;
@@ -251,10 +251,10 @@ pub(super) async fn forward(
         }
     };
     let elapsed_ms = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
-    shared.sink.emit(&ScraperEvent::Request {
+    shared.sink.emit(&ScrapeEvent::Request {
         url: redacted,
         status: response.status().as_u16(),
-        mode: Mode::Browser,
+        fetch_kind: FetchKind::Browser,
         elapsed_ms,
     });
     response

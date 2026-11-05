@@ -29,7 +29,7 @@ use seleniumbase_rs::evasion::fingerprint::OsType;
 use seleniumbase_rs::sb_cdp::{Page, Proxy};
 use seleniumbase_rs_codec::emulation;
 use seleniumbase_rs_codec::BrowserKind;
-use seleniumbase_rs_scrape::egress::route::{EgressKey, EgressRef};
+use seleniumbase_rs_scrape::egress::route::{ProxyKey, ProxyRoute};
 use seleniumbase_rs_scrape::jar::store::CookieJar;
 use seleniumbase_rs_scrape::passport::identity::IdentityError;
 
@@ -170,7 +170,7 @@ pub(super) fn bypass_hosts(patterns: &[String]) -> Vec<String> {
 }
 
 /// An egress for the proxy of a browser context.
-fn egress_of(proxy: &Proxy) -> Result<EgressRef, HttpError> {
+fn egress_of(proxy: &Proxy) -> Result<ProxyRoute, HttpError> {
     let server = proxy.server();
     let spec = match (proxy.credentials(), server.split_once("://")) {
         (Some((user, password)), Some((scheme, rest))) => {
@@ -179,13 +179,13 @@ fn egress_of(proxy: &Proxy) -> Result<EgressRef, HttpError> {
         (Some((user, password)), None) => format!("{user}:{password}@{server}"),
         (None, _) => server.to_owned(),
     };
-    EgressRef::parse(&spec, None).map_err(|_error| HttpError::Client {
+    ProxyRoute::parse(&spec, None).map_err(|_error| HttpError::Client {
         kind: "the proxy of the page cannot be read",
     })
 }
 
 /// Whether two keys name the same exit: the scheme (`socks5` and `socks5h` alike), host and port.
-fn same_exit(left: &EgressKey, right: &EgressKey) -> bool {
+fn same_exit(left: &ProxyKey, right: &ProxyKey) -> bool {
     let family = |scheme: &str| {
         if scheme.starts_with("socks5") {
             "socks5"
@@ -206,12 +206,12 @@ fn same_exit(left: &EgressKey, right: &EgressKey) -> bool {
 ///
 /// # Errors
 ///
-/// Returns [`IdentityError::EgressMismatch`] (as [`HttpError::Identity`]) when the egress given is
+/// Returns [`IdentityError::ProxyMismatch`] (as [`HttpError::Identity`]) when the egress given is
 /// not the proxy of the page's context.
 pub(super) fn reconcile(
-    given: Option<EgressRef>,
+    given: Option<ProxyRoute>,
     context_proxy: Option<&Proxy>,
-) -> Result<Option<EgressRef>, HttpError> {
+) -> Result<Option<ProxyRoute>, HttpError> {
     let Some(proxy) = context_proxy else {
         return Ok(given);
     };
@@ -219,7 +219,7 @@ pub(super) fn reconcile(
     match given {
         None => Ok(Some(routed)),
         Some(given) if same_exit(given.key(), routed.key()) => Ok(Some(given)),
-        Some(given) => Err(IdentityError::EgressMismatch {
+        Some(given) => Err(IdentityError::ProxyMismatch {
             expected: Some(routed.key().clone()),
             found: Some(given.key().clone()),
         }
@@ -247,13 +247,13 @@ pub(super) struct BrowserProxy {
 
 impl BrowserProxy {
     /// The exit the proxy names, when its address can be read.
-    fn exit(&self) -> Option<EgressKey> {
+    fn exit(&self) -> Option<ProxyKey> {
         let spec = if self.server.contains("://") {
             self.server.clone()
         } else {
             format!("http://{}", self.server)
         };
-        EgressRef::parse(&spec, None)
+        ProxyRoute::parse(&spec, None)
             .ok()
             .map(|egress| egress.key().clone())
     }
@@ -313,13 +313,13 @@ pub(super) fn browser_proxy_in(command_line: &str) -> Option<BrowserProxy> {
 /// # Errors
 ///
 /// Returns [`HttpError::BrowserProxy`] when the browser has a proxy and no egress was given, and
-/// [`IdentityError::EgressMismatch`] (as [`HttpError::Identity`]) when the egress given is not a
+/// [`IdentityError::ProxyMismatch`] (as [`HttpError::Identity`]) when the egress given is not a
 /// remote browser proxy.
 pub(super) fn reconcile_browser_wide(
-    given: Option<EgressRef>,
+    given: Option<ProxyRoute>,
     browser_proxy: Option<&BrowserProxy>,
     exits_directly: bool,
-) -> Result<Option<EgressRef>, HttpError> {
+) -> Result<Option<ProxyRoute>, HttpError> {
     let Some(wide) = browser_proxy else {
         return Ok(given);
     };
@@ -327,7 +327,7 @@ pub(super) fn reconcile_browser_wide(
         Some(given) => {
             let own = wide.exit().filter(|_| !wide.local);
             match own {
-                Some(own) if !same_exit(given.key(), &own) => Err(IdentityError::EgressMismatch {
+                Some(own) if !same_exit(given.key(), &own) => Err(IdentityError::ProxyMismatch {
                     expected: Some(own),
                     found: Some(given.key().clone()),
                 }
@@ -427,7 +427,7 @@ impl HttpSession {
     #[tracing::instrument(level = "debug", skip_all)]
     pub async fn from_page(
         page: &Page,
-        egress: Option<EgressRef>,
+        egress: Option<ProxyRoute>,
         mut options: HttpOptions,
     ) -> Result<Self, HttpError> {
         options.validate()?;
@@ -666,17 +666,17 @@ mod tests {
             "the credentials come along"
         );
 
-        let same = EgressRef::parse("http://other:pw@PROXY.example:8080", None).expect("spec");
+        let same = ProxyRoute::parse("http://other:pw@PROXY.example:8080", None).expect("spec");
         let kept = reconcile(Some(same), Some(&proxy))
             .expect("ok")
             .expect("an egress");
         assert_eq!(kept.key().port, 8080);
 
-        let other = EgressRef::parse("http://elsewhere.example:8080", None).expect("spec");
+        let other = ProxyRoute::parse("http://elsewhere.example:8080", None).expect("spec");
         let error = reconcile(Some(other), Some(&proxy)).expect_err("mismatch");
         assert!(matches!(
             error,
-            HttpError::Identity(IdentityError::EgressMismatch { .. })
+            HttpError::Identity(IdentityError::ProxyMismatch { .. })
         ));
         let shown = format!("{error} {error:?}");
         assert!(
@@ -686,7 +686,7 @@ mod tests {
 
         let none = reconcile(None, None).expect("ok");
         assert!(none.is_none());
-        let given = EgressRef::parse("http://elsewhere.example:8080", None).expect("spec");
+        let given = ProxyRoute::parse("http://elsewhere.example:8080", None).expect("spec");
         assert!(
             reconcile(Some(given), None).expect("ok").is_some(),
             "no context proxy: no check"
@@ -695,7 +695,7 @@ mod tests {
 
     #[test]
     fn socks5_and_socks5h_name_the_same_exit_but_not_http() {
-        let key = |spec: &str| EgressRef::parse(spec, None).expect(spec).key().clone();
+        let key = |spec: &str| ProxyRoute::parse(spec, None).expect(spec).key().clone();
         assert!(same_exit(
             &key("socks5://h.example:1080"),
             &key("socks5h://h.example:1080")
@@ -755,7 +755,7 @@ mod tests {
     fn a_browser_proxy_needs_an_egress_or_the_word_that_it_leaves_directly() {
         let remote = browser_proxy_in("--proxy-server=http://proxy.example:8080").expect("a proxy");
         let local = browser_proxy_in("--proxy-server=http://127.0.0.1:43210").expect("a proxy");
-        let egress = |spec: &str| EgressRef::parse(spec, None).expect(spec);
+        let egress = |spec: &str| ProxyRoute::parse(spec, None).expect(spec);
 
         for wide in [&remote, &local] {
             let error = reconcile_browser_wide(None, Some(wide), false).expect_err("not direct");
@@ -776,7 +776,7 @@ mod tests {
             .expect_err("not its proxy");
         assert!(matches!(
             error,
-            HttpError::Identity(IdentityError::EgressMismatch { .. })
+            HttpError::Identity(IdentityError::ProxyMismatch { .. })
         ));
         let shown = format!("{error} {error:?}");
         assert!(

@@ -11,7 +11,7 @@ Documentation: <https://mustcodeal-seleniumbase-rs.docs7.io>. Start with the
 |---|---|
 | `seleniumbase-rs-stealth` (root `.`) | Unified facade crate: re-exports all of `seleniumbase-rs` (including `sb_cdp` and `evasion`) alongside `codec`, `scrape` (enabled by default), and `mimic` (with `features = ["mimic"]`) so downstream projects need only one dependency. |
 | `seleniumbase-rs-codec` (`crates/codec`) | Pure wire formats, no I/O: a TLS `ClientHello` parser, JA3, JA4 and peetprint, the Akamai HTTP/2 fingerprint, HTTP/2 frame and HPACK reading, the TLS, HTTP/2 and header specs, and the measured browser table (`emulation`) embedded from `src/measured/*.json`. |
-| `seleniumbase-rs-scrape` (`crates/scrape`) | Stealth scraping without TLS spoofing, over the pure CDP engine of seleniumbase-rs. Pure modules for challenge detection and the mitigation policy, egress (proxy pool, geo locale, URL redaction), an RFC 6265 cookie jar, the per-site ledger and its events, and the stealth identity with its session policy; the `runtime` module holds the I/O: `BrowserScraper`, `EgressSwitch`, `JsonStateStore`, the identity file, the tracing sink and the capture tools. No TLS spoofing and no BoringSSL. |
+| `seleniumbase-rs-scrape` (`crates/scrape`) | Stealth scraping without TLS spoofing, over the pure CDP engine of seleniumbase-rs. Pure modules for challenge detection and the mitigation policy, egress (proxy pool, geo locale, URL redaction), an RFC 6265 cookie jar, the per-site ledger and its events, and the stealth identity with its session policy; the `runtime` module holds the I/O: `BrowserScraper`, `ProxySwitch`, `JsonLedger`, the identity file, the tracing sink and the capture tools. No TLS spoofing and no BoringSSL. |
 | `seleniumbase-rs-mimic` (`crates/mimic`) | Browser-identical TLS and HTTP/2 through wreq and BoringSSL: `ImpersonationProfile` and `CustomProfileBuilder`, `HttpSession` (plain HTTP that continues a browser's session), `MitmProxy` (a loopback proxy that gives a real Chrome the measured TLS), `StealthSession` (moves between plain HTTP and Chrome), `EphemeralCa`, and the HTTP/2 capture tool. Builds BoringSSL, so it needs `cmake` and a C/C++ toolchain. |
 
 `mimic` depends on `scrape`, which depends on `codec`; all three depend on `seleniumbase-rs`, and the root `seleniumbase-rs-stealth` crate re-exports them all.
@@ -89,14 +89,14 @@ is read as a stream and capped.
 
 ### Dual-mode sessions
 
-`StealthSession` holds one `StealthIdentity` (the fingerprint with its locale,
+`StealthSession` holds one `Identity` (the fingerprint with its locale,
 the measured browser, the cookies, the client hints, and the `egress` they were
 earned through) and works in one of two modes. In HTTP mode an `HttpSession`
 sends the requests. In browser mode a real Chrome sends them behind the
 `MitmProxy`, so both modes show the same handshake and a clearance earned in one
 is valid in the other. When a challenge appears in HTTP mode the session
 escalates to the browser, the browser solves it, and the cookies move into the
-identity; the session then goes back to HTTP (`SessionPolicy` decides, and a
+identity; the session then goes back to HTTP (`EscalationPolicy` decides, and a
 clearance about to expire sends it back to the browser). The proxy and the HTTP
 client use the same proxy egress. A Chrome of another major version than the
 measurement is refused before it loads a page.
@@ -136,12 +136,12 @@ locale, geolocation and more.
 
 `challenge::detect` reads a response and returns a `Detection` with a
 `ChallengeKind` (`None`, `JsChallenge`, `Interactive`, `Blocked`,
-`RateLimited`) and evidence naming the `Vendor` (Cloudflare, DataDome,
+`RateLimited`) and evidence naming the `ProtectionVendor` (Cloudflare, DataDome,
 PerimeterX, Akamai, Imperva, Kasada, AWS WAF). A header, a widget or a bare
 403 is evidence only; the verdict needs an interstitial marker.
 `MitigationPolicy::decide` is a pure function that turns a detection and the
-attempt context into one `Action`: `Proceed`, `Retry`, `Escalate`, `Solve`,
-`RotateEgress`, `RotateProfile`, `Cooldown` or `GiveUp`. The defaults are
+attempt context into one `Mitigation`: `Proceed`, `Retry`, `Escalate`, `Solve`,
+`RotateProxy`, `RotateFingerprint`, `Cooldown` or `GiveUp`. The defaults are
 3 attempts per URL, a new egress after 2 challenges in a row, a new profile
 after 3, a 900 second cooldown after a block, 60 seconds after a rate limit
 without `Retry-After`, and a `Retry-After` capped at 3600 seconds, with
@@ -169,15 +169,15 @@ document before its scripts run. The country comes from the proxy spec, and
 `StaticGeoResolver` maps it through a built-in table of locales (no network
 lookup): language list, `Accept-Language`, time zone and a position near the city,
 derived from the fingerprint seed. A built `Fingerprint` is never edited (the core's
-fingerprint API v2): `Locale::localize` and `EgressLocale::localize` return the next
+fingerprint API v2): `Locale::localize` and `ProxyLocale::localize` return the next
 one, and a fingerprint that denies geolocation keeps denying it.
 
 ### Profile and identity rotation
 
-`BrowserScraper::rotate_profile` draws a new fingerprint from a derived seed for
+`BrowserScraper::rotate_fingerprint` draws a new fingerprint from a derived seed for
 the same operating system, in the locale of the current egress, and restarts the
 browser with it (cookies start empty; what is known of each site stays).
-`export_identity` and `import_identity` move a `StealthIdentity` out of and into
+`export_identity` and `import_identity` move a `Identity` out of and into
 a scraper; an identity is only accepted through the egress it names, and for
 the same Chrome version. The identity file is written atomically with mode
 `0600` and is refused on read if others can access it.
@@ -185,8 +185,8 @@ the same Chrome version. The identity file is written atomically with mode
 ### Session state behind a store trait
 
 Per-site state (successes, challenges, cooldowns) is saved through the
-`StateStore` trait. Two implementations ship: `InMemoryStateStore` and
-`JsonStateStore`, one file written to a temporary sibling, synced and renamed
+`Ledger` trait. Two implementations ship: `InMemoryLedger` and
+`JsonLedger`, one file written to a temporary sibling, synced and renamed
 over the target, with owner-only permissions. There is no other backend. The
 JSON store keeps the whole table in memory and rewrites the file on each
 change, so it suits a few thousand sites at most, and one process may write a
@@ -194,7 +194,7 @@ file at a time.
 
 ### Observability
 
-The scraper reports typed events (`ScraperEvent`: request, challenge detected
+The scraper reports typed events (`ScrapeEvent`: request, challenge detected
 and solved, action chosen, mode changed, egress and profile rotated,
 clearance expiring, cooldown started, identity exported and restored) to an
 `EventSink`. URLs and proxies are redacted by construction. Three sinks ship:

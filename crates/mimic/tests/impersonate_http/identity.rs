@@ -19,7 +19,7 @@ fn emulation(major: u32, os: OsType) -> WireMeasurementRef {
     }
 }
 
-fn behind(spec: Option<&str>) -> seleniumbase_rs_scrape::passport::identity::StealthIdentity {
+fn behind(spec: Option<&str>) -> seleniumbase_rs_scrape::passport::identity::Identity {
     let major = measured_major();
     identity_of(
         fingerprint(OsType::Macos, major),
@@ -42,7 +42,7 @@ fn an_identity_that_belongs_to_a_proxy_is_refused_on_a_direct_connection_and_the
         assert!(
             matches!(
                 &error,
-                HttpError::Identity(IdentityError::EgressMismatch { .. })
+                HttpError::Identity(IdentityError::ProxyMismatch { .. })
             ),
             "{error}"
         );
@@ -65,7 +65,7 @@ fn an_identity_for_one_proxy_is_refused_behind_another() {
     assert!(
         matches!(
             error,
-            HttpError::Identity(IdentityError::EgressMismatch { .. })
+            HttpError::Identity(IdentityError::ProxyMismatch { .. })
         ),
         "{error}"
     );
@@ -78,8 +78,8 @@ fn the_matching_proxy_is_accepted_and_its_password_stays_out_of_every_view() {
     let session = HttpSession::from_identity(&proxied, Some(egress(SPEC)), HttpOptions::new())
         .expect("a session");
 
-    assert_eq!(session.egress().map(|key| key.port), Some(9));
-    let shown = format!("{session:?} {:?}", session.egress());
+    assert_eq!(session.proxy_route().map(|key| key.port), Some(9));
+    let shown = format!("{session:?} {:?}", session.proxy_route());
     for secret in ["s3cret", "alice"] {
         assert!(!shown.contains(secret), "{secret} in {shown}");
     }

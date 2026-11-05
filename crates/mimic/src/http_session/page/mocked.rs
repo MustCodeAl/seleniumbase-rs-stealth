@@ -11,7 +11,7 @@ use url::Url;
 
 use super::*;
 use seleniumbase_rs::sb_cdp::{Browser, MockCtrl};
-use seleniumbase_rs_scrape::runtime::egress_switch::{ContextProxySwitch, EgressSwitch};
+use seleniumbase_rs_scrape::runtime::proxy_switch::{ContextProxySwitch, ProxySwitch};
 
 const HOST: &str = "shop.test";
 
@@ -79,7 +79,7 @@ async fn a_page_hands_over_its_cookies_its_agent_and_its_languages() {
     assert_eq!(session.profile().user_agent(), agent);
     assert_eq!(session.profile().accept_language(), Some("de-DE,de;q=0.9"));
     assert_eq!(session.cookie_count(), 2);
-    assert!(session.egress().is_none());
+    assert!(session.proxy_route().is_none());
 }
 
 #[tokio::test]
@@ -226,7 +226,7 @@ async fn the_proxy_of_the_pages_context_is_taken_or_must_match() {
     mock.on("Runtime.evaluate", move |_| {
         Ok(json!({ "result": { "value": report.clone() } }))
     });
-    let proxy = EgressRef::parse("http://alice:s3cret@proxy.example:8080", None).expect("a spec");
+    let proxy = ProxyRoute::parse("http://alice:s3cret@proxy.example:8080", None).expect("a spec");
     let page = ContextProxySwitch::new()
         .switch(&browser, Some(&proxy))
         .await
@@ -235,15 +235,15 @@ async fn the_proxy_of_the_pages_context_is_taken_or_must_match() {
     let adopted = HttpSession::from_page(&page, None, HttpOptions::new())
         .await
         .expect("a session");
-    let other = EgressRef::parse("http://elsewhere.example:8080", None).expect("a spec");
+    let other = ProxyRoute::parse("http://elsewhere.example:8080", None).expect("a spec");
     let refused = HttpSession::from_page(&page, Some(other), HttpOptions::new())
         .await
         .expect_err("mismatch");
 
-    assert_eq!(adopted.egress(), Some(proxy.key()));
+    assert_eq!(adopted.proxy_route(), Some(proxy.key()));
     assert!(matches!(
         refused,
-        HttpError::Identity(IdentityError::EgressMismatch { .. })
+        HttpError::Identity(IdentityError::ProxyMismatch { .. })
     ));
     let shown = format!("{adopted:?} {refused} {refused:?}");
     assert!(

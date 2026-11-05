@@ -31,7 +31,7 @@ use seleniumbase_rs_codec::emulation;
 use seleniumbase_rs_codec::BrowserKind;
 use seleniumbase_rs_mimic::HttpSession;
 use seleniumbase_rs_scrape::WireMeasurementRef;
-use seleniumbase_rs_scrape::StealthIdentity;
+use seleniumbase_rs_scrape::Identity;
 use stealth_support::shop::Shop;
 
 /// The seed of the made-up identity. The same seed gives the same identity.
@@ -68,7 +68,7 @@ async fn run() -> Result<(), Box<dyn Error>> {
         major,
         os,
     };
-    let identity = StealthIdentity::new(
+    let identity = Identity::new(
         fingerprint,
         emulation_ref,
         None,

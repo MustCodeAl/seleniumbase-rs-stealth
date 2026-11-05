@@ -5,7 +5,7 @@ use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::sync::{Arc, Mutex, PoisonError};
 
 use seleniumbase_rs_mimic::mitm::MitmOptions;
-use seleniumbase_rs_scrape::egress::route::EgressRef;
+use seleniumbase_rs_scrape::egress::route::ProxyRoute;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::task::JoinHandle;
@@ -130,7 +130,7 @@ async fn serve(mut tcp: TcpStream, record: &Mutex<Vec<Asked>>) -> Option<()> {
 async fn a_socks5_egress_is_asked_for_the_name_and_not_for_an_address_looked_up_here() {
     let socks = Socks5::start().await;
     let ca = new_ca();
-    let egress = EgressRef::parse(&format!("socks5://alice:s3cret@{}", socks.addr), None)
+    let egress = ProxyRoute::parse(&format!("socks5://alice:s3cret@{}", socks.addr), None)
         .expect("an egress");
     // The name has an address here. If the scraper looked it up, the proxy would be handed that
     // address, and the site's name would be known to this machine's resolver.
