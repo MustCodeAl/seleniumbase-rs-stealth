@@ -5,7 +5,7 @@ use std::time::Duration;
 use seleniumbase_rs_codec::client_hello::ClientHello;
 use seleniumbase_rs_codec::header_spec::RequestShape;
 use seleniumbase_rs_scrape::runtime::capture::stream::{Capture, CapturedH2c};
-use seleniumbase_rs_wire::client::{wire_client, WireFormat, WireProtocol};
+use seleniumbase_rs_wire::client::{WireFormat, WireProtocol};
 use wreq::ClientBuilder;
 
 use crate::server::{Served, WireServer, HOST};
@@ -36,7 +36,8 @@ pub async fn exchange(
     via: Via,
 ) -> Served {
     let server = WireServer::bind().await;
-    let mut builder = wire_client(profile)
+    let mut builder = profile
+        .client_builder()
         .expect("a client builder")
         .tls_cert_store(server.trust())
         .resolve(HOST, server.addr())

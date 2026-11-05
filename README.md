@@ -74,8 +74,8 @@ handshake ends at the proxy, so the proxy is the one the site sees.
 
 ### A plain HTTP client without a browser
 
-`wire_client(&profile)` takes an `WireFormat` and returns a
-`wreq::ClientBuilder` (or an `WireFormatError`) with the measured TLS and HTTP/2
+`profile.client_builder()` takes a `WireFormat` and returns a
+`wreq::ClientBuilder` (or a `WireFormatError`) with the measured TLS and HTTP/2
 options and header order set; you add proxies, a trust store and timeouts, then
 build it. `WireFormat::apply` writes the identity headers of one
 request. `WireFormatBuilder` layers your own JA3, `JA4_r` or `JA4_ro`,

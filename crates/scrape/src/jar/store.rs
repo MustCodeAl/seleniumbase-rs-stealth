@@ -1,6 +1,6 @@
 //! An RFC 6265 cookie jar, with public-suffix checks through `psl`, that converts to and from CDP cookies.
 //!
-//! [`CookieJar::store`] applies the storage model of RFC 6265 section 5.3 with the RFC 6265bis
+//! [`CookieJar::receive`] applies the storage model of RFC 6265 section 5.3 with the RFC 6265bis
 //! rules Chrome ships: a `Secure` cookie needs a secure origin and an insecure origin may not
 //! overwrite or shadow one, the `__Secure-` and `__Host-` prefixes are enforced, `SameSite=None`
 //! needs `Secure`, and a `Domain` on a public suffix or an IP address is refused. A path longer
@@ -181,8 +181,9 @@ impl SiteContext {
     }
 }
 
-/// What [`CookieJar::store`] did with a `Set-Cookie` header.
+/// What [`CookieJar::receive`] did with a `Set-Cookie` header.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub enum SetCookieOutcome {
     /// A new cookie was stored.
     Stored,
@@ -244,7 +245,7 @@ fn prefix_reason(prefix: CookiePrefix) -> IgnoreReason {
 /// An RFC 6265 cookie store.
 ///
 /// It serializes as `{"cookies": [...]}`; reading one back checks every cookie against the rules
-/// [`CookieJar::store`] applies, so an edited file cannot smuggle in a cookie the jar would refuse.
+/// [`CookieJar::receive`] applies, so an edited file cannot smuggle in a cookie the jar would refuse.
 /// [`Debug`](fmt::Debug) prints counts only.
 #[derive(Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(try_from = "JarFile", into = "JarFile")]
@@ -282,7 +283,7 @@ impl CookieJar {
     /// cookie removes the stored one. Expired cookies are purged, and when a bound is passed the
     /// cookie evicted is, among the others, an insecure one before a `Secure` one, then the least
     /// recently accessed, then the oldest.
-    pub fn store(&mut self, request_url: &Url, set_cookie: &str, now: u64) -> SetCookieOutcome {
+    pub fn receive(&mut self, request_url: &Url, set_cookie: &str, now: u64) -> SetCookieOutcome {
         let Some(origin) = RequestOrigin::of(request_url) else {
             return SetCookieOutcome::Ignored(IgnoreReason::UnsupportedUrl);
         };
@@ -559,7 +560,7 @@ impl TryFrom<JarFile> for CookieJar {
     }
 }
 
-/// Checks a serialized jar against what [`CookieJar::store`] guarantees: every cookie valid, no
+/// Checks a serialized jar against what [`CookieJar::receive`] guarantees: every cookie valid, no
 /// two with the same identity, and the bounds kept.
 fn check_file(cookies: &[StoredCookie]) -> Result<(), JarError> {
     let count = cookies.len();
@@ -588,7 +589,7 @@ fn check_file(cookies: &[StoredCookie]) -> Result<(), JarError> {
     Ok(())
 }
 
-/// Checks the times of a loaded cookie against what [`CookieJar::store`] and
+/// Checks the times of a loaded cookie against what [`CookieJar::receive`] and
 /// [`CookieJar::header_for`] guarantee: it was created no later than it was last used, no time lies
 /// past [`MAX_TIMESTAMP_SECS`], and it does not expire more than [`MAX_LIFETIME_SECS`] after its
 /// last use (a header sets the expiry at most that far after the time it is stored, which is no

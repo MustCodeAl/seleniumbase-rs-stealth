@@ -33,7 +33,7 @@ enum HeaderEdit {
     Replace(HeaderSpec),
 }
 
-/// Builds an [`WireFormat`] from a measured base and caller-supplied inputs.
+/// Builds a [`WireFormat`] from a measured base and caller-supplied inputs.
 ///
 /// Every input is optional and layered over the base, which is the newest measured Chrome unless
 /// [`WireFormatBuilder::base`] or [`WireFormatBuilder::base_on`] says otherwise. What an

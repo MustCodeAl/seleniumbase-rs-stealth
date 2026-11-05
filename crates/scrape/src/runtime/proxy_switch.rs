@@ -36,7 +36,7 @@ pub trait ProxySwitch: Send + Sync {
     ) -> Result<Page, ScrapeError>;
 }
 
-/// An [`ProxySwitch`] that opens a new browser context with its own proxy and drops the one it
+/// A [`ProxySwitch`] that opens a new browser context with its own proxy and drops the one it
 /// opened before.
 ///
 /// The new context is made first, so a failure leaves the old one in place. A proxy with a user

@@ -18,7 +18,7 @@ async fn an_http2_origin_gets_the_http2_headers_and_the_reply_says_so() {
     let site = H2Site::start(BODY).await;
     let mut base = identity();
     let url = Url::parse(&site.url(HOST, "/")).expect("a url");
-    base.cookies.store(&url, "carried=1; Max-Age=3600", now());
+    base.cookies.receive(&url, "carried=1; Max-Age=3600", now());
     let sink = Arc::new(CollectingEventSink::new());
     let options = site.options(&[HOST]).event_sink(sink);
     let session = HttpSession::from_identity(&base, None, options).expect("a session");

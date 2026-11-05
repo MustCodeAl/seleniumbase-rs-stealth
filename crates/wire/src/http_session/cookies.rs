@@ -173,10 +173,11 @@ impl SessionJar {
         let mut state = locked(&self.state);
         let before = state.jar.cookies().to_vec();
         for line in lines.iter().take(MAX_SET_COOKIES_PER_RESPONSE) {
-            match state.jar.store(url, line, now) {
+            match state.jar.receive(url, line, now) {
                 SetCookieOutcome::Stored | SetCookieOutcome::Replaced => absorbed.stored += 1,
                 SetCookieOutcome::Deleted => absorbed.deleted += 1,
-                SetCookieOutcome::Ignored(_) => absorbed.ignored += 1,
+                // `Ignored`, or an outcome added later: neither stored nor deleted.
+                _ => absorbed.ignored += 1,
             }
         }
         let after = state.jar.cookies().to_vec();

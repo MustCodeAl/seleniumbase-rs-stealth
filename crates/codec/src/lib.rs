@@ -4,8 +4,8 @@
 //! `Peetprint`, `Akamai`), the specs (`TlsSpec`, `H2Spec`, `HeaderSpec`), and the measured table
 //! (`WireMeasurement`), with their errors `TlsSpecError`, `H2SpecError` and
 //! `WireMeasurementError`. The lookups of the measured table are the functions of `measurement`
-//! (`measured`, `for_kind`, `get`); they are re-exported under the names `wire_measurements`,
-//! `wire_measurement_for` and `wire_measurement`, because plain `get` says nothing at this level.
+//! (`measurement::all`, `measurement::for_kind`, `measurement::get`), named for the module path
+//! they are called through.
 //!
 //! The wire layer is experimental, like the rest of the stealth layer: its types may change
 //! between releases.
@@ -29,10 +29,7 @@ pub use h2_spec::{H2Spec, H2SpecError};
 pub use header_spec::{ClientHeaders, HeaderSpec, HeaderSpecError, RequestShape};
 pub use ja3::{Ja3, Ja3Error, Peetprint, PeetprintError};
 pub use ja4::{Ja4, Ja4Error, Ja4Raw};
-pub use measurement::{
-    for_kind as wire_measurement_for, get as wire_measurement, measured as wire_measurements,
-    WireMeasurement, WireMeasurementError,
-};
+pub use measurement::{WireMeasurement, WireMeasurementError};
 pub use tls_spec::{KnownGap, TlsSpec, TlsSpecError};
 
 /// A browser whose wire behaviour the measured tables describe.

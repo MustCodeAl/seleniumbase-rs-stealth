@@ -66,6 +66,7 @@ fn assert_no_gap_closed(hello: &ClientHello, measured: &WireMeasurement) {
                 "BoringSSL now sends ML-DSA signature algorithms: the known gap \
                  MlDsaSignatureAlgorithms is closed; remove it from provenance.known_gaps and re-measure"
             ),
+            other => panic!("the known gap {other:?} has no check here; add one"),
         }
     }
 }
@@ -342,7 +343,8 @@ async fn over_http1_the_headers_keep_the_measured_order_and_spelling() {
 async fn a_cookie_is_sent_after_the_language_and_before_the_priority() {
     let profile = profile();
     let server = crate::server::WireServer::bind().await;
-    let client = seleniumbase_rs_wire::client::wire_client(&profile)
+    let client = profile
+        .client_builder()
         .expect("a client builder")
         .tls_cert_store(server.trust())
         .resolve(crate::server::HOST, server.addr())

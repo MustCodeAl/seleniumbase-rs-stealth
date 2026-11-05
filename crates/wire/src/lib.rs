@@ -1,7 +1,7 @@
 //! Browser-identical TLS and HTTP/2 through wreq and `BoringSSL`, for seleniumbase-rs.
 //!
 //! The main types are re-exported here: the profile and the client (`WireFormat`,
-//! `WireFormatBuilder`, `wire_client`), plain HTTP that continues a browser's session
+//! `WireFormatBuilder`, `WireFormat::client_builder`), plain HTTP that continues a browser's session
 //! (`HttpSession`, `HttpSessionOptions`, `HttpRequest`, `HttpResponse`, `HttpError` and `Method`), the
 //! loopback proxy for a real Chrome (`MitmProxy`, `MitmOptions`, `MitmError`, `MitmStats`), the
 //! dual-mode session (`StealthSession`, `StealthSessionBuilder`, `StealthFetch`, `StealthError`)
@@ -26,7 +26,7 @@ pub mod stealth_session;
 mod sync;
 pub mod tls_server;
 
-pub use client::{wire_client, WireFormat, WireFormatBuilder, WireFormatError, WireProtocol};
+pub use client::{WireFormat, WireFormatBuilder, WireFormatError, WireProtocol};
 pub use http_session::{
     HttpAttempt, HttpError, HttpFetch, HttpRequest, HttpResponse, HttpRules, HttpSession,
     HttpSessionOptions, HttpVerdict, Method, ResponseHeaders,

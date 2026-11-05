@@ -47,7 +47,7 @@ pub enum ProxyOutcome {
     /// The request completed.
     Success,
     /// The connection through the egress failed.
-    ConnectError,
+    ConnectFailed,
     /// The site answered with a challenge.
     Challenged,
     /// The site refused the egress outright.
@@ -227,7 +227,7 @@ impl ProxyPool {
         };
         match outcome {
             ProxyOutcome::Success => slot.failures = 0,
-            ProxyOutcome::ConnectError | ProxyOutcome::Challenged | ProxyOutcome::Blocked => {
+            ProxyOutcome::ConnectFailed | ProxyOutcome::Challenged | ProxyOutcome::Blocked => {
                 slot.failures = slot.failures.saturating_add(1);
                 if slot.failures >= self.quarantine_after {
                     slot.quarantined_until = Some(now.saturating_add(self.quarantine_secs));
@@ -352,7 +352,7 @@ mod tests {
     #[test]
     fn round_robin_skips_a_quarantined_egress_without_repeating_another() {
         let pool = ProxyPool::new(three(), RotationStrategy::RoundRobin).quarantine(1, 600);
-        pool.report(&key("p2.example"), ProxyOutcome::ConnectError, 0);
+        pool.report(&key("p2.example"), ProxyOutcome::ConnectFailed, 0);
         assert_eq!(
             hosts(&pool, 6, 1),
             ["p1.example", "p3.example"].repeat(3),
@@ -363,7 +363,7 @@ mod tests {
     #[test]
     fn a_released_egress_rejoins_the_cycle() {
         let pool = ProxyPool::new(three(), RotationStrategy::RoundRobin).quarantine(1, 600);
-        pool.report(&key("p2.example"), ProxyOutcome::ConnectError, 0);
+        pool.report(&key("p2.example"), ProxyOutcome::ConnectFailed, 0);
         let _ = hosts(&pool, 2, 1);
         let mut after = hosts(&pool, 3, 600);
         after.sort();
@@ -381,7 +381,7 @@ mod tests {
         )
         .quarantine(3, 600);
         for _ in 0..3 {
-            pool.report(&key("p1.example"), ProxyOutcome::ConnectError, 100);
+            pool.report(&key("p1.example"), ProxyOutcome::ConnectFailed, 100);
         }
         assert_eq!(hosts(&pool, 4, 699), ["p2.example"; 4]);
         let released = hosts(&pool, 2, 700);
@@ -409,10 +409,10 @@ mod tests {
         )
         .quarantine(2, 10);
         for _ in 0..2 {
-            pool.report(&key("p1.example"), ProxyOutcome::ConnectError, 0);
+            pool.report(&key("p1.example"), ProxyOutcome::ConnectFailed, 0);
         }
         assert!(pool.pick(None, 9).is_none());
-        pool.report(&key("p1.example"), ProxyOutcome::ConnectError, 10);
+        pool.report(&key("p1.example"), ProxyOutcome::ConnectFailed, 10);
         assert!(
             pool.pick(None, 11).is_some(),
             "one failure after release is below the limit of two"
@@ -427,14 +427,14 @@ mod tests {
         )
         .quarantine(0, 60);
         assert!(pool.pick(None, 0).is_some());
-        pool.report(&key("p1.example"), ProxyOutcome::ConnectError, 0);
+        pool.report(&key("p1.example"), ProxyOutcome::ConnectFailed, 0);
         assert!(pool.pick(None, 1).is_none());
     }
 
     #[test]
     fn every_failing_outcome_counts_and_a_success_clears_the_count() {
         for failing in [
-            ProxyOutcome::ConnectError,
+            ProxyOutcome::ConnectFailed,
             ProxyOutcome::Challenged,
             ProxyOutcome::Blocked,
         ] {
@@ -488,11 +488,11 @@ mod tests {
     #[test]
     fn least_failures_follows_the_healthiest_egress() {
         let pool = ProxyPool::new(three(), RotationStrategy::LeastFailures);
-        pool.report(&key("p1.example"), ProxyOutcome::ConnectError, 0);
-        pool.report(&key("p1.example"), ProxyOutcome::ConnectError, 0);
-        pool.report(&key("p2.example"), ProxyOutcome::ConnectError, 0);
+        pool.report(&key("p1.example"), ProxyOutcome::ConnectFailed, 0);
+        pool.report(&key("p1.example"), ProxyOutcome::ConnectFailed, 0);
+        pool.report(&key("p2.example"), ProxyOutcome::ConnectFailed, 0);
         assert_eq!(hosts(&pool, 3, 0), ["p3.example"; 3]);
-        pool.report(&key("p3.example"), ProxyOutcome::ConnectError, 0);
+        pool.report(&key("p3.example"), ProxyOutcome::ConnectFailed, 0);
         assert_eq!(
             hosts(&pool, 4, 0),
             ["p2.example", "p3.example", "p2.example", "p3.example"]

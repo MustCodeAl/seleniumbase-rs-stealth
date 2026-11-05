@@ -24,8 +24,9 @@ Only `scrape` and `mimic` were affected; `codec` holds no fingerprint.
   - The `mimic` crate is `seleniumbase-rs-wire` (folder `crates/wire`, facade feature and
     path `wire`).
   - codec: the `emulation` module and `Emulation` are `measurement` and `WireMeasurement`
-    (`WireMeasurementError`, lookups `wire_measurement`, `wire_measurement_for`,
-    `wire_measurements`); the spec errors are `H2SpecError` and `TlsSpecError` everywhere
+    (`WireMeasurementError`; the lookups are called through the module:
+    `measurement::all`, `measurement::for_kind`, `measurement::get`, and the root aliases are
+    gone); the spec errors are `H2SpecError` and `TlsSpecError` everywhere
     (the aliases `emulation::SpecError` and `Http2Spec` are gone); `Pseudo` ->
     `PseudoHeader`, `Extension` -> `TlsExtension`, `PeetField` -> `PeetprintField`, `Slot`
     -> `PeetprintSlot`, `HeaderValue` -> `HeaderSource`, `HeaderIdentity` -> `ClientHeaders`.
@@ -35,7 +36,7 @@ Only `scrape` and `mimic` were affected; `codec` holds no fingerprint.
     `FetchKind` (`fetch_kind`); `Transition` -> `Escalation`; `SessionPolicy` ->
     `EscalationPolicy`; `Action` -> `Mitigation` (`RotateFingerprint`, `RotateProxy`); the
     `StateStore` family -> `Ledger`, `InMemoryLedger`, `JsonLedger`, `LedgerError`,
-    `DomainState` -> `SiteRecord`; `StealthIdentity` -> `Identity` (`wire_measurement`);
+    `DomainState` -> `SiteRecord`; `StealthIdentity` -> `Identity` (`wire_measurement`, `verify` -> `validate`); `CookieJar::store` -> `receive`;
     `Evidence` -> `ChallengeEvidence`; `Vendor` -> `ProtectionVendor`;
     `ChallengeKind::None` -> `Clear`; `ScraperEvent` -> `ScrapeEvent` with the event names
     `fetch_kind_changed`, `proxy_rotated`, `fingerprint_rotated`; builder setters without
@@ -43,7 +44,7 @@ Only `scrape` and `mimic` were affected; `codec` holds no fingerprint.
     `per_site_rate` -> `rate_limit`, `rotate_profile` -> `rotate_fingerprint`.
   - wire: `ImpersonationProfile` -> `WireFormat` (`WireFormat::builder()`, `h2_spec()`,
     `client_headers()`), `CustomProfileBuilder` -> `WireFormatBuilder`, `ImpersonateError` ->
-    `WireFormatError`, `impersonation_client` -> `wire_client`; `HttpReply` ->
+    `WireFormatError`, the free function `impersonation_client` -> the method `WireFormat::client_builder`; `HttpReply` ->
     `HttpResponse`, `HttpOptions` -> `HttpSessionOptions` (`rate_limit`), the
     `http_session` types under their exported names (`HttpAttempt`, `HttpFetch`,
     `ResponseHeaders`, `HttpRules`, `HttpVerdict`, fields `escalation`); `MitmProxy`:
@@ -54,6 +55,13 @@ Only `scrape` and `mimic` were affected; `codec` holds no fingerprint.
     `evasion::fingerprint::...`), wire's `ReplyProtocol` (`HttpResponse::protocol` returns
     `WireProtocol`) and wire's own `Clock` (it re-exports scrape's).
   - Serialized names follow the renames (identity files, ledger files, event JSON).
+  - Rust API naming review: `wire_client` is the method `WireFormat::client_builder()` (a
+    function with an obvious receiver is a method, and it returns a builder); the codec root
+    aliases are gone (`measurement::all`, `measurement::for_kind`, `measurement::get`;
+    `measured` and `try_measured` are `all` and `try_all`); `Identity::verify` is `validate`;
+    `CookieJar::store` is `receive`; `ProxyOutcome::ConnectError` is `ConnectFailed`.
+    `WireProtocol`, `KnownGap`, `SetCookieOutcome` and `ProxyRouteError` are
+    `#[non_exhaustive]`: each will grow (HTTP/3, newly found gaps, new outcomes).
 
 - **The core module `seleniumbase_rs::stealth` is now `seleniumbase_rs::evasion`.** The crates
   import it under the new name, and the facade re-exports it as

@@ -378,10 +378,10 @@ pub fn source_names() -> Vec<&'static str> {
 /// # Panics
 ///
 /// Panics if an embedded file is broken. The unit tests parse every file, so a broken file
-/// cannot reach a release; use [`try_measured`] to see the error instead.
+/// cannot reach a release; use [`try_all`] to see the error instead.
 #[must_use]
-pub fn measured() -> &'static [WireMeasurement] {
-    try_measured().expect("the embedded measured files parse; the emulation unit tests prove it")
+pub fn all() -> &'static [WireMeasurement] {
+    try_all().expect("the embedded measured files parse; the emulation unit tests prove it")
 }
 
 /// Every measured entry, or the reason an embedded file could not be read.
@@ -389,7 +389,7 @@ pub fn measured() -> &'static [WireMeasurement] {
 /// # Errors
 ///
 /// Returns the first [`WireMeasurementError`] met while parsing the embedded files.
-pub fn try_measured() -> Result<&'static [WireMeasurement], &'static WireMeasurementError> {
+pub fn try_all() -> Result<&'static [WireMeasurement], &'static WireMeasurementError> {
     table().as_ref().map(Vec::as_slice)
 }
 
@@ -433,8 +433,7 @@ pub fn newest_on(
 /// Panics if `kind` has no entry, which that test rules out.
 #[must_use]
 pub fn for_kind(kind: BrowserKind) -> &'static WireMeasurement {
-    newest(measured(), kind)
-        .expect("every BrowserKind has a measured entry; a unit test enforces it")
+    newest(all(), kind).expect("every BrowserKind has a measured entry; a unit test enforces it")
 }
 
 /// The newest measured entry of a browser on an operating system.
@@ -446,7 +445,7 @@ pub fn get(
     kind: BrowserKind,
     os: OsType,
 ) -> Result<&'static WireMeasurement, WireMeasurementError> {
-    newest_on(measured(), kind, os).ok_or(WireMeasurementError::NotMeasured { kind, os })
+    newest_on(all(), kind, os).ok_or(WireMeasurementError::NotMeasured { kind, os })
 }
 
 /// The measured entry of a browser at one major version on an operating system.
@@ -461,7 +460,7 @@ pub fn get_version(
     major: u32,
 ) -> Result<&'static WireMeasurement, WireMeasurementError> {
     get(kind, os)?;
-    measured()
+    all()
         .iter()
         .find(|entry| entry.kind == kind && entry.os == os && entry.major == major)
         .ok_or(WireMeasurementError::VersionNotMeasured { kind, major, os })
@@ -471,7 +470,7 @@ pub fn get_version(
 #[must_use]
 pub fn measured_systems(kind: BrowserKind) -> Vec<OsType> {
     let mut seen = BTreeSet::new();
-    measured()
+    all()
         .iter()
         .filter(|entry| entry.kind == kind)
         .map(|entry| entry.os)

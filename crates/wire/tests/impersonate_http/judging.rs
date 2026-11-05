@@ -176,7 +176,7 @@ fn cleared(at: u64, lifetime: u64) -> seleniumbase_rs_scrape::passport::identity
     let mut base = identity();
     let url = Url::parse(&format!("https://{HOST}/")).expect("a url");
     let line = format!("cf_clearance=CLEARANCE; Path=/; Secure; HttpOnly; Max-Age={lifetime}");
-    base.cookies.store(&url, &line, at);
+    base.cookies.receive(&url, &line, at);
     base.refresh_clearances(at);
     base
 }

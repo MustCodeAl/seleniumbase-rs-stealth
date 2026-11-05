@@ -172,7 +172,7 @@ impl HttpSession {
         options: HttpSessionOptions,
     ) -> Result<Self, HttpError> {
         options.validate()?;
-        identity.verify()?;
+        identity.validate()?;
         identity.check_proxy(egress.as_ref().map(ProxyRoute::key))?;
         let profile = WireFormat::from_fingerprint(&identity.fingerprint)?;
         identity

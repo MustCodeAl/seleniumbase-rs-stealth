@@ -26,7 +26,7 @@ of it.
 | Measured browser tables (Chrome 155 on macOS) and the lookup that refuses everything else | `codec` | Available |
 | Capture tools `capture_tls` and `capture_hints` | `scrape` | Available |
 | Capture tool `capture_h2` | `wire` | Available |
-| `WireFormat`, `WireFormatBuilder`, `wire_client` (wreq with BoringSSL) | `wire` | Available |
+| `WireFormat`, `WireFormatBuilder`, `WireFormat::client_builder` (wreq with BoringSSL) | `wire` | Available |
 | RFC 6265 cookie jar | `scrape` | Available |
 | `Identity`, its identity file, `EscalationPolicy` | `scrape` | Available |
 | Challenge detection, mitigation policy, proxy pool, per-site state, events | `scrape` | Available |
@@ -257,14 +257,14 @@ The `wire` crate turns a measured profile into a wreq client:
 
 ```rust
 use seleniumbase_rs_stealth::wire::client::{
-    wire_client, WireFormat, WireProtocol,
+    WireFormat, WireProtocol,
 };
 use seleniumbase_rs_stealth::codec::header_spec::RequestShape;
 use seleniumbase_rs_stealth::codec::BrowserKind;
 
 # async fn demo() -> Result<(), Box<dyn std::error::Error>> {
 let profile = WireFormat::measured(BrowserKind::Chrome)?;
-let client = wire_client(&profile)?.build()?;
+let client = profile.client_builder()?.build()?;
 
 let request = client.get("https://example.com/");
 let request = profile.apply(request, RequestShape::Document, None, WireProtocol::Http2)?;
@@ -274,7 +274,7 @@ let response = request.send().await?;
 # }
 ```
 
-- `wire_client` returns a `wreq::ClientBuilder` with the profile's
+- `client_builder` returns a `wreq::ClientBuilder` with the profile's
   `ClientHello`, HTTP/2 start and default headers. You add proxies, timeouts and
   a trust store, then build. Certificate verification stays on: trust a private
   root with `tls_cert_store`, never by turning verification off.
@@ -401,7 +401,7 @@ let now = std::time::SystemTime::now()
 let url = Url::parse("https://shop.example.com/cart")?;
 
 let mut jar = CookieJar::new();
-jar.store(&url, "sid=abc; Path=/; Secure; HttpOnly; SameSite=Lax", now);
+jar.receive(&url, "sid=abc; Path=/; Secure; HttpOnly; SameSite=Lax", now);
 let header = jar.header_for(&url, SiteContext::SameSite { top_level: true }, now);
 assert_eq!(header.as_deref(), Some("sid=abc"));
 # Ok(())
@@ -669,7 +669,7 @@ local storage in a `SessionStore`, the way a browser pool lease does.
 
 The scraper reports what it does to an `EventSink`. A `ScrapeEvent` can hold a
 URL only as a `RedactedUrl` (userinfo and sensitive query values removed) and a
-proxy only as an `ProxyKey`, so a password or token cannot reach a sink by
+proxy only as a `ProxyKey`, so a password or token cannot reach a sink by
 construction. The default sink, `TracingEventSink`, writes each event to
 `tracing` on the target `seleniumbase_rs_scrape`; `CollectingEventSink` keeps
 the newest events for tests. Errors are `ScrapeError`, whose URLs are redacted

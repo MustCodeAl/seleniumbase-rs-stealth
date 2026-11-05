@@ -53,7 +53,7 @@ pub(crate) fn identity() -> Identity {
 /// Stores one `Set-Cookie` header received from `url` in the jar of `identity`, at [`NOW`].
 pub(crate) fn set_cookie(identity: &mut Identity, url: &str, header: &str) -> SetCookieOutcome {
     let url = Url::parse(url).expect("a valid url");
-    identity.cookies.store(&url, header, NOW)
+    identity.cookies.receive(&url, header, NOW)
 }
 
 /// An identity that earned a Cloudflare clearance for `example.com` lasting an hour from [`NOW`].

@@ -124,7 +124,7 @@ impl BrowserScraper {
     /// when the browser refuses.
     #[tracing::instrument(skip_all)]
     pub async fn import_identity(&mut self, identity: &Identity) -> Result<(), ScrapeError> {
-        identity.verify()?;
+        identity.validate()?;
         identity.check_proxy(self.proxy_route())?;
         if self.persona.major.is_some() {
             identity.check_wire_measurement(&self.emulation())?;

@@ -172,6 +172,7 @@ impl fmt::Display for ProxyRoute {
 
 /// Why an egress spec was refused.
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum ProxyRouteError {
     /// The scheme is not one a proxy may use.
     #[error("unsupported proxy scheme `{0}`; use http, https, socks5 or socks5h")]

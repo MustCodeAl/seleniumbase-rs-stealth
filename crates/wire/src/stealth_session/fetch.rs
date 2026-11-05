@@ -280,7 +280,7 @@ impl StealthSession {
         let HttpFetch { reply, verdict } = match fetched {
             Ok(fetched) => fetched,
             Err(error) => {
-                self.report(ProxyOutcome::ConnectError);
+                self.report(ProxyOutcome::ConnectFailed);
                 return Err(error.into());
             }
         };
@@ -310,7 +310,7 @@ impl StealthSession {
         let (response, snapshot) = match loaded {
             Ok(page) => page,
             Err(error) => {
-                self.report(ProxyOutcome::ConnectError);
+                self.report(ProxyOutcome::ConnectFailed);
                 return Err(error.into());
             }
         };

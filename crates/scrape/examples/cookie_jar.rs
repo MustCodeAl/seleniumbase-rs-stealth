@@ -87,7 +87,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     println!("Set-Cookie headers received from {shop}");
     for (what, header) in HEADERS {
-        let outcome = format!("{:?}", jar.store(&shop, header, now));
+        let outcome = format!("{:?}", jar.receive(&shop, header, now));
         println!("  {outcome:<34} {what}");
     }
 

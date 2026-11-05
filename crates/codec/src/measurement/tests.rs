@@ -1,9 +1,8 @@
 //! Parsing, lookup and the refusal of unmeasured browser and system pairs.
 
 use super::{
-    for_kind, get, get_version, measured, measured_systems, newest, newest_on, parse_all,
-    source_names, try_measured, KnownGap, WireMeasurement, WireMeasurementError,
-    MAX_MEASURED_JSON_BYTES, SOURCES,
+    all, for_kind, get, get_version, measured_systems, newest, newest_on, parse_all, source_names,
+    try_all, KnownGap, WireMeasurement, WireMeasurementError, MAX_MEASURED_JSON_BYTES, SOURCES,
 };
 use crate::tls_spec::KnownGap as TlsKnownGap;
 use crate::BrowserKind;
@@ -50,7 +49,7 @@ fn parse_value(value: &serde_json::Value) -> Result<WireMeasurement, WireMeasure
 
 #[test]
 fn every_embedded_file_parses_and_none_repeats() {
-    let entries = try_measured().expect("the embedded files parse");
+    let entries = try_all().expect("the embedded files parse");
 
     assert_eq!(entries.len(), SOURCES.len());
     assert!(!entries.is_empty(), "an empty table measures nothing");
@@ -177,7 +176,7 @@ fn a_measured_system_with_another_major_is_a_version_error() {
 fn every_browser_kind_has_an_entry() {
     for kind in all_kinds() {
         assert!(
-            measured().iter().any(|entry| entry.kind == kind),
+            all().iter().any(|entry| entry.kind == kind),
             "{kind:?} has no measured entry; measure it or refuse it in a documented way"
         );
         assert_eq!(for_kind(kind).kind, kind);

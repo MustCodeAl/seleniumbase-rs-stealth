@@ -55,7 +55,7 @@ fn every_measured_file_is_embedded_and_every_embedded_file_exists() {
 
 #[test]
 fn the_file_name_matches_the_entry_it_holds() {
-    for entry in measurement::measured() {
+    for entry in measurement::all() {
         let file = format!("{}.json", entry.file_stem());
 
         assert!(

@@ -160,7 +160,8 @@ async fn the_cookies_of_the_identity_are_sent_and_the_session_exports_the_new_on
     .await;
     let mut base = identity();
     let url = Url::parse(&site.url(HOST, "/")).expect("a url");
-    base.cookies.store(&url, "carried=OLD; Max-Age=3600", now());
+    base.cookies
+        .receive(&url, "carried=OLD; Max-Age=3600", now());
     let sink = Arc::new(CollectingEventSink::new());
     let options = site
         .options(&[HOST])

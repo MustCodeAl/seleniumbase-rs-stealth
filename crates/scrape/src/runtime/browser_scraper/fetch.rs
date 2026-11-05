@@ -194,7 +194,7 @@ impl BrowserScraper {
         let response = match cdp::goto_with_response(&self.page, &target.url).await {
             Ok(response) => response,
             Err(error) => {
-                self.report(ProxyOutcome::ConnectError);
+                self.report(ProxyOutcome::ConnectFailed);
                 return Err(error);
             }
         };

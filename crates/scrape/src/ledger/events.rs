@@ -1,6 +1,6 @@
 //! The scraper events and the `EventSink` trait, with every URL and egress in them already redacted.
 //!
-//! A [`ScrapeEvent`] can only hold a URL as a [`RedactedUrl`] and a proxy as an [`ProxyKey`], so
+//! A [`ScrapeEvent`] can only hold a URL as a [`RedactedUrl`] and a proxy as a [`ProxyKey`], so
 //! a password, a token in a query or any other credential cannot reach a sink by construction.
 //! The other fields are counts, times, kinds and site names. Events serialize as JSON objects with
 //! an `event` field naming the variant in `snake_case`.

@@ -8,7 +8,7 @@ use wreq::{NoProxy, Proxy};
 
 use super::error::HttpError;
 use super::options::HttpSessionOptions;
-use crate::client::{wire_client, WireFormat};
+use crate::client::WireFormat;
 use seleniumbase_rs_scrape::egress::route::ProxyRoute;
 
 /// The notation of the `no_proxy` list for a host that skips the proxy.
@@ -87,7 +87,8 @@ pub(super) fn build_client(
     egress: Option<&ProxyRoute>,
     options: &HttpSessionOptions,
 ) -> Result<wreq::Client, HttpError> {
-    let mut builder = wire_client(profile)?
+    let mut builder = profile
+        .client_builder()?
         .redirect(Policy::none())
         .gzip(true)
         .brotli(true)

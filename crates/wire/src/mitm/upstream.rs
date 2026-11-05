@@ -24,7 +24,7 @@ use super::destination::{self, PublicOnly};
 use super::forward::ProxyBody;
 use super::websocket::RelayIo;
 use super::{MitmError, MitmOptions};
-use crate::client::{wire_client, WireFormat, WireFormatError};
+use crate::client::{WireFormat, WireFormatError};
 use crate::convert;
 use crate::sync::locked;
 use seleniumbase_rs_codec::client_hello::ext_id;
@@ -307,7 +307,7 @@ fn client(
     egress: Option<&ProxyRoute>,
     options: &MitmOptions,
 ) -> Result<wreq::Client, MitmError> {
-    finish(wire_client(profile)?, egress, options)
+    finish(profile.client_builder()?, egress, options)
 }
 
 /// The measured WebSocket hello of the profile's browser and system, without the known gaps,

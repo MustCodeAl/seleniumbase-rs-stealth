@@ -33,7 +33,7 @@ pub(super) fn check_identity(
     identity: &Identity,
     egress: Option<&ProxyKey>,
 ) -> Result<(), StealthError> {
-    identity.verify()?;
+    identity.validate()?;
     identity.check_proxy(egress)?;
     let profile = WireFormat::from_fingerprint(&identity.fingerprint)?;
     identity.check_wire_measurement(&WireMeasurementRef {

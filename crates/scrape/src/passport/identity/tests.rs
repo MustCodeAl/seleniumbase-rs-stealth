@@ -73,7 +73,7 @@ fn a_proxy_set_after_construction_is_still_not_serialized() {
 fn verify_refuses_an_identity_that_carries_a_proxy() {
     let mut made = identity();
     made.fingerprint = with_proxy(&made.fingerprint, PASSWORD);
-    let error = made.verify().expect_err("a proxy is refused");
+    let error = made.validate().expect_err("a proxy is refused");
     assert!(matches!(error, IdentityError::Incoherent(_)), "{error:?}");
     assert!(!error.to_string().contains(PASSWORD));
 }
@@ -201,11 +201,11 @@ fn debug_shows_the_cookie_count_and_the_egress_and_nothing_else() {
 
 #[test]
 fn verify_accepts_a_good_identity_and_refuses_another_schema() {
-    assert_eq!(identity().verify(), Ok(()));
+    assert_eq!(identity().validate(), Ok(()));
     let mut future = identity();
     future.schema = IDENTITY_SCHEMA + 1;
     assert_eq!(
-        future.verify(),
+        future.validate(),
         Err(IdentityError::Schema(IDENTITY_SCHEMA + 1))
     );
 }
@@ -219,7 +219,7 @@ fn verify_refuses_a_fingerprint_that_no_longer_fits_its_os() {
         .platform("Win32")
         .build()
         .expect("builds");
-    assert!(matches!(made.verify(), Err(IdentityError::Incoherent(_))));
+    assert!(matches!(made.validate(), Err(IdentityError::Incoherent(_))));
 }
 
 #[test]

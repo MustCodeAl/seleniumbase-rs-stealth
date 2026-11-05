@@ -8,7 +8,7 @@
 //! The identity holds cookies, which are credentials. Its [`Debug`](std::fmt::Debug) prints the
 //! cookie count and the proxy key only. Its fingerprint never holds a proxy: a proxy can carry a
 //! password, so [`Identity::new`] clears it, serialization leaves it out even if it was set
-//! afterwards, and [`Identity::verify`] refuses an identity that has one.
+//! afterwards, and [`Identity::validate`] refuses an identity that has one.
 //!
 //! This module is pure. The file the identity is saved to is written by
 //! [`identity_file`](crate::runtime::identity_file).
@@ -146,7 +146,7 @@ pub enum IdentityError {
     Incoherent(Vec<String>),
     /// The identity claims another browser version than the one measured.
     #[error(
-        "the identity claims Chrome {identity} but the wire_measurement was measured on Chrome {measured}"
+        "the identity claims Chrome {identity} but the wire measurement was taken on Chrome {measured}"
     )]
     WireMeasurementMismatch {
         /// The major version the identity claims.
@@ -281,7 +281,7 @@ impl Identity {
     ///
     /// Returns [`IdentityError::Schema`] for another layout and [`IdentityError::Incoherent`] for a
     /// fingerprint that fails [`Fingerprint::validate`] or holds a proxy.
-    pub fn verify(&self) -> Result<(), IdentityError> {
+    pub fn validate(&self) -> Result<(), IdentityError> {
         if self.schema != IDENTITY_SCHEMA {
             return Err(IdentityError::Schema(self.schema));
         }

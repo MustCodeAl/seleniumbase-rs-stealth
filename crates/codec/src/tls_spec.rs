@@ -133,6 +133,7 @@ pub enum TlsSpecError {
 
 /// A known difference between a measured browser hello and what `BoringSSL` can send.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[non_exhaustive]
 pub enum KnownGap {
     /// The `trust_anchors` extension (0xCA34), which needs a newer btls and wreq.
     TrustAnchorsExtension,

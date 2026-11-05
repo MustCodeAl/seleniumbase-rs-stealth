@@ -5,7 +5,7 @@
 //! - **Writing** goes through the atomic writer of the JSON state store: a sibling temporary file created new with mode
 //!   `0600` on Unix, synced and renamed over the target, so a reader sees the old file or the new
 //!   one, and an older file with wider permissions is replaced by one that has `0600`. An identity
-//!   that [`Identity::verify`] would refuse (another schema, an incoherent fingerprint, a
+//!   that [`Identity::validate`] would refuse (another schema, an incoherent fingerprint, a
 //!   proxy) is not written.
 //! - **Reading** opens the file first and judges the open file, not the path: on Unix it must be a
 //!   regular file, owned by the user running the process, that group and others cannot access
@@ -127,7 +127,7 @@ impl IdentityFileError {
 /// # Errors
 ///
 /// Returns [`IdentityFileError::Identity`] when the identity is refused by
-/// [`Identity::verify`], and [`IdentityFileError::Io`] when the file cannot be written.
+/// [`Identity::validate`], and [`IdentityFileError::Io`] when the file cannot be written.
 pub fn save_blocking(path: &Path, identity: &Identity) -> Result<(), IdentityFileError> {
     let bytes = encode(path, identity)?;
     write_file(path, &bytes).map_err(|source| io_error(path, source))
@@ -135,7 +135,9 @@ pub fn save_blocking(path: &Path, identity: &Identity) -> Result<(), IdentityFil
 
 /// The file's content for `identity`, after checking that it would be read back.
 fn encode(path: &Path, identity: &Identity) -> Result<Vec<u8>, IdentityFileError> {
-    identity.verify().map_err(|source| refused(path, source))?;
+    identity
+        .validate()
+        .map_err(|source| refused(path, source))?;
     serde_json::to_vec_pretty(identity)
         .map_err(|error| io_error(path, io::Error::other(json_failure(&error))))
 }
@@ -183,7 +185,7 @@ fn corrupt(path: &Path, error: &serde_json::Error) -> IdentityFileError {
 /// [`IdentityFileError::Permissions`] when others can access it, [`IdentityFileError::TooLarge`]
 /// when it is over [`MAX_IDENTITY_FILE_BYTES`], [`IdentityFileError::Corrupt`] when it is not an
 /// identity, and [`IdentityFileError::Identity`] for another schema or an identity that
-/// [`Identity::verify`] refuses.
+/// [`Identity::validate`] refuses.
 pub fn load_blocking(path: &Path) -> Result<Identity, IdentityFileError> {
     load_with_limit(path, MAX_IDENTITY_FILE_BYTES)
 }
@@ -197,7 +199,9 @@ fn load_with_limit(path: &Path, limit: u64) -> Result<Identity, IdentityFileErro
     }
     let identity: Identity =
         serde_json::from_slice(&bytes).map_err(|error| corrupt(path, &error))?;
-    identity.verify().map_err(|source| refused(path, source))?;
+    identity
+        .validate()
+        .map_err(|source| refused(path, source))?;
     Ok(identity)
 }
 

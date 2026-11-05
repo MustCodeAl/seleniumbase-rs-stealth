@@ -2,7 +2,7 @@
 //! the proof that a profile reaches the wire is `tests/impersonate_wire.rs`.
 
 use super::identity::{quote, sec_ch_ua, user_agent_major};
-use super::{wire_client, WireFormat, WireFormatError, WireProtocol};
+use super::{WireFormat, WireFormatError, WireProtocol};
 use crate::convert::ConvertError;
 use seleniumbase_rs::evasion::fingerprint::{BrandVersion, Fingerprint, OsType, Spoof};
 use seleniumbase_rs_codec::client_hello::ext_id;
@@ -593,7 +593,8 @@ fn a_base_with_no_capture_is_refused_when_the_builder_needs_it() {
 
 #[test]
 fn the_client_builder_accepts_every_measured_and_custom_profile() {
-    wire_client(&chrome())
+    chrome()
+        .client_builder()
         .expect("builds")
         .build()
         .expect("a client");
@@ -604,7 +605,8 @@ fn the_client_builder_accepts_every_measured_and_custom_profile() {
         .expect("accepted")
         .build()
         .expect("builds");
-    wire_client(&custom)
+    custom
+        .client_builder()
         .expect("builds")
         .build()
         .expect("a client");

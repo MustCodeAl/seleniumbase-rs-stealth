@@ -378,7 +378,7 @@ fn first_egress(
     let Some(identity) = &start.restore else {
         return Ok(pool.and_then(|pool| pool.pick(None, now)));
     };
-    identity.verify()?;
+    identity.validate()?;
     let named = identity.proxy.as_ref().and_then(|key| {
         start.egresses.iter().find(|egress| {
             let held = egress.key();

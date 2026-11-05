@@ -22,7 +22,7 @@ use std::error::Error;
 use std::process::ExitCode;
 
 use seleniumbase_rs_codec::BrowserKind;
-use seleniumbase_rs_wire::{wire_client, WireFormat, WireFormatBuilder, WireFormatError};
+use seleniumbase_rs_wire::{WireFormat, WireFormatBuilder, WireFormatError};
 
 /// An Akamai HTTP/2 fingerprint other than Chrome's: its own SETTINGS, connection window,
 /// PRIORITY frames and pseudo-header order.
@@ -113,7 +113,7 @@ fn run() -> Result<(), Box<dyn Error>> {
     }
 
     // A profile becomes a wreq client builder. Building the client sends nothing.
-    let client = wire_client(&other_h2)?.build()?;
+    let client = other_h2.client_builder()?.build()?;
     drop(client);
     println!("\nbuilt a wreq client from the HTTP/2 override; nothing was sent");
     Ok(())

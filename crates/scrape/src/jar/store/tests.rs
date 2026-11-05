@@ -20,7 +20,7 @@ fn url(text: &str) -> Url {
 }
 
 fn store_at(jar: &mut CookieJar, at: &str, header: &str, now: u64) -> SetCookieOutcome {
-    jar.store(&url(at), header, now)
+    jar.receive(&url(at), header, now)
 }
 
 fn store(jar: &mut CookieJar, at: &str, header: &str) -> SetCookieOutcome {
@@ -607,7 +607,7 @@ fn generated_exchanges_keep_every_invariant() {
         let now = NOW + step / 10;
         let (at, header_text) = random_exchange(&mut rng);
         let origin_host = url(&at).host_str().expect("host").to_owned();
-        let outcome = jar.store(&url(&at), &header_text, now);
+        let outcome = jar.receive(&url(&at), &header_text, now);
         if outcome == SetCookieOutcome::Stored {
             // A new cookie is pushed last and is never the one evicted.
             let latest = jar.cookies().last().expect("stored");

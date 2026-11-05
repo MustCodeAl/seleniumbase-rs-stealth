@@ -1,21 +1,21 @@
 //! Builds an impersonating wreq client from a profile, with the custom JA3 and Akamai builder.
 //!
-//! An [`WireFormat`] is a browser the crate has measured, as data: the TLS and HTTP/2
+//! A [`WireFormat`] is a browser the crate has measured, as data: the TLS and HTTP/2
 //! specs it was measured with (minus what `BoringSSL` and wreq cannot send, which stays on
 //! record in [`WireFormat::known_gaps`]), its header lists, and the identity a request
-//! carries (`User-Agent`, `Sec-CH-UA*`, `Accept-Language`). [`wire_client`] turns it into
+//! carries (`User-Agent`, `Sec-CH-UA*`, `Accept-Language`). [`WireFormat::client_builder`] turns it into
 //! a [`wreq::ClientBuilder`]; the caller adds proxies, a trust store and timeouts, then builds.
 //!
 //! ```no_run
 //! use seleniumbase_rs_wire::client::{
-//!     wire_client, WireFormat, WireProtocol,
+//!     WireFormat, WireProtocol,
 //! };
 //! use seleniumbase_rs_codec::header_spec::RequestShape;
 //! use seleniumbase_rs_codec::BrowserKind;
 //!
 //! # async fn demo() -> Result<(), Box<dyn std::error::Error>> {
 //! let profile = WireFormat::measured(BrowserKind::Chrome)?;
-//! let client = wire_client(&profile)?.build()?;
+//! let client = profile.client_builder()?.build()?;
 //! let request = client.get("https://example.com/");
 //! let request = profile.apply(request, RequestShape::Document, None, WireProtocol::Http2)?;
 //! let response = request.send().await?;
@@ -141,6 +141,7 @@ pub enum WireFormatError {
 /// HTTP/2 requests carry the `priority` header of the measured table; HTTP/1.1 requests do not,
 /// because Chrome sends it on HTTP/2 only.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum WireProtocol {
     /// HTTP/1.1.
     Http1,
@@ -186,7 +187,7 @@ impl WireFormat {
     /// Returns [`WireFormatError::Measurement`] when the embedded tables are broken or hold no
     /// entry for `kind`, and the errors of [`WireFormat::from_measured`].
     pub fn measured(kind: BrowserKind) -> Result<Self, WireFormatError> {
-        let table = measurement::try_measured().map_err(Clone::clone)?;
+        let table = measurement::try_all().map_err(Clone::clone)?;
         let entry = measurement::newest(table, kind).ok_or(WireFormatError::Incomplete {
             what: "measurement for this browser",
         })?;
@@ -250,7 +251,7 @@ impl WireFormat {
     /// Returns [`WireFormatError::Incomplete`] when nothing is measured, and the errors of
     /// [`WireFormat::from_fingerprint`].
     pub fn random(seed: u64) -> Result<Self, WireFormatError> {
-        let table = measurement::try_measured().map_err(Clone::clone)?;
+        let table = measurement::try_all().map_err(Clone::clone)?;
         let count = u64::try_from(table.len()).unwrap_or(u64::MAX).max(1);
         let index = usize::try_from(seed % count).unwrap_or_default();
         let entry = table.get(index).ok_or(WireFormatError::Incomplete {
@@ -453,7 +454,7 @@ impl WireFormat {
     ///
     /// # Errors
     ///
-    /// Returns an [`WireFormatError`] when a header cannot be rendered or sent.
+    /// Returns a [`WireFormatError`] when a header cannot be rendered or sent.
     pub fn apply(
         &self,
         request: RequestBuilder,
@@ -474,20 +475,27 @@ impl WireFormat {
     }
 }
 
-/// Starts a wreq client with the TLS, HTTP/2 and default headers of a profile.
-///
-/// The client announces `h2` and `http/1.1`, sends the profile's `ClientHello` and HTTP/2 start,
-/// and carries the navigation headers by default; use [`WireFormat::apply`] to give a
-/// request the headers of its own shape. Certificate verification stays on: trust a private
-/// root with `tls_cert_store`, never by turning verification off. The caller sets proxies and
-/// timeouts and builds the client.
-///
-/// # Errors
-///
-/// Returns an [`WireFormatError`] when a spec cannot be sent by this client stack. That is the
-/// same check a custom profile passed at build time, so it only fails for a profile whose specs
-/// were changed afterwards.
-pub fn wire_client(profile: &WireFormat) -> Result<wreq::ClientBuilder, WireFormatError> {
+impl WireFormat {
+    /// A wreq client builder that sends this wire format: its TLS, HTTP/2 and default headers.
+    ///
+    /// The client announces `h2` and `http/1.1`, sends the `ClientHello` and HTTP/2 start of
+    /// this format, and carries the navigation headers by default; use [`WireFormat::apply`]
+    /// to give a request the headers of its own shape. Certificate verification stays on:
+    /// trust a private root with `tls_cert_store`, never by turning verification off. The
+    /// caller sets proxies and timeouts and builds the client.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`WireFormatError`] when a spec cannot be sent by this client stack. That is
+    /// the same check a custom format passed at build time, so it only fails for a format
+    /// whose specs were changed afterwards.
+    pub fn client_builder(&self) -> Result<wreq::ClientBuilder, WireFormatError> {
+        client_builder(self)
+    }
+}
+
+/// The builder behind [`WireFormat::client_builder`].
+fn client_builder(profile: &WireFormat) -> Result<wreq::ClientBuilder, WireFormatError> {
     let tls = convert::tls_options(&profile.tls)?;
     let http2 = convert::http2_options(&profile.http2)?;
     let document = profile.headers_for(RequestShape::Document, None, WireProtocol::Http2)?;
