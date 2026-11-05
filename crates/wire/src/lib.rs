@@ -7,10 +7,8 @@
 //! dual-mode session (`StealthSession`, `StealthSessionBuilder`, `StealthFetch`, `StealthError`)
 //! and the in-memory CA (`EphemeralCa`).
 //!
-//! Five names of the HTTP session are generic, and are re-exported with a prefix so that they do
-//! not read as something else at this level: `HttpAttempt`, `HttpFetch`, `HttpRules` and `HttpVerdict` of the
-//! judging calls become `HttpAttempt`, `HttpFetch`, `HttpRules` and `HttpVerdict`, and the
-//! reply `ResponseHeaders` become `ResponseHeaders`. The original names stay in `http_session`.
+//! The judging types of the HTTP session (`HttpAttempt`, `HttpFetch`, `HttpRules`, `HttpVerdict`)
+//! and its reply headers (`ResponseHeaders`) are re-exported here under their own names.
 //!
 //! The stealth layer is experimental: its types may change between releases. It is measured on
 //! macOS with Chrome 155 only.
