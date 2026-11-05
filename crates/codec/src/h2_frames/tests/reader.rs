@@ -12,7 +12,7 @@ fn request() -> Vec<u8> {
         1,
         flag::END_HEADERS,
         None,
-        &request_block(&Pseudo::ALL, &[]),
+        &request_block(&PseudoHeader::ALL, &[]),
     )
 }
 

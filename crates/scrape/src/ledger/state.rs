@@ -1,7 +1,7 @@
-//! Per-site state (successes, challenges, cooldowns) and the `StateStore` trait it is saved through.
+//! Per-site state (successes, challenges, cooldowns) and the `Ledger` trait it is saved through.
 //!
 //! This module is pure: the types, the update rule and the in-memory store. The store that
-//! writes a file is [`JsonStateStore`](crate::runtime::json_store::JsonStateStore).
+//! writes a file is [`JsonLedger`](crate::runtime::json_store::JsonLedger).
 
 use std::collections::BTreeMap;
 use std::io;
@@ -12,8 +12,8 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
 use crate::challenge::detect::{ChallengeKind, Detection};
-use crate::challenge::mitigation::Mode;
-use crate::egress::route::EgressKey;
+use crate::challenge::mitigation::FetchKind;
+use crate::egress::route::ProxyKey;
 use crate::sync::locked;
 
 /// The version of the state file layout. A file with another version is refused, not guessed at.
@@ -26,7 +26,7 @@ pub const MAX_STATE_SITES: usize = 10_000;
 /// What is known about one site: how it has answered, and how it should be approached next.
 /// `site` is the key; callers pass the registrable domain.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct DomainState {
+pub struct SiteRecord {
     /// The site this state is about.
     pub site: String,
     /// Responses that were not challenges.
@@ -53,13 +53,13 @@ pub struct DomainState {
     /// How the site is best fetched. `Http` once a plain request has worked; `Browser` once one
     /// was challenged.
     #[serde(default)]
-    pub preferred_mode: Option<Mode>,
+    pub preferred_kind: Option<FetchKind>,
     /// The egress the site last answered through. Never its credentials.
     #[serde(default)]
-    pub last_egress: Option<EgressKey>,
+    pub last_proxy: Option<ProxyKey>,
 }
 
-impl DomainState {
+impl SiteRecord {
     /// A site that has not been seen.
     #[must_use]
     pub fn new(site: impl Into<String>) -> Self {
@@ -72,28 +72,28 @@ impl DomainState {
             last_challenge: None,
             last_seen: 0,
             cooldown_until: None,
-            preferred_mode: None,
-            last_egress: None,
+            preferred_kind: None,
+            last_proxy: None,
         }
     }
 
     /// Takes in one response, fetched in `mode` at time `now` (seconds since the Unix epoch).
     ///
     /// A response that is not a challenge counts as a success, ends the streak and lifts a
-    /// cooldown; in [`Mode::Http`] it also makes plain requests the preferred way. A block
+    /// cooldown; in [`FetchKind::Http`] it also makes plain requests the preferred way. A block
     /// counts in `blocks`, and a script challenge, interactive challenge or rate limit in
     /// `challenges`; each extends the streak and is remembered in `last_challenge`. A challenge
-    /// or block met in [`Mode::Http`] makes the browser the preferred way; a rate limit does not,
+    /// or block met in [`FetchKind::Http`] makes the browser the preferred way; a rate limit does not,
     /// because a browser would be limited too.
-    pub fn record(&mut self, detection: &Detection, mode: Mode, now: u64) {
+    pub fn record(&mut self, detection: &Detection, mode: FetchKind, now: u64) {
         self.last_seen = now;
         match detection.kind {
-            ChallengeKind::None => {
+            ChallengeKind::Clear => {
                 self.successes = self.successes.saturating_add(1);
                 self.consecutive_challenges = 0;
                 self.cooldown_until = None;
-                if mode == Mode::Http {
-                    self.preferred_mode = Some(Mode::Http);
+                if mode == FetchKind::Http {
+                    self.preferred_kind = Some(FetchKind::Http);
                 }
             }
             kind => {
@@ -105,8 +105,8 @@ impl DomainState {
                 self.consecutive_challenges = self.consecutive_challenges.saturating_add(1);
                 self.last_challenge = Some(kind);
                 let rate_limited = matches!(kind, ChallengeKind::RateLimited { .. });
-                if mode == Mode::Http && !rate_limited {
-                    self.preferred_mode = Some(Mode::Browser);
+                if mode == FetchKind::Http && !rate_limited {
+                    self.preferred_kind = Some(FetchKind::Browser);
                 }
             }
         }
@@ -130,7 +130,7 @@ impl DomainState {
 /// Why a state store failed.
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
-pub enum StateError {
+pub enum LedgerError {
     /// The file could not be read or written.
     #[error("cannot read or write the state file {}: {source}", .path.display())]
     Io {
@@ -164,41 +164,41 @@ pub enum StateError {
 
 /// Where per-site state lives between requests.
 #[async_trait]
-pub trait StateStore: Send + Sync {
+pub trait Ledger: Send + Sync {
     /// The state of `site`, when there is any.
     ///
     /// # Errors
     ///
-    /// Returns [`StateError`] when the store cannot be read.
-    async fn get(&self, site: &str) -> Result<Option<DomainState>, StateError>;
+    /// Returns [`LedgerError`] when the store cannot be read.
+    async fn get(&self, site: &str) -> Result<Option<SiteRecord>, LedgerError>;
 
     /// Saves `state`, replacing what was there for its site.
     ///
     /// # Errors
     ///
-    /// Returns [`StateError`] when the store cannot be written. Nothing is changed then.
-    async fn put(&self, state: DomainState) -> Result<(), StateError>;
+    /// Returns [`LedgerError`] when the store cannot be written. Nothing is changed then.
+    async fn put(&self, state: SiteRecord) -> Result<(), LedgerError>;
 
     /// Forgets `site`. Forgetting a site that is not there is not an error.
     ///
     /// # Errors
     ///
-    /// Returns [`StateError`] when the store cannot be written. Nothing is changed then.
-    async fn remove(&self, site: &str) -> Result<(), StateError>;
+    /// Returns [`LedgerError`] when the store cannot be written. Nothing is changed then.
+    async fn remove(&self, site: &str) -> Result<(), LedgerError>;
 
     /// Every site that has state, in order.
     ///
     /// # Errors
     ///
-    /// Returns [`StateError`] when the store cannot be read.
-    async fn sites(&self) -> Result<Vec<String>, StateError>;
+    /// Returns [`LedgerError`] when the store cannot be read.
+    async fn sites(&self) -> Result<Vec<String>, LedgerError>;
 }
 
 /// Puts `state` in `sites`, first dropping the site seen longest ago (the first by name among
 /// equals) while a new site would take the table past `cap`.
 pub(crate) fn insert_bounded(
-    sites: &mut BTreeMap<String, DomainState>,
-    state: DomainState,
+    sites: &mut BTreeMap<String, SiteRecord>,
+    state: SiteRecord,
     cap: usize,
 ) {
     if !sites.contains_key(&state.site) {
@@ -218,11 +218,11 @@ pub(crate) fn insert_bounded(
 
 /// A store that keeps everything in memory, behind an `Arc`, so that clones share it.
 #[derive(Clone, Debug, Default)]
-pub struct InMemoryStateStore {
-    sites: Arc<Mutex<BTreeMap<String, DomainState>>>,
+pub struct InMemoryLedger {
+    sites: Arc<Mutex<BTreeMap<String, SiteRecord>>>,
 }
 
-impl InMemoryStateStore {
+impl InMemoryLedger {
     /// An empty store.
     #[must_use]
     pub fn new() -> Self {
@@ -231,22 +231,22 @@ impl InMemoryStateStore {
 }
 
 #[async_trait]
-impl StateStore for InMemoryStateStore {
-    async fn get(&self, site: &str) -> Result<Option<DomainState>, StateError> {
+impl Ledger for InMemoryLedger {
+    async fn get(&self, site: &str) -> Result<Option<SiteRecord>, LedgerError> {
         Ok(locked(&self.sites).get(site).cloned())
     }
 
-    async fn put(&self, state: DomainState) -> Result<(), StateError> {
+    async fn put(&self, state: SiteRecord) -> Result<(), LedgerError> {
         insert_bounded(&mut locked(&self.sites), state, MAX_STATE_SITES);
         Ok(())
     }
 
-    async fn remove(&self, site: &str) -> Result<(), StateError> {
+    async fn remove(&self, site: &str) -> Result<(), LedgerError> {
         locked(&self.sites).remove(site);
         Ok(())
     }
 
-    async fn sites(&self) -> Result<Vec<String>, StateError> {
+    async fn sites(&self) -> Result<Vec<String>, LedgerError> {
         Ok(locked(&self.sites).keys().cloned().collect())
     }
 }
@@ -254,24 +254,24 @@ impl StateStore for InMemoryStateStore {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::challenge::detect::Evidence;
+    use crate::challenge::detect::ChallengeEvidence;
     use futures_util::FutureExt;
 
     fn seen(kind: ChallengeKind) -> Detection {
         Detection {
             kind,
-            evidence: Evidence::default(),
+            evidence: ChallengeEvidence::default(),
         }
     }
 
     fn ok() -> Detection {
-        seen(ChallengeKind::None)
+        seen(ChallengeKind::Clear)
     }
 
-    fn state(site: &str, last_seen: u64) -> DomainState {
-        DomainState {
+    fn state(site: &str, last_seen: u64) -> SiteRecord {
+        SiteRecord {
             last_seen,
-            ..DomainState::new(site)
+            ..SiteRecord::new(site)
         }
     }
 
@@ -282,7 +282,7 @@ mod tests {
 
     #[test]
     fn a_new_site_has_seen_nothing() {
-        let fresh = DomainState::new("example.test");
+        let fresh = SiteRecord::new("example.test");
         assert_eq!(fresh.site, "example.test");
         assert_eq!(
             (
@@ -293,17 +293,17 @@ mod tests {
             ),
             (0, 0, 0, 0)
         );
-        assert!(fresh.last_challenge.is_none() && fresh.preferred_mode.is_none());
+        assert!(fresh.last_challenge.is_none() && fresh.preferred_kind.is_none());
         assert!(!fresh.in_cooldown(0));
     }
 
     #[test]
     fn a_success_counts_and_ends_the_streak() {
-        let mut site = DomainState::new("example.test");
-        site.record(&seen(ChallengeKind::JsChallenge), Mode::Browser, 10);
-        site.record(&seen(ChallengeKind::JsChallenge), Mode::Browser, 11);
+        let mut site = SiteRecord::new("example.test");
+        site.record(&seen(ChallengeKind::JsChallenge), FetchKind::Browser, 10);
+        site.record(&seen(ChallengeKind::JsChallenge), FetchKind::Browser, 11);
         assert_eq!(site.consecutive_challenges, 2);
-        site.record(&ok(), Mode::Browser, 12);
+        site.record(&ok(), FetchKind::Browser, 12);
         assert_eq!(site.successes, 1);
         assert_eq!(site.challenges, 2);
         assert_eq!(site.consecutive_challenges, 0);
@@ -317,14 +317,14 @@ mod tests {
 
     #[test]
     fn blocks_and_challenges_are_counted_apart() {
-        let mut site = DomainState::new("example.test");
-        site.record(&seen(ChallengeKind::Blocked), Mode::Http, 1);
-        site.record(&seen(ChallengeKind::Interactive), Mode::Browser, 2);
+        let mut site = SiteRecord::new("example.test");
+        site.record(&seen(ChallengeKind::Blocked), FetchKind::Http, 1);
+        site.record(&seen(ChallengeKind::Interactive), FetchKind::Browser, 2);
         site.record(
             &seen(ChallengeKind::RateLimited {
                 retry_after_secs: Some(5),
             }),
-            Mode::Http,
+            FetchKind::Http,
             3,
         );
         assert_eq!((site.blocks, site.challenges, site.successes), (1, 2, 0));
@@ -339,61 +339,61 @@ mod tests {
 
     #[test]
     fn the_preferred_mode_follows_what_worked_over_http() {
-        let mut site = DomainState::new("example.test");
-        site.record(&ok(), Mode::Browser, 1);
+        let mut site = SiteRecord::new("example.test");
+        site.record(&ok(), FetchKind::Browser, 1);
         assert_eq!(
-            site.preferred_mode, None,
+            site.preferred_kind, None,
             "a browser success says nothing about plain requests"
         );
-        site.record(&ok(), Mode::Http, 2);
-        assert_eq!(site.preferred_mode, Some(Mode::Http));
-        site.record(&seen(ChallengeKind::JsChallenge), Mode::Http, 3);
-        assert_eq!(site.preferred_mode, Some(Mode::Browser));
-        site.record(&ok(), Mode::Browser, 4);
+        site.record(&ok(), FetchKind::Http, 2);
+        assert_eq!(site.preferred_kind, Some(FetchKind::Http));
+        site.record(&seen(ChallengeKind::JsChallenge), FetchKind::Http, 3);
+        assert_eq!(site.preferred_kind, Some(FetchKind::Browser));
+        site.record(&ok(), FetchKind::Browser, 4);
         assert_eq!(
-            site.preferred_mode,
-            Some(Mode::Browser),
+            site.preferred_kind,
+            Some(FetchKind::Browser),
             "a browser success does not undo it"
         );
-        site.record(&seen(ChallengeKind::Interactive), Mode::Browser, 5);
-        assert_eq!(site.preferred_mode, Some(Mode::Browser));
+        site.record(&seen(ChallengeKind::Interactive), FetchKind::Browser, 5);
+        assert_eq!(site.preferred_kind, Some(FetchKind::Browser));
     }
 
     #[test]
     fn a_rate_limit_does_not_send_the_site_to_the_browser() {
-        let mut site = DomainState::new("example.test");
-        site.record(&ok(), Mode::Http, 1);
+        let mut site = SiteRecord::new("example.test");
+        site.record(&ok(), FetchKind::Http, 1);
         site.record(
             &seen(ChallengeKind::RateLimited {
                 retry_after_secs: None,
             }),
-            Mode::Http,
+            FetchKind::Http,
             2,
         );
-        assert_eq!(site.preferred_mode, Some(Mode::Http));
-        site.record(&seen(ChallengeKind::Blocked), Mode::Http, 3);
-        assert_eq!(site.preferred_mode, Some(Mode::Browser));
+        assert_eq!(site.preferred_kind, Some(FetchKind::Http));
+        site.record(&seen(ChallengeKind::Blocked), FetchKind::Http, 3);
+        assert_eq!(site.preferred_kind, Some(FetchKind::Browser));
     }
 
     #[test]
     fn counters_saturate_instead_of_wrapping() {
-        let mut site = DomainState::new("example.test");
+        let mut site = SiteRecord::new("example.test");
         site.successes = u64::MAX;
         site.challenges = u64::MAX;
         site.blocks = u64::MAX;
         site.consecutive_challenges = u32::MAX;
-        site.record(&ok(), Mode::Http, 1);
+        site.record(&ok(), FetchKind::Http, 1);
         assert_eq!(site.successes, u64::MAX);
         site.consecutive_challenges = u32::MAX;
-        site.record(&seen(ChallengeKind::JsChallenge), Mode::Http, 2);
-        site.record(&seen(ChallengeKind::Blocked), Mode::Http, 3);
+        site.record(&seen(ChallengeKind::JsChallenge), FetchKind::Http, 2);
+        site.record(&seen(ChallengeKind::Blocked), FetchKind::Http, 3);
         assert_eq!((site.challenges, site.blocks), (u64::MAX, u64::MAX));
         assert_eq!(site.consecutive_challenges, u32::MAX);
     }
 
     #[test]
     fn a_cooldown_holds_until_its_time_and_never_shortens() {
-        let mut site = DomainState::new("example.test");
+        let mut site = SiteRecord::new("example.test");
         site.start_cooldown(100);
         assert!(site.in_cooldown(0) && site.in_cooldown(99));
         assert!(!site.in_cooldown(100) && !site.in_cooldown(101));
@@ -409,20 +409,20 @@ mod tests {
 
     #[test]
     fn a_success_lifts_a_cooldown() {
-        let mut site = DomainState::new("example.test");
+        let mut site = SiteRecord::new("example.test");
         site.start_cooldown(1_000);
-        site.record(&seen(ChallengeKind::Blocked), Mode::Http, 10);
+        site.record(&seen(ChallengeKind::Blocked), FetchKind::Http, 10);
         assert!(site.in_cooldown(11), "a block does not lift it");
-        site.record(&ok(), Mode::Http, 20);
+        site.record(&ok(), FetchKind::Http, 20);
         assert!(!site.in_cooldown(21));
     }
 
     #[test]
     fn state_round_trips_and_an_older_file_still_loads() {
-        let mut site = DomainState::new("example.test");
-        site.record(&seen(ChallengeKind::Blocked), Mode::Http, 5);
+        let mut site = SiteRecord::new("example.test");
+        site.record(&seen(ChallengeKind::Blocked), FetchKind::Http, 5);
         site.start_cooldown(900);
-        site.last_egress = Some(EgressKey {
+        site.last_proxy = Some(ProxyKey {
             scheme: "http".to_owned(),
             host: "p1.example".to_owned(),
             port: 8080,
@@ -430,23 +430,23 @@ mod tests {
         });
         let json = serde_json::to_string(&site).expect("serializes");
         assert_eq!(
-            serde_json::from_str::<DomainState>(&json).expect("parses"),
+            serde_json::from_str::<SiteRecord>(&json).expect("parses"),
             site
         );
-        let minimal: DomainState =
+        let minimal: SiteRecord =
             serde_json::from_str(r#"{"site":"old.test","unknown_future_field":[1,2]}"#)
                 .expect("a file with only the site loads, extra fields are ignored");
-        assert_eq!(minimal, DomainState::new("old.test"));
-        assert!(serde_json::from_str::<DomainState>(r#"{"successes":1}"#).is_err());
+        assert_eq!(minimal, SiteRecord::new("old.test"));
+        assert!(serde_json::from_str::<SiteRecord>(r#"{"successes":1}"#).is_err());
     }
 
     #[test]
     fn the_state_holds_a_route_but_no_credential() {
         let egress =
-            crate::egress::route::EgressRef::parse("http://alice:s3cret@p1.example:8080", None)
+            crate::egress::route::ProxyRoute::parse("http://alice:s3cret@p1.example:8080", None)
                 .expect("valid spec");
-        let mut site = DomainState::new("example.test");
-        site.last_egress = Some(egress.key().clone());
+        let mut site = SiteRecord::new("example.test");
+        site.last_proxy = Some(egress.key().clone());
         let shown = format!(
             "{site:?} {}",
             serde_json::to_string(&site).expect("serializes")
@@ -460,7 +460,7 @@ mod tests {
 
     #[test]
     fn the_in_memory_store_keeps_replaces_and_forgets() {
-        let store = InMemoryStateStore::new();
+        let store = InMemoryLedger::new();
         assert_eq!(now(store.get("a.test")).expect("reads"), None);
         now(store.put(state("b.test", 1))).expect("writes");
         now(store.put(state("a.test", 2))).expect("writes");
@@ -476,7 +476,7 @@ mod tests {
 
     #[test]
     fn clones_of_the_in_memory_store_share_it() {
-        let store = InMemoryStateStore::new();
+        let store = InMemoryLedger::new();
         let other = store.clone();
         now(store.put(state("a.test", 1))).expect("writes");
         assert_eq!(now(other.sites()).expect("reads"), ["a.test"]);
@@ -513,7 +513,7 @@ mod tests {
 
     #[test]
     fn a_table_over_its_cap_shrinks_back_and_a_cap_of_zero_keeps_one() {
-        let mut sites: BTreeMap<String, DomainState> = (0..10)
+        let mut sites: BTreeMap<String, SiteRecord> = (0..10)
             .map(|i| (format!("s{i}.test"), state(&format!("s{i}.test"), i)))
             .collect();
         insert_bounded(&mut sites, state("new.test", 99), 4);
@@ -526,7 +526,7 @@ mod tests {
 
     #[test]
     fn the_in_memory_store_is_bounded() {
-        let store = InMemoryStateStore::new();
+        let store = InMemoryLedger::new();
         for i in 0..MAX_STATE_SITES + 20 {
             now(store.put(state(&format!("s{i}.test"), u64::try_from(i).unwrap_or(0))))
                 .expect("writes");
@@ -544,7 +544,7 @@ mod tests {
 
     #[test]
     fn an_error_names_its_file() {
-        let io = StateError::Io {
+        let io = LedgerError::Io {
             path: PathBuf::from("/tmp/state.json"),
             source: io::Error::other("disk on fire"),
         };
@@ -553,8 +553,8 @@ mod tests {
             shown.contains("/tmp/state.json") && shown.contains("disk on fire"),
             "{shown}"
         );
-        assert!(StateError::Schema(7).to_string().contains('7'));
-        let big = StateError::TooLarge {
+        assert!(LedgerError::Schema(7).to_string().contains('7'));
+        let big = LedgerError::TooLarge {
             path: PathBuf::from("/tmp/state.json"),
             limit: 10,
         };

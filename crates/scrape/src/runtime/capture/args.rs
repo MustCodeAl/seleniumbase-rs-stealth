@@ -7,7 +7,7 @@ use super::chrome::{ChromeOptions, DEFAULT_PAGE_PROBES};
 use super::CaptureError;
 
 /// Where the measured files go, relative to the folder of the crate that runs the tool. The
-/// tools run from the scrape and mimic crates, which sit beside the codec crate that embeds
+/// tools run from the scrape and wire crates, which sit beside the codec crate that embeds
 /// the files.
 pub const DEFAULT_OUT_DIR: &str = "../codec/src/measured";
 /// Where the raw byte fixtures go, relative to the folder of the crate that runs the tool: the

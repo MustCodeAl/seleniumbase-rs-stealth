@@ -3,10 +3,10 @@
 use serde_json::json;
 
 use super::rig::{country, real_page, widget_challenge, Rig, NOW, SEED};
-use crate::challenge::detect::Vendor;
+use crate::challenge::detect::ProtectionVendor;
 use crate::egress::geo::GeoError;
 use crate::error::ScrapeError;
-use crate::ledger::events::ScraperEvent;
+use crate::ledger::events::ScrapeEvent;
 use crate::passport::identity::{IdentityError, NO_EXPIRY};
 use crate::runtime::browser_scraper::launcher::{claimed_major, host_os};
 use seleniumbase_rs::evasion::humanize::Rng;
@@ -19,7 +19,7 @@ const FORBIDDEN_DOMAINS: [&str; 5] = ["Runtime", "DOM", "Log", "Debugger", "Prof
 
 fn two_proxies(rig: &Rig) -> crate::runtime::browser_scraper::BrowserScraperBuilder {
     rig.builder()
-        .with_geo_proxies([
+        .geo_proxies([
             ("http://ualpha:s3cret@de.proxy.example:8080", country("DE")),
             ("http://ubeta:hunter2@fr.proxy.example:8080", country("FR")),
         ])
@@ -33,7 +33,10 @@ async fn rotating_the_profile_draws_another_one_for_the_same_machine_and_starts_
     scraper.fetch(URL).await.expect("the page is fetched");
     let before = scraper.fingerprint().clone();
 
-    scraper.rotate_profile().await.expect("the profile rotates");
+    scraper
+        .rotate_fingerprint()
+        .await
+        .expect("the profile rotates");
 
     assert_eq!(scraper.seed(), Rng::new(SEED).next_u64());
     let after = scraper.fingerprint();
@@ -55,8 +58,8 @@ async fn rotating_the_profile_draws_another_one_for_the_same_machine_and_starts_
         new.mock.calls_to("Network.setCookies").is_empty(),
         "nothing carries over"
     );
-    assert_eq!(rig.event_names().last(), Some(&"profile_rotated"));
-    let known = crate::ledger::state::StateStore::get(&rig.store, "shop.example")
+    assert_eq!(rig.event_names().last(), Some(&"fingerprint_rotated"));
+    let known = crate::ledger::state::Ledger::get(&rig.store, "shop.example")
         .await
         .expect("the store reads")
         .expect("the site is still known");
@@ -73,7 +76,7 @@ async fn a_profile_that_cannot_start_leaves_the_old_browser_in_place() {
         .on_launch(|_, mock| mock.fail("Target.getTargets", "no tabs"));
 
     let error = scraper
-        .rotate_profile()
+        .rotate_fingerprint()
         .await
         .expect_err("the new browser has no tab");
 
@@ -97,10 +100,10 @@ async fn rotating_to_another_country_restarts_the_browser_in_the_language_and_zo
     let mut scraper = two_proxies(&rig).build().await.expect("the scraper builds");
     let before = scraper.fingerprint().clone();
 
-    scraper.rotate_egress().await.expect("the egress rotates");
+    scraper.rotate_proxy().await.expect("the proxy rotates");
 
     assert_eq!(
-        scraper.egress().map(|key| key.host.as_str()),
+        scraper.proxy_route().map(|key| key.host.as_str()),
         Some("fr.proxy.example")
     );
     assert_eq!(
@@ -131,7 +134,7 @@ async fn rotating_to_another_country_restarts_the_browser_in_the_language_and_zo
     let event = rig.sink.events().pop().expect("an event");
     assert!(matches!(
         &event,
-        ScraperEvent::EgressRotated { from: Some(from), to: Some(to) }
+        ScrapeEvent::ProxyRotated { from: Some(from), to: Some(to) }
             if from.host == "de.proxy.example" && to.host == "fr.proxy.example"
     ));
 }
@@ -141,7 +144,7 @@ async fn rotating_within_a_country_only_opens_a_context_behind_the_next_proxy() 
     let rig = Rig::new(vec![real_page()]);
     let mut scraper = rig
         .builder()
-        .with_geo_proxies([
+        .geo_proxies([
             ("http://one.proxy.example:8080", country("DE")),
             ("http://two.proxy.example:8080", country("DE")),
         ])
@@ -152,11 +155,11 @@ async fn rotating_within_a_country_only_opens_a_context_behind_the_next_proxy() 
     let kept = rig.launcher.last();
     let before = scraper.fingerprint().clone();
 
-    scraper.rotate_egress().await.expect("the egress rotates");
+    scraper.rotate_proxy().await.expect("the proxy rotates");
 
     assert_eq!(rig.launcher.count(), 2, "the browser is not started again");
     assert_eq!(
-        scraper.egress().map(|key| key.host.as_str()),
+        scraper.proxy_route().map(|key| key.host.as_str()),
         Some("two.proxy.example")
     );
     let created = kept.mock.calls_to("Target.createBrowserContext");
@@ -169,7 +172,7 @@ async fn rotating_within_a_country_only_opens_a_context_behind_the_next_proxy() 
     assert_eq!(
         gone.len(),
         1,
-        "the context of the first egress goes with its cookies"
+        "the context of the first proxy goes with its cookies"
     );
     assert_eq!(scraper.fingerprint(), &before);
     assert!(kept.browser.is_connected());
@@ -185,13 +188,13 @@ async fn a_browser_that_cannot_start_for_the_new_country_leaves_the_scraper_as_i
         .on_launch(|_, mock| mock.fail("Target.createBrowserContext", "no contexts"));
 
     let error = scraper
-        .rotate_egress()
+        .rotate_proxy()
         .await
         .expect_err("the new browser has no context");
 
     assert!(matches!(error, ScrapeError::Browser(_)), "{error:?}");
     assert_eq!(
-        scraper.egress().map(|key| key.host.as_str()),
+        scraper.proxy_route().map(|key| key.host.as_str()),
         Some("de.proxy.example")
     );
     assert_eq!(scraper.page().id(), page);
@@ -207,21 +210,21 @@ async fn rotating_with_no_other_egress_is_an_error_and_changes_nothing() {
     let one = Rig::new(vec![real_page()]);
     let mut single = one
         .builder()
-        .with_geo_proxies([("http://de.proxy.example:8080", country("DE"))])
+        .geo_proxies([("http://de.proxy.example:8080", country("DE"))])
         .expect("a valid spec")
         .build()
         .await
         .expect("the scraper builds");
     let page = single.page().id().to_owned();
 
-    let none = without_pool.rotate_egress().await.expect_err("no pool");
-    let alone = single.rotate_egress().await.expect_err("one egress");
+    let none = without_pool.rotate_proxy().await.expect_err("no pool");
+    let alone = single.rotate_proxy().await.expect_err("one proxy");
 
-    assert!(matches!(none, ScrapeError::NoEgressAvailable));
-    assert!(matches!(alone, ScrapeError::NoEgressAvailable));
+    assert!(matches!(none, ScrapeError::NoProxyLeft));
+    assert!(matches!(alone, ScrapeError::NoProxyLeft));
     assert_eq!(single.page().id(), page);
     assert_eq!(
-        single.egress().map(|key| key.host.as_str()),
+        single.proxy_route().map(|key| key.host.as_str()),
         Some("de.proxy.example")
     );
     assert_eq!(
@@ -239,7 +242,7 @@ async fn an_egress_whose_country_has_no_locale_is_refused_before_the_switch() {
     let rig = Rig::new(vec![real_page()]);
     let mut scraper = rig
         .builder()
-        .with_geo_proxies([
+        .geo_proxies([
             ("http://de.proxy.example:8080", country("DE")),
             ("http://zz.proxy.example:8080", country("ZZ")),
         ])
@@ -248,14 +251,14 @@ async fn an_egress_whose_country_has_no_locale_is_refused_before_the_switch() {
         .await
         .expect("the scraper builds");
 
-    let error = scraper.rotate_egress().await.expect_err("ZZ has no locale");
+    let error = scraper.rotate_proxy().await.expect_err("ZZ has no locale");
 
     assert!(
         matches!(error, ScrapeError::Geo(GeoError::NoLocale(_))),
         "{error:?}"
     );
     assert_eq!(
-        scraper.egress().map(|key| key.host.as_str()),
+        scraper.proxy_route().map(|key| key.host.as_str()),
         Some("de.proxy.example")
     );
     assert_eq!(
@@ -288,18 +291,18 @@ async fn an_identity_carries_the_fingerprint_the_cookies_and_the_clearance() {
 
     assert_eq!(&identity.fingerprint, scraper.fingerprint());
     assert_eq!(identity.cookies.len(), 1);
-    assert_eq!(identity.emulation.kind, BrowserKind::Chrome);
-    assert_eq!(identity.emulation.major, 155);
-    assert_eq!(identity.emulation.os, host_os());
-    assert_eq!(identity.egress, None);
+    assert_eq!(identity.wire_measurement.kind, BrowserKind::Chrome);
+    assert_eq!(identity.wire_measurement.major, 155);
+    assert_eq!(identity.wire_measurement.os, host_os());
+    assert_eq!(identity.proxy, None);
     assert_eq!(identity.created_at, NOW);
     let clearance = identity.clearance_for("shop.example").expect("a clearance");
-    assert_eq!(clearance.vendor, Vendor::Cloudflare);
+    assert_eq!(clearance.vendor, ProtectionVendor::Cloudflare);
     assert_eq!(clearance.cookie, "cf_clearance");
     assert_eq!(clearance.expires_at, NO_EXPIRY);
     assert!(matches!(
         rig.sink.events().pop(),
-        Some(ScraperEvent::IdentityExported { cookies: 1 })
+        Some(ScrapeEvent::IdentityExported { cookies: 1 })
     ));
     assert!(!format!("{identity:?}").contains("fresh-token"));
 }
@@ -333,7 +336,7 @@ async fn an_identity_is_restored_in_a_scraper_with_another_profile() {
     assert_eq!(set[0].params["cookies"][0]["name"], "cf_clearance");
     assert!(matches!(
         rig.sink.events().pop(),
-        Some(ScraperEvent::IdentityRestored { cookies: 1 })
+        Some(ScrapeEvent::IdentityRestored { cookies: 1 })
     ));
 }
 
@@ -363,19 +366,19 @@ async fn an_identity_of_another_egress_is_refused_and_nothing_is_set() {
         .export_identity()
         .await
         .expect("the identity exports");
-    assert!(identity.egress.is_some());
+    assert!(identity.proxy.is_some());
     let rig = Rig::new(vec![real_page()]);
     let mut direct = rig.builder().build().await.expect("builds");
 
     let error = direct
         .import_identity(&identity)
         .await
-        .expect_err("another egress");
+        .expect_err("another proxy");
 
     assert!(
         matches!(
             &error,
-            ScrapeError::Identity(IdentityError::EgressMismatch { .. })
+            ScrapeError::Identity(IdentityError::ProxyMismatch { .. })
         ),
         "{error:?}"
     );
@@ -401,7 +404,7 @@ async fn an_identity_for_another_chrome_or_layout_is_refused() {
         .expect("the identity exports");
 
     let mut old_chrome = identity.clone();
-    old_chrome.emulation.major = 150;
+    old_chrome.wire_measurement.major = 150;
     let mut future_layout = identity;
     future_layout.schema = 9;
 
@@ -417,7 +420,7 @@ async fn an_identity_for_another_chrome_or_layout_is_refused() {
     assert!(
         matches!(
             chrome,
-            ScrapeError::Identity(IdentityError::EmulationMismatch {
+            ScrapeError::Identity(IdentityError::WireMeasurementMismatch {
                 identity: 150,
                 measured: 155
             })
@@ -441,7 +444,7 @@ async fn the_version_of_chrome_is_not_checked_when_the_running_one_is_unknown() 
         .export_identity()
         .await
         .expect("the identity exports");
-    identity.emulation.major = 150;
+    identity.wire_measurement.major = 150;
     let rig = Rig::with_product(vec![real_page()], "");
     let mut scraper = rig.builder().seed(SEED + 3).build().await.expect("builds");
 
@@ -473,7 +476,7 @@ async fn a_session_is_saved_and_loaded_with_its_local_storage() {
         .await
         .expect("nothing to load");
 
-    let saved = scraper.sessions().load("login").expect("it was saved");
+    let saved = scraper.session_store().load("login").expect("it was saved");
     assert_eq!(saved.origin(), Some("https://shop.example"));
     assert_eq!(
         saved.local_storage().get("theme").map(String::as_str),
@@ -503,8 +506,11 @@ async fn no_flow_switches_on_a_domain_a_page_can_feel() {
     let mut scraper = two_proxies(&rig).build().await.expect("the scraper builds");
 
     scraper.fetch(URL).await.expect("the challenge is passed");
-    scraper.rotate_egress().await.expect("the egress rotates");
-    scraper.rotate_profile().await.expect("the profile rotates");
+    scraper.rotate_proxy().await.expect("the proxy rotates");
+    scraper
+        .rotate_fingerprint()
+        .await
+        .expect("the profile rotates");
     let identity = scraper
         .export_identity()
         .await
@@ -539,7 +545,7 @@ async fn no_secret_reaches_a_log_an_event_a_state_an_error_or_the_browser() {
         .fetch("https://shop.example/?token=hunter3")
         .await
         .expect("the challenge is passed");
-    scraper.rotate_egress().await.expect("the egress rotates");
+    scraper.rotate_proxy().await.expect("the proxy rotates");
     let identity = scraper
         .export_identity()
         .await
@@ -547,7 +553,7 @@ async fn no_secret_reaches_a_log_an_event_a_state_an_error_or_the_browser() {
 
     let events = serde_json::to_string(&rig.sink.events()).expect("events serialize");
     let state = serde_json::to_string(
-        &crate::ledger::state::StateStore::get(&rig.store, "shop.example")
+        &crate::ledger::state::Ledger::get(&rig.store, "shop.example")
             .await
             .expect("the store reads"),
     )

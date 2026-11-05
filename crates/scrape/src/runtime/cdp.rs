@@ -7,7 +7,7 @@
 //!
 //! - [`goto_with_response`] navigates and returns what the server answered the main frame.
 //! - [`detect_page`] reads the rendered page and decides whether it is a challenge.
-//! - [`EgressLocale`] and [`apply_locale`] make a tab speak the language and keep the time zone of
+//! - [`ProxyLocale`] and [`apply_locale`] make a tab speak the language and keep the time zone of
 //!   the country its egress is in.
 //! - [`export_cookies`] and [`import_cookies`] move cookies between the browser and a
 //!   [`CookieJar`]; [`capture_session`] and [`restore_session`] do the same for a whole login.
@@ -19,11 +19,11 @@ use std::time::Duration;
 use serde_json::{json, Value};
 
 use crate::challenge::detect::{
-    clearance_cookie, detect, ChallengeKind, Detection, ResponseView, Vendor,
+    clearance_cookie, detect, ChallengeKind, Detection, ProtectionVendor, ResponseView,
 };
 use crate::egress::geo::{placed_in, GeoError, GeoResolver, Locale, LocaleExt};
 use crate::egress::redact::RedactedUrl;
-use crate::egress::route::EgressRef;
+use crate::egress::route::ProxyRoute;
 use crate::error::ScrapeError;
 use crate::jar::store::CookieJar;
 use seleniumbase_rs::evasion::behavior::Behavior;
@@ -147,14 +147,14 @@ pub async fn detect_page(page: &Page, response: &NavResponse) -> Result<PageSnap
 
 /// The locale and time zone an egress puts a tab in.
 #[derive(Clone, Debug)]
-pub struct EgressLocale {
+pub struct ProxyLocale {
     /// The locale of the egress country.
     pub locale: &'static Locale,
     /// The IANA time zone: the resolver's when it knew one, else the locale's.
     pub timezone: String,
 }
 
-impl EgressLocale {
+impl ProxyLocale {
     /// Asks `resolver` where `egress` is and finds the locale of that country.
     ///
     /// # Errors
@@ -162,7 +162,7 @@ impl EgressLocale {
     /// Returns [`ScrapeError::Geo`] when the egress has no country or the country has no locale.
     pub async fn resolve(
         resolver: &dyn GeoResolver,
-        egress: &EgressRef,
+        egress: &ProxyRoute,
     ) -> Result<Self, ScrapeError> {
         let info = resolver.resolve(egress).await?;
         let locale = Locale::for_country(info.country).ok_or(GeoError::NoLocale(info.country))?;
@@ -199,7 +199,7 @@ impl EgressLocale {
 /// # Errors
 ///
 /// Returns [`ScrapeError::Browser`] when the browser refuses an override.
-pub async fn apply_locale(page: &Page, placed: &EgressLocale) -> Result<(), ScrapeError> {
+pub async fn apply_locale(page: &Page, placed: &ProxyLocale) -> Result<(), ScrapeError> {
     let emulation = page.emulation();
     emulation.locale(placed.locale.tag).await?;
     emulation.timezone(&placed.timezone).await?;
@@ -236,7 +236,7 @@ pub async fn import_cookies(page: &Page, jar: &CookieJar, now: u64) -> Result<us
 /// Returns [`ScrapeError::Browser`] when the browser cannot be queried.
 pub async fn clearance_value(
     page: &Page,
-    vendor: Option<Vendor>,
+    vendor: Option<ProtectionVendor>,
 ) -> Result<Option<String>, ScrapeError> {
     let Some(name) = vendor.and_then(clearance_cookie) else {
         return Ok(None);
@@ -261,7 +261,7 @@ pub async fn clearance_value(
 /// Returns [`ScrapeError::Browser`] when the browser cannot be queried.
 pub async fn wait_for_clearance(
     page: &Page,
-    vendor: Option<Vendor>,
+    vendor: Option<ProtectionVendor>,
     stale: Option<&str>,
     timeout: Duration,
 ) -> Result<bool, ScrapeError> {
@@ -283,7 +283,7 @@ pub async fn wait_for_clearance(
 /// Whether one look at the browser shows a solved challenge. See [`wait_for_clearance`].
 async fn is_cleared(
     page: &Page,
-    vendor: Option<Vendor>,
+    vendor: Option<ProtectionVendor>,
     stale: Option<&str>,
 ) -> Result<bool, ScrapeError> {
     if vendor.and_then(clearance_cookie).is_some() {
@@ -304,7 +304,7 @@ async fn is_cleared(
         headers: &[],
         body: &body,
     });
-    Ok(seen.kind == ChallengeKind::None)
+    Ok(seen.kind == ChallengeKind::Clear)
 }
 
 /// Captures the cookies of the tab's browser context and the local storage of the tab's origin as a

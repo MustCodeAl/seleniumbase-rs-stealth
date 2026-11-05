@@ -1,6 +1,6 @@
 //! Tests of the JA3 and peetprint parsers, the pure MD5 and the published example vectors.
 
-use super::peetprint::{PeetField, Slot, MAX_PEETPRINT_LEN};
+use super::peetprint::{PeetprintField, PeetprintSlot, MAX_PEETPRINT_LEN};
 use super::{md5_hex, Ja3, Ja3Error, Ja3Field, Peetprint, PeetprintError, MAX_JA3_LEN};
 use crate::client_hello::fixtures::HelloBuilder;
 use crate::client_hello::ClientHello;
@@ -154,7 +154,11 @@ fn the_documented_peetprint_example_round_trips() {
     assert_eq!(parsed.to_string(), PEET_EXAMPLE);
     assert_eq!(
         parsed.versions,
-        vec![Slot::Grease, Slot::Id(772), Slot::Id(771)]
+        vec![
+            PeetprintSlot::Grease,
+            PeetprintSlot::Id(772),
+            PeetprintSlot::Id(771)
+        ]
     );
     assert_eq!(parsed.alpn, vec!["h2".to_owned(), "http/1.1".to_owned()]);
     assert_eq!(parsed.psk_modes, vec![1]);
@@ -176,7 +180,10 @@ fn a_parsed_hello_yields_a_sorted_peetprint() {
 #[test]
 fn grease_written_as_a_number_collapses_to_the_word() {
     let parsed = Peetprint::parse("2570-772|2|||||4865|0").expect("parses");
-    assert_eq!(parsed.versions, vec![Slot::Grease, Slot::Id(772)]);
+    assert_eq!(
+        parsed.versions,
+        vec![PeetprintSlot::Grease, PeetprintSlot::Id(772)]
+    );
     assert!(parsed.groups.is_empty() && parsed.alpn == ["h2"]);
     assert_eq!(parsed.to_string(), "GREASE-772|2|||||4865|0");
 }
@@ -202,31 +209,31 @@ fn rejects_malformed_peetprints_with_the_failing_field() {
         ("1|2|3|4|5|6|7|8|9", Err(PeetprintError::FieldCount(9))),
         (
             "x|2|29|1027|1|2|4865|0",
-            token(super::peetprint::PeetField::Versions, "x"),
+            token(super::peetprint::PeetprintField::Versions, "x"),
         ),
         (
             "772|3|29|1027|1|2|4865|0",
-            token(super::peetprint::PeetField::Alpn, "3"),
+            token(super::peetprint::PeetprintField::Alpn, "3"),
         ),
         (
             "772|xZZ|29|1027|1|2|4865|0",
-            token(super::peetprint::PeetField::Alpn, "xZZ"),
+            token(super::peetprint::PeetprintField::Alpn, "xZZ"),
         ),
         (
             "772|x|29|1027|1|2|4865|0",
-            token(super::peetprint::PeetField::Alpn, "x"),
+            token(super::peetprint::PeetprintField::Alpn, "x"),
         ),
         (
             "772|2|29|1027|256|2|4865|0",
-            token(super::peetprint::PeetField::PskModes, "256"),
+            token(super::peetprint::PeetprintField::PskModes, "256"),
         ),
         (
             "772|2|29|1027|1|70000|4865|0",
-            token(super::peetprint::PeetField::CertCompression, "70000"),
+            token(super::peetprint::PeetprintField::CertCompression, "70000"),
         ),
         (
             "772|2|29|1027|1|2|4865|0-",
-            token(super::peetprint::PeetField::Extensions, ""),
+            token(super::peetprint::PeetprintField::Extensions, ""),
         ),
     ];
     for (text, want) in cases {
@@ -243,7 +250,7 @@ fn rejects_malformed_alpn_hex_forms() {
         assert_eq!(
             Peetprint::parse(&peet),
             Err(PeetprintError::Token {
-                field: PeetField::Alpn,
+                field: PeetprintField::Alpn,
                 token: text.to_owned()
             }),
             "{text}"
@@ -264,14 +271,14 @@ fn field_names_read_naturally_in_messages() {
         assert_eq!(field.to_string(), name);
     }
     let peet_names = [
-        (PeetField::Versions, "versions"),
-        (PeetField::Alpn, "alpn"),
-        (PeetField::Groups, "groups"),
-        (PeetField::SignatureAlgorithms, "signature algorithms"),
-        (PeetField::PskModes, "psk modes"),
-        (PeetField::CertCompression, "certificate compression"),
-        (PeetField::Ciphers, "ciphers"),
-        (PeetField::Extensions, "extensions"),
+        (PeetprintField::Versions, "versions"),
+        (PeetprintField::Alpn, "alpn"),
+        (PeetprintField::Groups, "groups"),
+        (PeetprintField::SignatureAlgorithms, "signature algorithms"),
+        (PeetprintField::PskModes, "psk modes"),
+        (PeetprintField::CertCompression, "certificate compression"),
+        (PeetprintField::Ciphers, "ciphers"),
+        (PeetprintField::Extensions, "extensions"),
     ];
     for (field, name) in peet_names {
         assert_eq!(field.to_string(), name);

@@ -9,8 +9,8 @@ use crate::challenge::detect::ChallengeKind;
 use crate::challenge::mitigation::GiveUpReason;
 use crate::egress::geo::GeoError;
 use crate::egress::redact::RedactedUrl;
-use crate::egress::route::EgressError;
-use crate::ledger::state::StateError;
+use crate::egress::route::ProxyRouteError;
+use crate::ledger::state::LedgerError;
 use crate::passport::identity::IdentityError;
 use seleniumbase_rs::evasion::fingerprint::FingerprintError;
 use seleniumbase_rs::SeleniumBaseError;
@@ -21,13 +21,13 @@ use seleniumbase_rs::SeleniumBaseError;
 pub enum ScrapeError {
     /// A proxy spec was refused.
     #[error(transparent)]
-    Egress(#[from] EgressError),
+    Proxy(#[from] ProxyRouteError),
     /// A country or locale could not be resolved.
     #[error(transparent)]
     Geo(#[from] GeoError),
     /// The per-site state could not be read or written.
     #[error(transparent)]
-    State(#[from] StateError),
+    Ledger(#[from] LedgerError),
     /// An identity was refused.
     #[error(transparent)]
     Identity(#[from] IdentityError),
@@ -73,7 +73,7 @@ pub enum ScrapeError {
     },
     /// An egress change was asked for and there is no other egress to change to.
     #[error("no other egress is available")]
-    NoEgressAvailable,
+    NoProxyLeft,
     /// The browser failed in some other way.
     #[error(transparent)]
     Browser(SeleniumBaseError),
@@ -107,7 +107,7 @@ impl From<ScrapeError> for SeleniumBaseError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::egress::route::EgressKey;
+    use crate::egress::route::ProxyKey;
 
     const SECRET_URL: &str = "https://alice:s3cret@shop.example/cart?token=hunter2&page=2";
 
@@ -190,7 +190,7 @@ mod tests {
                 site: "shop.example".to_owned(),
                 until: 1_700_000_900,
             },
-            ScrapeError::NoEgressAvailable,
+            ScrapeError::NoProxyLeft,
         ];
         for error in &errors {
             let text = shown(error);
@@ -203,7 +203,7 @@ mod tests {
     #[test]
     fn the_domain_errors_convert_with_a_question_mark() {
         fn egress() -> Result<(), ScrapeError> {
-            crate::egress::route::EgressRef::parse("ftp://proxy.example:21", None)?;
+            crate::egress::route::ProxyRoute::parse("ftp://proxy.example:21", None)?;
             Ok(())
         }
         fn geo() -> Result<(), ScrapeError> {
@@ -213,10 +213,10 @@ mod tests {
         fn identity() -> Result<(), ScrapeError> {
             Err(IdentityError::Schema(9))?
         }
-        assert!(matches!(egress(), Err(ScrapeError::Egress(_))));
+        assert!(matches!(egress(), Err(ScrapeError::Proxy(_))));
         assert!(matches!(geo(), Err(ScrapeError::Geo(_))));
         assert!(matches!(identity(), Err(ScrapeError::Identity(_))));
-        let key = EgressKey {
+        let key = ProxyKey {
             scheme: "http".to_owned(),
             host: "proxy.example".to_owned(),
             port: 8080,

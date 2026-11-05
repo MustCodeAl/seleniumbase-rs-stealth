@@ -40,15 +40,15 @@ fn a_jar_file_cannot_carry_times_no_clock_produced() {
 fn a_clock_that_steps_back_leaves_a_jar_that_still_loads() {
     let mut jar = CookieJar::new();
     let at = url("https://example.com/");
-    jar.store(&at, "a=1; Max-Age=999999999", NOW + 10);
-    jar.store(&at, "b=1; Max-Age=999999999", NOW + 10);
+    jar.receive(&at, "a=1; Max-Age=999999999", NOW + 10);
+    jar.receive(&at, "b=1; Max-Age=999999999", NOW + 10);
     assert!(jar.header_for(&at, SAME, NOW + 5).is_some());
     assert!(
         jar.cookies().iter().all(|c| c.last_access == NOW + 10),
         "sending never lowers the last access"
     );
-    let outcome = jar.store(&at, "b=2; Max-Age=999999999", NOW + 3);
-    assert_eq!(outcome, StoreOutcome::Replaced);
+    let outcome = jar.receive(&at, "b=2; Max-Age=999999999", NOW + 3);
+    assert_eq!(outcome, SetCookieOutcome::Replaced);
     let json = serde_json::to_string(&jar).expect("serializes");
     let back: CookieJar = serde_json::from_str(&json).expect("a jar the library wrote loads");
     assert_eq!(back, jar);

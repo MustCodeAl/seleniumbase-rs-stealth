@@ -13,7 +13,7 @@ use std::process::ExitCode;
 use std::time::Duration;
 
 use seleniumbase_rs_codec::BrowserKind;
-use seleniumbase_rs_mimic::client::{impersonation_client, ImpersonationProfile};
+use seleniumbase_rs_wire::client::{impersonation_client, ImpersonationProfile};
 use wreq::tls::trust::CertStore;
 
 const LOOPBACK: IpAddr = IpAddr::V4(Ipv4Addr::LOCALHOST);

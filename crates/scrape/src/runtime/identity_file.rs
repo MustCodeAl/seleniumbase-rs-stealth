@@ -1,11 +1,11 @@
-//! Reads and writes a `StealthIdentity` file, atomically and with owner-only permissions.
+//! Reads and writes a `Identity` file, atomically and with owner-only permissions.
 //!
 //! The file is the identity as pretty-printed JSON. It holds cookies, which are credentials, so:
 //!
 //! - **Writing** goes through the atomic writer of the JSON state store: a sibling temporary file created new with mode
 //!   `0600` on Unix, synced and renamed over the target, so a reader sees the old file or the new
 //!   one, and an older file with wider permissions is replaced by one that has `0600`. An identity
-//!   that [`StealthIdentity::verify`] would refuse (another schema, an incoherent fingerprint, a
+//!   that [`Identity::validate`] would refuse (another schema, an incoherent fingerprint, a
 //!   proxy) is not written.
 //! - **Reading** opens the file first and judges the open file, not the path: on Unix it must be a
 //!   regular file, owned by the user running the process, that group and others cannot access
@@ -31,7 +31,7 @@ use std::sync::OnceLock;
 
 use serde::Deserialize;
 
-use crate::passport::identity::{json_failure, IdentityError, StealthIdentity, IDENTITY_SCHEMA};
+use crate::passport::identity::{json_failure, Identity, IdentityError, IDENTITY_SCHEMA};
 use crate::runtime::json_store::atomic_write;
 
 #[cfg(test)]
@@ -127,15 +127,17 @@ impl IdentityFileError {
 /// # Errors
 ///
 /// Returns [`IdentityFileError::Identity`] when the identity is refused by
-/// [`StealthIdentity::verify`], and [`IdentityFileError::Io`] when the file cannot be written.
-pub fn save_blocking(path: &Path, identity: &StealthIdentity) -> Result<(), IdentityFileError> {
+/// [`Identity::validate`], and [`IdentityFileError::Io`] when the file cannot be written.
+pub fn save_blocking(path: &Path, identity: &Identity) -> Result<(), IdentityFileError> {
     let bytes = encode(path, identity)?;
     write_file(path, &bytes).map_err(|source| io_error(path, source))
 }
 
 /// The file's content for `identity`, after checking that it would be read back.
-fn encode(path: &Path, identity: &StealthIdentity) -> Result<Vec<u8>, IdentityFileError> {
-    identity.verify().map_err(|source| refused(path, source))?;
+fn encode(path: &Path, identity: &Identity) -> Result<Vec<u8>, IdentityFileError> {
+    identity
+        .validate()
+        .map_err(|source| refused(path, source))?;
     serde_json::to_vec_pretty(identity)
         .map_err(|error| io_error(path, io::Error::other(json_failure(&error))))
 }
@@ -183,21 +185,23 @@ fn corrupt(path: &Path, error: &serde_json::Error) -> IdentityFileError {
 /// [`IdentityFileError::Permissions`] when others can access it, [`IdentityFileError::TooLarge`]
 /// when it is over [`MAX_IDENTITY_FILE_BYTES`], [`IdentityFileError::Corrupt`] when it is not an
 /// identity, and [`IdentityFileError::Identity`] for another schema or an identity that
-/// [`StealthIdentity::verify`] refuses.
-pub fn load_blocking(path: &Path) -> Result<StealthIdentity, IdentityFileError> {
+/// [`Identity::validate`] refuses.
+pub fn load_blocking(path: &Path) -> Result<Identity, IdentityFileError> {
     load_with_limit(path, MAX_IDENTITY_FILE_BYTES)
 }
 
 /// [`load_blocking`] with the size limit given.
-fn load_with_limit(path: &Path, limit: u64) -> Result<StealthIdentity, IdentityFileError> {
+fn load_with_limit(path: &Path, limit: u64) -> Result<Identity, IdentityFileError> {
     let bytes = read_checked(path, limit)?;
     let header: Header = serde_json::from_slice(&bytes).map_err(|error| corrupt(path, &error))?;
     if header.schema != IDENTITY_SCHEMA {
         return Err(refused(path, IdentityError::Schema(header.schema)));
     }
-    let identity: StealthIdentity =
+    let identity: Identity =
         serde_json::from_slice(&bytes).map_err(|error| corrupt(path, &error))?;
-    identity.verify().map_err(|source| refused(path, source))?;
+    identity
+        .validate()
+        .map_err(|source| refused(path, source))?;
     Ok(identity)
 }
 
@@ -374,10 +378,7 @@ fn check_handle(path: &Path, file: &fs::File) -> Result<(), IdentityFileError> {
 ///
 /// As [`save_blocking`].
 #[tracing::instrument(skip_all, fields(path = %path.as_ref().display()))]
-pub async fn save(
-    path: impl AsRef<Path>,
-    identity: &StealthIdentity,
-) -> Result<(), IdentityFileError> {
+pub async fn save(path: impl AsRef<Path>, identity: &Identity) -> Result<(), IdentityFileError> {
     let path = path.as_ref().to_path_buf();
     let bytes = encode(&path, identity)?;
     let target = path.clone();
@@ -394,7 +395,7 @@ pub async fn save(
 ///
 /// As [`load_blocking`].
 #[tracing::instrument(skip_all, fields(path = %path.as_ref().display()))]
-pub async fn load(path: impl AsRef<Path>) -> Result<StealthIdentity, IdentityFileError> {
+pub async fn load(path: impl AsRef<Path>) -> Result<Identity, IdentityFileError> {
     let path = path.as_ref().to_path_buf();
     let target = path.clone();
     tokio::task::spawn_blocking(move || load_blocking(&target))

@@ -3,7 +3,7 @@
 //! [`measure_tls`] points a browser at a loopback listener that answers nothing, so every HTTPS
 //! connection it makes ends after its `ClientHello`. A made-up host name is mapped to the listener
 //! with `--host-resolver-rules`, which keeps the server name in the hello real. [`measure_hints`]
-//! loads the [`HintsServer`](super::hints::HintsServer) page and collects what the browser reports.
+//! loads the [`HintsServer`] page and collects what the browser reports.
 //!
 //! Both start a browser, so the tests that call them are ignored by default.
 

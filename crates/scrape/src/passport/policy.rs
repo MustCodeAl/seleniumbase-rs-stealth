@@ -1,37 +1,37 @@
 //! Decides when a session moves between browser and HTTP mode, and when a clearance is near expiry.
 //!
 //! The policy is a pure function of the mode, the identity, the site's state and the time
-//! (`now` is passed in; nothing here reads a clock). A session sits in [`Mode::Http`] while it
-//! can and goes to [`Mode::Browser`] when HTTP is not enough. It asks twice per fetch.
+//! (`now` is passed in; nothing here reads a clock). A session sits in [`FetchKind::Http`] while it
+//! can and goes to [`FetchKind::Browser`] when HTTP is not enough. It asks twice per fetch.
 //!
-//! # Before a fetch ([`SessionPolicy::before_fetch`])
+//! # Before a fetch ([`EscalationPolicy::before_fetch`])
 //!
 //! Only an HTTP session ever leaves here; a browser session stays where it is.
 //!
-//! | Mode | The identity holds | Other | Transition |
+//! | Fetch kind | The identity holds | Other | Escalation |
 //! |---|---|---|---|
-//! | Browser | anything | anything | [`Transition::Stay`] |
+//! | Browser | anything | anything | [`Escalation::Stay`] |
 //! | Http | a clearance with at most `clearance_margin` left, or an expired one | anything | escalate: [`EscalateReason::ClearanceExpiring`] |
-//! | Http | a clearance with more than the margin left | anything | [`Transition::Stay`], even if the site needs a browser |
+//! | Http | a clearance with more than the margin left | anything | [`Escalation::Stay`], even if the site needs a browser |
 //! | Http | no clearance for the site | `require_clearance_for_http` | escalate: [`EscalateReason::NoClearance`] |
-//! | Http | no clearance for the site | the site's `preferred_mode` is the browser | escalate: [`EscalateReason::SiteNeedsBrowser`] |
-//! | Http | no clearance for the site | otherwise | [`Transition::Stay`] |
+//! | Http | no clearance for the site | the site's `preferred_kind` is the browser | escalate: [`EscalateReason::SiteNeedsBrowser`] |
+//! | Http | no clearance for the site | otherwise | [`Escalation::Stay`] |
 //!
 //! A clearance that is held and valid wins over the site's history, because earning it in a
 //! browser and then carrying it over HTTP is the point of leaving the browser. A cooldown is not
 //! the policy's concern: the caller checks it before it fetches at all.
 //!
-//! # After a fetch ([`SessionPolicy::after_fetch`])
+//! # After a fetch ([`EscalationPolicy::after_fetch`])
 //!
 //! `action` is what the mitigation policy decided for `detection`, and it has just been carried
-//! out. For [`Action::Solve`] that means the challenge was solved. Call
-//! [`StealthIdentity::refresh_clearances`] first so the identity shows what the solve earned.
+//! out. For [`Mitigation::Solve`] that means the challenge was solved. Call
+//! [`Identity::refresh_clearances`] first so the identity shows what the solve earned.
 //!
-//! | Mode | Action | Other | Transition |
+//! | Fetch kind | Mitigation | Other | Escalation |
 //! |---|---|---|---|
-//! | Http | [`Action::Escalate`] | anything | escalate: [`EscalateReason::Challenge`] with the detected kind |
-//! | Browser | [`Action::Solve`] | `demote_after_solve`, `prefer` is HTTP, the identity holds a clearance | demote: [`DemoteReason::ChallengeSolved`] |
-//! | any | anything else | anything | [`Transition::Stay`] |
+//! | Http | [`Mitigation::Escalate`] | anything | escalate: [`EscalateReason::Challenge`] with the detected kind |
+//! | Browser | [`Mitigation::Solve`] | `demote_after_solve`, `prefer` is HTTP, the identity holds a clearance | demote: [`DemoteReason::ChallengeSolved`] |
+//! | any | anything else | anything | [`Escalation::Stay`] |
 //!
 //! [`EscalateReason::Manual`] and [`DemoteReason::Manual`] are never produced here; a session
 //! uses them when its caller asks for a change.
@@ -40,10 +40,10 @@ use std::time::Duration;
 
 use serde::Serialize;
 
-use super::identity::StealthIdentity;
+use super::identity::Identity;
 use crate::challenge::detect::{ChallengeKind, Detection};
-use crate::challenge::mitigation::{Action, Mode};
-use crate::ledger::state::DomainState;
+use crate::challenge::mitigation::{FetchKind, Mitigation};
+use crate::ledger::state::SiteRecord;
 
 #[cfg(test)]
 mod tests;
@@ -53,7 +53,7 @@ pub const DEFAULT_CLEARANCE_MARGIN_SECS: u64 = 120;
 
 /// When a session changes mode.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct SessionPolicy {
+pub struct EscalationPolicy {
     /// An HTTP request needs a clearance for its site; without one the session escalates.
     pub require_clearance_for_http: bool,
     /// A clearance with at most this long left (whole seconds) counts as expiring.
@@ -61,10 +61,10 @@ pub struct SessionPolicy {
     /// Go back to HTTP once the browser has solved a challenge and the identity holds a clearance.
     pub demote_after_solve: bool,
     /// The mode a new session starts in and returns to.
-    pub prefer: Mode,
+    pub prefer: FetchKind,
 }
 
-impl Default for SessionPolicy {
+impl Default for EscalationPolicy {
     /// No clearance required, a margin of [`DEFAULT_CLEARANCE_MARGIN_SECS`], demote after a
     /// solve, and prefer HTTP.
     fn default() -> Self {
@@ -72,7 +72,7 @@ impl Default for SessionPolicy {
             require_clearance_for_http: false,
             clearance_margin: Duration::from_secs(DEFAULT_CLEARANCE_MARGIN_SECS),
             demote_after_solve: true,
-            prefer: Mode::Http,
+            prefer: FetchKind::Http,
         }
     }
 }
@@ -80,7 +80,7 @@ impl Default for SessionPolicy {
 /// A change of mode, or none.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub enum Transition {
+pub enum Escalation {
     /// Keep the mode.
     Stay,
     /// Go from HTTP to the browser.
@@ -120,32 +120,32 @@ pub enum DemoteReason {
     Manual,
 }
 
-impl Transition {
+impl Escalation {
     /// The mode a session in `current` is in after this transition.
     #[must_use]
-    pub fn resulting_mode(self, current: Mode) -> Mode {
+    pub fn resulting_kind(self, current: FetchKind) -> FetchKind {
         match self {
             Self::Stay => current,
-            Self::Escalate(_) => Mode::Browser,
-            Self::Demote(_) => Mode::Http,
+            Self::Escalate(_) => FetchKind::Browser,
+            Self::Demote(_) => FetchKind::Http,
         }
     }
 }
 
-impl SessionPolicy {
+impl EscalationPolicy {
     /// Whether to change mode before fetching `site`. See the module documentation for the table.
     #[must_use]
     pub fn before_fetch(
         &self,
-        mode: Mode,
-        id: &StealthIdentity,
+        mode: FetchKind,
+        id: &Identity,
         site: &str,
-        st: Option<&DomainState>,
+        st: Option<&SiteRecord>,
         now: u64,
-    ) -> Transition {
+    ) -> Escalation {
         match mode {
-            Mode::Browser => Transition::Stay,
-            Mode::Http => self.http_before_fetch(id, site, st, now),
+            FetchKind::Browser => Escalation::Stay,
+            FetchKind::Http => self.http_before_fetch(id, site, st, now),
         }
     }
 
@@ -154,49 +154,49 @@ impl SessionPolicy {
     #[must_use]
     pub fn after_fetch(
         &self,
-        mode: Mode,
+        mode: FetchKind,
         d: &Detection,
-        a: &Action,
-        id: &StealthIdentity,
-    ) -> Transition {
+        a: &Mitigation,
+        id: &Identity,
+    ) -> Escalation {
         match (mode, a) {
-            (Mode::Http, Action::Escalate) => {
-                Transition::Escalate(EscalateReason::Challenge(d.kind))
+            (FetchKind::Http, Mitigation::Escalate) => {
+                Escalation::Escalate(EscalateReason::Challenge(d.kind))
             }
-            (Mode::Browser, Action::Solve) if self.demotes_after_solve(id) => {
-                Transition::Demote(DemoteReason::ChallengeSolved)
+            (FetchKind::Browser, Mitigation::Solve) if self.demotes_after_solve(id) => {
+                Escalation::Demote(DemoteReason::ChallengeSolved)
             }
-            _ => Transition::Stay,
+            _ => Escalation::Stay,
         }
     }
 
     /// The rows of the table for an HTTP session before a fetch.
     fn http_before_fetch(
         &self,
-        id: &StealthIdentity,
+        id: &Identity,
         site: &str,
-        st: Option<&DomainState>,
+        st: Option<&SiteRecord>,
         now: u64,
-    ) -> Transition {
+    ) -> Escalation {
         if let Some(clearance) = id.clearance_for(site) {
             let remaining_secs = clearance.expires_at.saturating_sub(now);
             return if remaining_secs <= self.clearance_margin.as_secs() {
-                Transition::Escalate(EscalateReason::ClearanceExpiring { remaining_secs })
+                Escalation::Escalate(EscalateReason::ClearanceExpiring { remaining_secs })
             } else {
-                Transition::Stay
+                Escalation::Stay
             };
         }
         if self.require_clearance_for_http {
-            return Transition::Escalate(EscalateReason::NoClearance);
+            return Escalation::Escalate(EscalateReason::NoClearance);
         }
-        if st.is_some_and(|state| state.preferred_mode == Some(Mode::Browser)) {
-            return Transition::Escalate(EscalateReason::SiteNeedsBrowser);
+        if st.is_some_and(|state| state.preferred_kind == Some(FetchKind::Browser)) {
+            return Escalation::Escalate(EscalateReason::SiteNeedsBrowser);
         }
-        Transition::Stay
+        Escalation::Stay
     }
 
     /// Whether a browser session that has just solved a challenge goes back to HTTP.
-    fn demotes_after_solve(&self, id: &StealthIdentity) -> bool {
-        self.demote_after_solve && self.prefer == Mode::Http && !id.clearances.is_empty()
+    fn demotes_after_solve(&self, id: &Identity) -> bool {
+        self.demote_after_solve && self.prefer == FetchKind::Http && !id.clearances.is_empty()
     }
 }

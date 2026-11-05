@@ -20,7 +20,7 @@ fn the_bytes_a_site_may_hold_are_bounded_and_the_newest_cookie_stays() {
     for (i, at) in (NOW..).take(MAX_COOKIES_PER_SITE).enumerate() {
         let header = format!("c{i:03}={value}");
         let outcome = store_at(&mut jar, "https://example.com/", &header, at);
-        assert_eq!(outcome, StoreOutcome::Stored);
+        assert_eq!(outcome, SetCookieOutcome::Stored);
         assert!(held_by_jar(&jar) <= MAX_BYTES_PER_SITE, "after cookie {i}");
     }
     assert!(jar.len() < MAX_COOKIES_PER_SITE, "{jar:?}");
@@ -38,7 +38,10 @@ fn growing_a_cookie_by_replacing_it_cannot_pass_the_site_bound() {
         let header = format!("c{i}={value}");
         let outcome = store_at(&mut jar, "https://example.com/", &header, at);
         assert!(
-            matches!(outcome, StoreOutcome::Replaced | StoreOutcome::Stored),
+            matches!(
+                outcome,
+                SetCookieOutcome::Replaced | SetCookieOutcome::Stored
+            ),
             "{outcome:?}"
         );
         assert!(held_by_jar(&jar) <= MAX_BYTES_PER_SITE, "after cookie {i}");

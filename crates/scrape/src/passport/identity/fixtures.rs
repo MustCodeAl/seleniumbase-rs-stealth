@@ -2,10 +2,10 @@
 
 use url::Url;
 
-use super::{EmulationRef, StealthIdentity};
+use super::{Identity, WireMeasurementRef};
 use crate::egress::geo::CountryCode;
-use crate::egress::route::EgressKey;
-use crate::jar::store::StoreOutcome;
+use crate::egress::route::ProxyKey;
+use crate::jar::store::SetCookieOutcome;
 use seleniumbase_rs::evasion::fingerprint::{Fingerprint, OsType};
 use seleniumbase_rs_codec::BrowserKind;
 
@@ -20,18 +20,18 @@ pub(crate) fn fingerprint() -> Fingerprint {
     Fingerprint::randomized_with_major(OsType::Macos, 7, MAJOR)
 }
 
-/// The emulation the sample identity was measured against.
-pub(crate) fn emulation() -> EmulationRef {
-    EmulationRef {
+/// The wire measurement the sample identity was measured against.
+pub(crate) fn wire_measurement() -> WireMeasurementRef {
+    WireMeasurementRef {
         kind: BrowserKind::Chrome,
         major: MAJOR,
         os: OsType::Macos,
     }
 }
 
-/// A proxy egress in Germany on `host`.
-pub(crate) fn egress(host: &str) -> EgressKey {
-    EgressKey {
+/// A proxy proxy in Germany on `host`.
+pub(crate) fn proxy(host: &str) -> ProxyKey {
+    ProxyKey {
         scheme: "http".to_owned(),
         host: host.to_owned(),
         port: 8080,
@@ -40,26 +40,31 @@ pub(crate) fn egress(host: &str) -> EgressKey {
 }
 
 /// A fresh identity behind `p1.example`, holding no cookie.
-pub(crate) fn identity() -> StealthIdentity {
-    StealthIdentity::new(fingerprint(), emulation(), Some(egress("p1.example")), NOW)
-        .expect("the sample fingerprint is coherent")
+pub(crate) fn identity() -> Identity {
+    Identity::new(
+        fingerprint(),
+        wire_measurement(),
+        Some(proxy("p1.example")),
+        NOW,
+    )
+    .expect("the sample fingerprint is coherent")
 }
 
 /// Stores one `Set-Cookie` header received from `url` in the jar of `identity`, at [`NOW`].
-pub(crate) fn set_cookie(identity: &mut StealthIdentity, url: &str, header: &str) -> StoreOutcome {
+pub(crate) fn set_cookie(identity: &mut Identity, url: &str, header: &str) -> SetCookieOutcome {
     let url = Url::parse(url).expect("a valid url");
-    identity.cookies.store(&url, header, NOW)
+    identity.cookies.receive(&url, header, NOW)
 }
 
 /// An identity that earned a Cloudflare clearance for `example.com` lasting an hour from [`NOW`].
-pub(crate) fn identity_with_clearance() -> StealthIdentity {
+pub(crate) fn identity_with_clearance() -> Identity {
     let mut identity = identity();
     let outcome = set_cookie(
         &mut identity,
         "https://www.example.com/",
         "cf_clearance=SECRET-CLEARANCE-VALUE; Domain=example.com; Path=/; Secure; HttpOnly; Max-Age=3600",
     );
-    assert_eq!(outcome, StoreOutcome::Stored);
+    assert_eq!(outcome, SetCookieOutcome::Stored);
     identity.refresh_clearances(NOW);
     identity
 }

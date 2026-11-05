@@ -191,7 +191,7 @@ fn malformed_headers_frames_are_named() {
 
 #[test]
 fn padded_headers_with_priority_yield_the_bare_fragment() {
-    let block = request_block(&Pseudo::ALL, &[]);
+    let block = request_block(&PseudoHeader::ALL, &[]);
     let mut payload = vec![3];
     payload.extend(priority_bytes(true, 9, 33));
     payload.extend(&block);

@@ -9,7 +9,7 @@
 //!
 //! Recording a capture and judging it are separate steps. `from_preface` records whatever
 //! the client sent, GREASE settings included. [`H2Spec::check_reproducible`] then says
-//! whether the `wreq` HTTP/2 stack can send it, and names what it cannot in a [`SpecError`]:
+//! whether the `wreq` HTTP/2 stack can send it, and names what it cannot in a [`H2SpecError`]:
 //! the check runs before any client exists, so a spec that cannot be sent is never half
 //! applied. What the stack cannot emit, as of `wreq-proto` 0.2.6:
 //!
@@ -20,14 +20,14 @@
 //!
 //! ```
 //! use seleniumbase_rs_codec::akamai::Akamai;
-//! use seleniumbase_rs_codec::h2_spec::{H2Spec, SpecError};
+//! use seleniumbase_rs_codec::h2_spec::{H2Spec, H2SpecError};
 //!
 //! let akamai: Akamai = "1:4096;2:0;4:1048576|983041|0|m,a,s,p".parse()?;
 //! let spec = H2Spec::from_akamai(&akamai)?;
 //! assert_eq!(spec.akamai(), akamai);
 //!
 //! let grease: Akamai = "2570:1;4:1048576|0|0|m,a,s,p".parse()?;
-//! assert_eq!(H2Spec::from_akamai(&grease), Err(SpecError::UnsupportedSetting(2570)));
+//! assert_eq!(H2Spec::from_akamai(&grease), Err(H2SpecError::UnsupportedSetting(2570)));
 //! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
 
@@ -35,7 +35,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use super::akamai::{
-    Akamai, PriorityFrame, Pseudo, MAX_PRIORITY_FRAMES, MAX_STREAM_ID, MAX_WEIGHT, MIN_WEIGHT,
+    Akamai, PriorityFrame, PseudoHeader, MAX_PRIORITY_FRAMES, MAX_STREAM_ID, MAX_WEIGHT, MIN_WEIGHT,
 };
 use super::h2_frames::{read_preface, H2CaptureError, H2Preface, HeadersPriority};
 
@@ -94,7 +94,7 @@ const DEFAULT_INITIAL_STREAM: u32 = 1;
 /// Why an HTTP/2 spec cannot be built or cannot be sent.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 #[non_exhaustive]
-pub enum SpecError {
+pub enum H2SpecError {
     /// A SETTINGS id the HTTP/2 stack cannot send, such as a GREASE or experimental id.
     #[error("SETTINGS id {0} cannot be sent by the HTTP/2 stack (experimental and GREASE ids are unsupported)")]
     UnsupportedSetting(u16),
@@ -160,26 +160,23 @@ pub struct H2Spec {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub headers_priority: Option<HeadersPriority>,
     /// The order of the request pseudo-headers.
-    pub pseudo_order: [Pseudo; 4],
+    pub pseudo_order: [PseudoHeader; 4],
     /// The stream id of the first request, when it is not the usual `1`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub initial_stream_id: Option<u32>,
 }
-
-/// The same type under the name the design plan uses.
-pub type Http2Spec = H2Spec;
 
 impl H2Spec {
     /// Records a captured connection start. Nothing is judged here.
     ///
     /// # Errors
     ///
-    /// Returns [`SpecError::PseudoOrder`] when the request does not carry the four
+    /// Returns [`H2SpecError::PseudoOrder`] when the request does not carry the four
     /// pseudo-headers exactly once and before its other headers.
-    pub fn from_preface(preface: &H2Preface) -> Result<Self, SpecError> {
+    pub fn from_preface(preface: &H2Preface) -> Result<Self, H2SpecError> {
         let pseudo_order = preface
             .pseudo_order()
-            .map_err(|_malformed| SpecError::PseudoOrder)?;
+            .map_err(|_malformed| H2SpecError::PseudoOrder)?;
         Ok(Self {
             settings: preface.settings.clone(),
             window_update: preface.window_update,
@@ -195,11 +192,11 @@ impl H2Spec {
     ///
     /// # Errors
     ///
-    /// Returns [`SpecError::Incomplete`] when the bytes end before the first request is
-    /// complete, [`SpecError::Capture`] when they are not a valid client start, and
-    /// [`SpecError::PseudoOrder`] as [`H2Spec::from_preface`] does.
-    pub fn from_capture(bytes: &[u8]) -> Result<Self, SpecError> {
-        let preface = read_preface(bytes)?.ok_or(SpecError::Incomplete)?;
+    /// Returns [`H2SpecError::Incomplete`] when the bytes end before the first request is
+    /// complete, [`H2SpecError::Capture`] when they are not a valid client start, and
+    /// [`H2SpecError::PseudoOrder`] as [`H2Spec::from_preface`] does.
+    pub fn from_capture(bytes: &[u8]) -> Result<Self, H2SpecError> {
+        let preface = read_preface(bytes)?.ok_or(H2SpecError::Incomplete)?;
         Self::from_preface(&preface)
     }
 
@@ -209,8 +206,8 @@ impl H2Spec {
     ///
     /// # Errors
     ///
-    /// Returns the [`SpecError`] that [`H2Spec::check_reproducible`] reports.
-    pub fn from_akamai(akamai: &Akamai) -> Result<Self, SpecError> {
+    /// Returns the [`H2SpecError`] that [`H2Spec::check_reproducible`] reports.
+    pub fn from_akamai(akamai: &Akamai) -> Result<Self, H2SpecError> {
         let spec = Self::from_akamai_parts(akamai, None);
         spec.check_reproducible()?;
         Ok(spec)
@@ -225,8 +222,8 @@ impl H2Spec {
     ///
     /// # Errors
     ///
-    /// Returns the [`SpecError`] that [`H2Spec::check_reproducible`] reports for the result.
-    pub fn with_akamai(&self, akamai: &Akamai) -> Result<Self, SpecError> {
+    /// Returns the [`H2SpecError`] that [`H2Spec::check_reproducible`] reports for the result.
+    pub fn with_akamai(&self, akamai: &Akamai) -> Result<Self, H2SpecError> {
         let spec = Self::from_akamai_parts(akamai, self.headers_priority);
         spec.check_reproducible()?;
         Ok(spec)
@@ -237,21 +234,24 @@ impl H2Spec {
     /// # Errors
     ///
     /// Returns the first problem found, naming the setting, frame or field.
-    pub fn check_reproducible(&self) -> Result<(), SpecError> {
+    pub fn check_reproducible(&self) -> Result<(), H2SpecError> {
         check_settings(&self.settings)?;
         if self.window_update > MAX_WINDOW_UPDATE {
-            return Err(SpecError::WindowUpdate(self.window_update));
+            return Err(H2SpecError::WindowUpdate(self.window_update));
         }
         check_priority_frames(&self.priority_frames)?;
         if let Some(priority) = self.headers_priority {
             check_headers_priority(priority)?;
         }
-        if !Pseudo::ALL.iter().all(|p| self.pseudo_order.contains(p)) {
-            return Err(SpecError::PseudoOrder);
+        if !PseudoHeader::ALL
+            .iter()
+            .all(|p| self.pseudo_order.contains(p))
+        {
+            return Err(H2SpecError::PseudoOrder);
         }
         match self.initial_stream_id {
             Some(id) if id.is_multiple_of(2) || id > MAX_STREAM_ID => {
-                Err(SpecError::InitialStreamId(id))
+                Err(H2SpecError::InitialStreamId(id))
             }
             _ => Ok(()),
         }
@@ -313,22 +313,22 @@ impl H2Spec {
     }
 }
 
-fn check_settings(settings: &[(u16, u32)]) -> Result<(), SpecError> {
+fn check_settings(settings: &[(u16, u32)]) -> Result<(), H2SpecError> {
     let mut seen: Vec<u16> = Vec::with_capacity(EMITTABLE_SETTINGS.len());
     for &(id, value) in settings {
         if !EMITTABLE_SETTINGS.contains(&id) {
-            return Err(SpecError::UnsupportedSetting(id));
+            return Err(H2SpecError::UnsupportedSetting(id));
         }
         if seen.contains(&id) {
-            return Err(SpecError::DuplicateSetting(id));
+            return Err(H2SpecError::DuplicateSetting(id));
         }
         seen.push(id);
         if !setting_value_is_legal(id, value) {
-            return Err(SpecError::SettingValue { id, value });
+            return Err(H2SpecError::SettingValue { id, value });
         }
     }
     match ALWAYS_SENT_SETTINGS.iter().find(|id| !seen.contains(id)) {
-        Some(missing) => Err(SpecError::SettingAlwaysSent(*missing)),
+        Some(missing) => Err(H2SpecError::SettingAlwaysSent(*missing)),
         None => Ok(()),
     }
 }
@@ -345,7 +345,7 @@ fn setting_value_is_legal(id: u16, value: u32) -> bool {
     }
 }
 
-fn check_priority_frames(frames: &[PriorityFrame]) -> Result<(), SpecError> {
+fn check_priority_frames(frames: &[PriorityFrame]) -> Result<(), H2SpecError> {
     let mut seen: Vec<u32> = Vec::with_capacity(frames.len().min(MAX_SPEC_PRIORITY_FRAMES));
     for frame in frames {
         let stream = frame.stream_id;
@@ -357,7 +357,7 @@ fn check_priority_frames(frames: &[PriorityFrame]) -> Result<(), SpecError> {
             priority_problem(frame)
         };
         if let Some(reason) = problem {
-            return Err(SpecError::Priority { stream, reason });
+            return Err(H2SpecError::Priority { stream, reason });
         }
         seen.push(stream);
     }
@@ -383,7 +383,7 @@ fn priority_problem(frame: &PriorityFrame) -> Option<&'static str> {
     }
 }
 
-fn check_headers_priority(priority: HeadersPriority) -> Result<(), SpecError> {
+fn check_headers_priority(priority: HeadersPriority) -> Result<(), H2SpecError> {
     let reason = if !(MIN_WEIGHT..=MAX_WEIGHT).contains(&priority.weight) {
         "weight outside 1 to 256"
     } else if priority.depends_on > MAX_STREAM_ID {
@@ -391,7 +391,7 @@ fn check_headers_priority(priority: HeadersPriority) -> Result<(), SpecError> {
     } else {
         return Ok(());
     };
-    Err(SpecError::HeadersPriority { reason })
+    Err(H2SpecError::HeadersPriority { reason })
 }
 
 #[cfg(test)]

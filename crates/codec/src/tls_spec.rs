@@ -5,7 +5,7 @@
 //! parsed hello. A caller can also layer a custom JA3, JA4 (as `JA4_r` or `JA4_ro`) or peetprint
 //! over a base spec; each overlay replaces what its fingerprint carries, takes the rest from the
 //! base, and then runs [`TlsSpec::check_reproducible`], so a spec `BoringSSL` cannot emit is
-//! refused with a named [`SpecError`] before any client exists. The overlay result is also
+//! refused with a named [`TlsSpecError`] before any client exists. The overlay result is also
 //! recomputed and compared with the input, so an accepted input reproduces its own fingerprint.
 //!
 //! The lists never hold GREASE: the `grease` flag says `BoringSSL` adds its GREASE values. The
@@ -23,7 +23,7 @@ use super::ids::{
     EC_POINT_UNCOMPRESSED, ML_DSA_SIGALGS, REFUSED_EXTENSIONS, SIGNATURE_ALGORITHMS,
     TLS12_LEGACY_VERSION, TLS13_CIPHERS,
 };
-use super::ja3::peetprint::{slots, PeetField, Slot};
+use super::ja3::peetprint::{slots, PeetprintField, PeetprintSlot};
 use super::ja3::{Ja3, Peetprint};
 use super::ja4::{Ja4, Ja4Facts, Ja4Order, Ja4Raw, Ja4Section};
 
@@ -59,7 +59,7 @@ const CONTENT_EXTENSIONS: [u16; 11] = [
 /// Why a spec cannot be reproduced, or an overlay cannot be applied.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 #[non_exhaustive]
-pub enum SpecError {
+pub enum TlsSpecError {
     /// The handshake version is not TLS 1.2 (771), the only value `BoringSSL` writes.
     #[error("handshake version {0} cannot be emitted; BoringSSL writes 771")]
     LegacyVersion(u16),
@@ -125,7 +125,7 @@ pub enum SpecError {
     Ja4Alpn(String),
     /// The recomputed peetprint differs from the input in this field.
     #[error("the spec cannot reproduce the peetprint {0} field")]
-    PeetprintMismatch(PeetField),
+    PeetprintMismatch(PeetprintField),
     /// Two hellos meant to show one client differ in more than extension order.
     #[error("the hellos differ in their cipher suites or extension sets")]
     HellosDiffer,
@@ -133,6 +133,7 @@ pub enum SpecError {
 
 /// A known difference between a measured browser hello and what `BoringSSL` can send.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[non_exhaustive]
 pub enum KnownGap {
     /// The `trust_anchors` extension (0xCA34), which needs a newer btls and wreq.
     TrustAnchorsExtension,
@@ -206,8 +207,8 @@ fn strings(items: &[Vec<u8>]) -> Vec<String> {
         .collect()
 }
 
-fn duplicate(list: &'static str, id: u16) -> SpecError {
-    SpecError::Duplicate { list, id }
+fn duplicate(list: &'static str, id: u16) -> TlsSpecError {
+    TlsSpecError::Duplicate { list, id }
 }
 
 /// The first id that occurs twice in `ids`.
@@ -253,13 +254,13 @@ impl TlsSpec {
     ///
     /// # Errors
     ///
-    /// Returns [`SpecError::HellosDiffer`] when the cipher suites or the set of extensions differ.
-    pub fn with_observed_order(&self, other: &ClientHello) -> Result<Self, SpecError> {
+    /// Returns [`TlsSpecError::HellosDiffer`] when the cipher suites or the set of extensions differ.
+    pub fn with_observed_order(&self, other: &ClientHello) -> Result<Self, TlsSpecError> {
         let extensions = without_grease(&other.extension_ids());
         let same_set = extensions.iter().collect::<BTreeSet<_>>()
             == self.extensions.iter().collect::<BTreeSet<_>>();
         if !same_set || without_grease(&other.cipher_suites) != self.cipher_suites {
-            return Err(SpecError::HellosDiffer);
+            return Err(TlsSpecError::HellosDiffer);
         }
         let mut spec = self.clone();
         spec.permute_extensions = self.permute_extensions || extensions != self.extensions;
@@ -362,13 +363,13 @@ impl TlsSpec {
         .normalized()
     }
 
-    fn greased(&self, ids: &[u16], count: usize) -> Vec<Slot> {
+    fn greased(&self, ids: &[u16], count: usize) -> Vec<PeetprintSlot> {
         let lead = if self.grease && !ids.is_empty() {
             count
         } else {
             0
         };
-        std::iter::repeat_n(Slot::Grease, lead)
+        std::iter::repeat_n(PeetprintSlot::Grease, lead)
             .chain(slots(ids))
             .collect()
     }
@@ -399,9 +400,9 @@ impl TlsSpec {
     ///
     /// # Errors
     ///
-    /// Returns the first [`SpecError`] found: the version, the cipher suites, the extensions, the
+    /// Returns the first [`TlsSpecError`] found: the version, the cipher suites, the extensions, the
     /// groups, the point formats, the signature algorithms, then extension content.
-    pub fn check_reproducible(&self) -> Result<(), SpecError> {
+    pub fn check_reproducible(&self) -> Result<(), TlsSpecError> {
         self.check_version()?;
         self.check_ciphers()?;
         self.check_extensions()?;
@@ -411,14 +412,14 @@ impl TlsSpec {
         self.check_content()
     }
 
-    fn check_version(&self) -> Result<(), SpecError> {
+    fn check_version(&self) -> Result<(), TlsSpecError> {
         if self.legacy_version != TLS12_LEGACY_VERSION {
-            return Err(SpecError::LegacyVersion(self.legacy_version));
+            return Err(TlsSpecError::LegacyVersion(self.legacy_version));
         }
         let mut seen = BTreeSet::new();
         for &version in &self.supported_versions {
             if !(TLS_1_0..=TLS_1_3).contains(&version) {
-                return Err(SpecError::UnsupportedVersion(version));
+                return Err(TlsSpecError::UnsupportedVersion(version));
             }
             if !seen.insert(version) {
                 return Err(duplicate("supported_versions", version));
@@ -427,14 +428,14 @@ impl TlsSpec {
         Ok(())
     }
 
-    fn check_ciphers(&self) -> Result<(), SpecError> {
+    fn check_ciphers(&self) -> Result<(), TlsSpecError> {
         if self.cipher_suites.is_empty() {
-            return Err(SpecError::NoCipherSuites);
+            return Err(TlsSpecError::NoCipherSuites);
         }
         let mut seen = BTreeSet::new();
         for &id in &self.cipher_suites {
             if !BORINGSSL_CIPHERS.contains(&id) {
-                return Err(SpecError::UnsupportedCipher(id));
+                return Err(TlsSpecError::UnsupportedCipher(id));
             }
             if !seen.insert(id) {
                 return Err(duplicate("cipher_suites", id));
@@ -444,12 +445,12 @@ impl TlsSpec {
         let complete = present == TLS13_CIPHERS.len();
         let wants_tls13 = self.supported_versions.contains(&TLS_1_3);
         if (present != 0 && !complete) || complete != wants_tls13 {
-            return Err(SpecError::Tls13Suites);
+            return Err(TlsSpecError::Tls13Suites);
         }
         Ok(())
     }
 
-    fn check_extensions(&self) -> Result<(), SpecError> {
+    fn check_extensions(&self) -> Result<(), TlsSpecError> {
         let mut seen = BTreeSet::new();
         for &id in &self.extensions {
             let refused = REFUSED_EXTENSIONS
@@ -465,20 +466,20 @@ impl TlsSpec {
                 None
             };
             if let Some(reason) = reason {
-                return Err(SpecError::UnsupportedExtension { id, reason });
+                return Err(TlsSpecError::UnsupportedExtension { id, reason });
             }
             if !seen.insert(id) {
-                return Err(SpecError::DuplicateExtension(id));
+                return Err(TlsSpecError::DuplicateExtension(id));
             }
         }
         Ok(())
     }
 
-    fn check_groups(&self) -> Result<(), SpecError> {
+    fn check_groups(&self) -> Result<(), TlsSpecError> {
         let mut offered = BTreeSet::new();
         for &id in &self.supported_groups {
             if !BORINGSSL_GROUPS.contains(&id) {
-                return Err(SpecError::UnsupportedGroup(id));
+                return Err(TlsSpecError::UnsupportedGroup(id));
             }
             if !offered.insert(id) {
                 return Err(duplicate("supported_groups", id));
@@ -492,12 +493,12 @@ impl TlsSpec {
             .iter()
             .find(|id| !offered.contains(id))
         {
-            Some(&id) => Err(SpecError::KeyShareNotOffered(id)),
+            Some(&id) => Err(TlsSpecError::KeyShareNotOffered(id)),
             None => Ok(()),
         }
     }
 
-    fn check_point_formats(&self) -> Result<(), SpecError> {
+    fn check_point_formats(&self) -> Result<(), TlsSpecError> {
         let expected: &[u8] = if self.has_extension(ext_id::EC_POINT_FORMATS) {
             &[EC_POINT_UNCOMPRESSED]
         } else {
@@ -506,11 +507,11 @@ impl TlsSpec {
         if self.point_formats == expected {
             Ok(())
         } else {
-            Err(SpecError::PointFormats(self.point_formats.clone()))
+            Err(TlsSpecError::PointFormats(self.point_formats.clone()))
         }
     }
 
-    fn check_signature_algorithms(&self) -> Result<(), SpecError> {
+    fn check_signature_algorithms(&self) -> Result<(), TlsSpecError> {
         let mut seen = BTreeSet::new();
         for &id in &self.signature_algorithms {
             check_sigalg(id)?;
@@ -546,13 +547,13 @@ impl TlsSpec {
         })
     }
 
-    fn check_content(&self) -> Result<(), SpecError> {
+    fn check_content(&self) -> Result<(), TlsSpecError> {
         for id in CONTENT_EXTENSIONS {
             if self
                 .content_filled(id)
                 .is_some_and(|filled| filled != self.has_extension(id))
             {
-                return Err(SpecError::ExtensionContent(id));
+                return Err(TlsSpecError::ExtensionContent(id));
             }
         }
         match self
@@ -560,17 +561,17 @@ impl TlsSpec {
             .iter()
             .find(|name| name.is_empty() || name.len() > MAX_ALPN_LEN)
         {
-            Some(name) => Err(SpecError::Alpn(name.clone())),
+            Some(name) => Err(TlsSpecError::Alpn(name.clone())),
             None => Ok(()),
         }
     }
 }
 
 /// Refuses a signature scheme `BoringSSL` cannot send, naming it.
-fn check_sigalg(id: u16) -> Result<(), SpecError> {
+fn check_sigalg(id: u16) -> Result<(), TlsSpecError> {
     if ML_DSA_SIGALGS.contains(&id) || !BORINGSSL_SIGALGS.contains(&id) {
         let name = SIGNATURE_ALGORITHMS.name(id).unwrap_or(UNASSIGNED);
-        return Err(SpecError::UnsupportedSigalg { id, name });
+        return Err(TlsSpecError::UnsupportedSigalg { id, name });
     }
     Ok(())
 }

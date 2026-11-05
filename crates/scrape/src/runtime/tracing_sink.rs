@@ -1,14 +1,14 @@
 //! The `TracingEventSink`, which writes redacted scraper events to `tracing`.
 //!
 //! Each event becomes one `tracing` event on the [`TARGET`] with an `event` field naming it and
-//! one field per value. A [`ScraperEvent`] holds only redacted URLs and egress keys, so nothing
+//! one field per value. A [`ScrapeEvent`] holds only redacted URLs and egress keys, so nothing
 //! secret is formatted here. The sink does no I/O of its own, so it does not block; the
 //! subscriber decides where the line goes.
 
 use std::fmt;
 
-use crate::egress::route::EgressKey;
-use crate::ledger::events::{EventSink, ScraperEvent};
+use crate::egress::route::ProxyKey;
+use crate::ledger::events::{EventSink, ScrapeEvent};
 
 #[cfg(test)]
 mod tests;
@@ -18,13 +18,13 @@ pub const TARGET: &str = "seleniumbase_rs_scrape";
 
 /// An event sink that writes to `tracing`.
 ///
-/// Requests and decisions are logged at `DEBUG`, challenges, changes of mode, egress or profile and
+/// Requests and decisions are logged at `DEBUG`, challenges, changes of fetch kind, proxy or fingerprint and
 /// identity moves at `INFO`, and a cooldown at `WARN`.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct TracingEventSink;
 
 /// An egress for a log field: `direct` or `scheme://host:port`.
-struct Shown<'a>(&'a Option<EgressKey>);
+struct Shown<'a>(&'a Option<ProxyKey>);
 
 impl fmt::Display for Shown<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -36,26 +36,26 @@ impl fmt::Display for Shown<'_> {
 }
 
 impl EventSink for TracingEventSink {
-    fn emit(&self, event: &ScraperEvent) {
+    fn emit(&self, event: &ScrapeEvent) {
         let name = event.name();
         match event {
-            ScraperEvent::Request {
+            ScrapeEvent::Request {
                 url,
                 status,
-                mode,
+                fetch_kind,
                 elapsed_ms,
             } => {
-                tracing::debug!(target: TARGET, event = name, %url, status, ?mode, elapsed_ms);
+                tracing::debug!(target: TARGET, event = name, %url, status, ?fetch_kind, elapsed_ms);
             }
-            ScraperEvent::ChallengeDetected {
+            ScrapeEvent::ChallengeDetected {
                 url,
                 kind,
                 vendor,
-                mode,
+                fetch_kind,
             } => {
-                tracing::info!(target: TARGET, event = name, %url, ?kind, ?vendor, ?mode);
+                tracing::info!(target: TARGET, event = name, %url, ?kind, ?vendor, ?fetch_kind);
             }
-            ScraperEvent::ChallengeSolved {
+            ScrapeEvent::ChallengeSolved {
                 url,
                 kind,
                 attempts,
@@ -63,29 +63,29 @@ impl EventSink for TracingEventSink {
             } => {
                 tracing::info!(target: TARGET, event = name, %url, ?kind, attempts, elapsed_ms);
             }
-            ScraperEvent::ActionChosen { site, action } => {
+            ScrapeEvent::ActionChosen { site, action } => {
                 tracing::debug!(target: TARGET, event = name, %site, ?action);
             }
-            ScraperEvent::ModeChanged { from, to, reason } => {
+            ScrapeEvent::FetchKindChanged { from, to, reason } => {
                 tracing::info!(target: TARGET, event = name, ?from, ?to, ?reason);
             }
-            ScraperEvent::EgressRotated { from, to } => {
+            ScrapeEvent::ProxyRotated { from, to } => {
                 tracing::info!(target: TARGET, event = name, from = %Shown(from), to = %Shown(to));
             }
-            ScraperEvent::ProfileRotated { from_seed, to_seed } => {
+            ScrapeEvent::FingerprintRotated { from_seed, to_seed } => {
                 tracing::info!(target: TARGET, event = name, from_seed, to_seed);
             }
-            ScraperEvent::ClearanceExpiring {
+            ScrapeEvent::ClearanceExpiring {
                 site,
                 remaining_secs,
             } => {
                 tracing::info!(target: TARGET, event = name, %site, remaining_secs);
             }
-            ScraperEvent::CooldownStarted { site, until } => {
+            ScrapeEvent::CooldownStarted { site, until } => {
                 tracing::warn!(target: TARGET, event = name, %site, until);
             }
-            ScraperEvent::IdentityExported { cookies }
-            | ScraperEvent::IdentityRestored { cookies } => {
+            ScrapeEvent::IdentityExported { cookies }
+            | ScrapeEvent::IdentityRestored { cookies } => {
                 tracing::info!(target: TARGET, event = name, cookies);
             }
         }

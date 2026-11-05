@@ -1848,7 +1848,39 @@ dependencies = [
 ]
 
 [[package]]
-name = "seleniumbase-rs-mimic"
+name = "seleniumbase-rs-scrape"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "futures-util",
+ "http",
+ "psl",
+ "seleniumbase-rs",
+ "seleniumbase-rs-codec",
+ "serde",
+ "serde_json",
+ "syn 3.0.9",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "url",
+]
+
+[[package]]
+name = "seleniumbase-rs-stealth"
+version = "0.1.0"
+dependencies = [
+ "seleniumbase-rs",
+ "seleniumbase-rs-codec",
+ "seleniumbase-rs-scrape",
+ "seleniumbase-rs-wire",
+]
+
+[[package]]
+name = "seleniumbase-rs-wire"
 version = "0.1.0"
 dependencies = [
  "async-trait",
@@ -1877,38 +1909,6 @@ dependencies = [
  "tracing",
  "url",
  "wreq",
-]
-
-[[package]]
-name = "seleniumbase-rs-scrape"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "chrono",
- "futures-util",
- "http",
- "psl",
- "seleniumbase-rs",
- "seleniumbase-rs-codec",
- "serde",
- "serde_json",
- "syn 3.0.9",
- "tempfile",
- "thiserror 2.0.21",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "url",
-]
-
-[[package]]
-name = "seleniumbase-rs-stealth"
-version = "0.1.0"
-dependencies = [
- "seleniumbase-rs",
- "seleniumbase-rs-codec",
- "seleniumbase-rs-mimic",
- "seleniumbase-rs-scrape",
 ]
 
 [[package]]

@@ -4,13 +4,13 @@ use std::time::Instant;
 
 use super::{BrowserFetch, BrowserScraper};
 use crate::challenge::detect::{ChallengeKind, Detection};
-use crate::challenge::mitigation::{Action, AttemptContext, GiveUpReason, Mode};
-use crate::egress::pool::EgressOutcome;
+use crate::challenge::mitigation::{AttemptContext, FetchKind, GiveUpReason, Mitigation};
+use crate::egress::pool::ProxyOutcome;
 use crate::egress::redact::RedactedUrl;
 use crate::error::ScrapeError;
 use crate::jar::store::site_of;
-use crate::ledger::events::ScraperEvent;
-use crate::ledger::state::DomainState;
+use crate::ledger::events::ScrapeEvent;
+use crate::ledger::state::SiteRecord;
 use crate::runtime::cdp::{self, NavResponse, PageSnapshot};
 use seleniumbase_rs::utils::urls::normalize_page_url;
 
@@ -75,7 +75,7 @@ impl BrowserScraper {
     /// - [`ScrapeError::Unsolved`] when a challenge was still there after the attempts allowed;
     /// - [`ScrapeError::GaveUp`] when the policy stopped for another reason;
     /// - [`ScrapeError::Navigation`] when the browser could not load the page;
-    /// - [`ScrapeError::State`], [`ScrapeError::Geo`] and [`ScrapeError::Browser`] when the store,
+    /// - [`ScrapeError::Ledger`], [`ScrapeError::Geo`] and [`ScrapeError::Browser`] when the store,
     ///   a locale or the browser fails.
     #[tracing::instrument(skip_all, fields(url = %RedactedUrl::new(url)))]
     pub async fn fetch(&mut self, url: &str) -> Result<BrowserFetch, ScrapeError> {
@@ -88,7 +88,7 @@ impl BrowserScraper {
             .store
             .get(&target.site)
             .await?
-            .unwrap_or_else(|| DomainState::new(&target.site));
+            .unwrap_or_else(|| SiteRecord::new(&target.site));
         let now = self.now();
         if let Some(until) = state.cooldown_until.filter(|until| now < *until) {
             return Err(ScrapeError::CoolingDown {
@@ -96,7 +96,7 @@ impl BrowserScraper {
                 until,
             });
         }
-        self.egress.site = Some(target.site.clone());
+        self.proxy.site = Some(target.site.clone());
         let outcome = self.attempts(&target, &mut state).await;
         let saved = self.wiring.store.put(state).await;
         let fetched = outcome?;
@@ -124,7 +124,7 @@ impl BrowserScraper {
     #[tracing::instrument(skip_all)]
     pub async fn solve_challenge(&mut self) -> Result<Detection, ScrapeError> {
         let before = self.read_current().await?;
-        if before.detection.kind == ChallengeKind::None {
+        if before.detection.kind == ChallengeKind::Clear {
             return Ok(before.detection);
         }
         let vendor = before.detection.evidence.vendor;
@@ -161,7 +161,7 @@ impl BrowserScraper {
     async fn attempts(
         &mut self,
         target: &Target,
-        state: &mut DomainState,
+        state: &mut SiteRecord,
     ) -> Result<BrowserFetch, ScrapeError> {
         let mut solved: Option<Solved> = None;
         let mut attempt = 0_u32;
@@ -169,7 +169,7 @@ impl BrowserScraper {
             attempt = attempt.saturating_add(1);
             let (response, snapshot) = self.load_once(target, state).await?;
             let action = self.decide(target, state, &snapshot.detection, attempt);
-            if action == Action::Solve && solved.is_none() {
+            if action == Mitigation::Solve && solved.is_none() {
                 solved = Some(Solved {
                     kind: snapshot.detection.kind,
                     since: Instant::now(),
@@ -188,32 +188,32 @@ impl BrowserScraper {
     async fn load_once(
         &mut self,
         target: &Target,
-        state: &mut DomainState,
+        state: &mut SiteRecord,
     ) -> Result<(NavResponse, PageSnapshot), ScrapeError> {
         let started = Instant::now();
         let response = match cdp::goto_with_response(&self.page, &target.url).await {
             Ok(response) => response,
             Err(error) => {
-                self.report(EgressOutcome::ConnectError);
+                self.report(ProxyOutcome::ConnectFailed);
                 return Err(error);
             }
         };
         let snapshot = cdp::detect_page(&self.page, &response).await?;
         let detection = &snapshot.detection;
-        state.record(detection, Mode::Browser, self.now());
-        state.last_egress = self.current_key();
-        self.emit(&ScraperEvent::Request {
+        state.record(detection, FetchKind::Browser, self.now());
+        state.last_proxy = self.current_key();
+        self.emit(&ScrapeEvent::Request {
             url: target.redacted.clone(),
             status: response.status,
-            mode: Mode::Browser,
+            fetch_kind: FetchKind::Browser,
             elapsed_ms: elapsed_ms(started),
         });
-        if detection.kind != ChallengeKind::None {
-            self.emit(&ScraperEvent::ChallengeDetected {
+        if detection.kind != ChallengeKind::Clear {
+            self.emit(&ScrapeEvent::ChallengeDetected {
                 url: target.redacted.clone(),
                 kind: detection.kind,
                 vendor: detection.evidence.vendor,
-                mode: Mode::Browser,
+                fetch_kind: FetchKind::Browser,
             });
         }
         self.report(outcome_of(detection.kind));
@@ -221,10 +221,10 @@ impl BrowserScraper {
         Ok((response, snapshot))
     }
 
-    /// Tells the pool how the egress in use fared.
-    fn report(&self, outcome: EgressOutcome) {
-        if let (Some(pool), Some(current)) = (&self.egress.pool, &self.egress.current) {
-            pool.report(current.egress.key(), outcome, self.now());
+    /// Tells the pool how the proxy in use fared.
+    fn report(&self, outcome: ProxyOutcome) {
+        if let (Some(pool), Some(current)) = (&self.proxy.pool, &self.proxy.current) {
+            pool.report(current.proxy.key(), outcome, self.now());
         }
     }
 
@@ -232,20 +232,20 @@ impl BrowserScraper {
     fn decide(
         &self,
         target: &Target,
-        state: &DomainState,
+        state: &SiteRecord,
         detection: &Detection,
         attempt: u32,
-    ) -> Action {
+    ) -> Mitigation {
         let context = AttemptContext {
             attempt,
-            mode: Mode::Browser,
+            fetch_kind: FetchKind::Browser,
             consecutive_challenges: state.consecutive_challenges,
-            can_rotate_egress: self.egress.size > 1,
+            can_rotate_proxy: self.proxy.size > 1,
             can_escalate: false,
             now: self.now(),
         };
         let action = self.wiring.policy.decide(detection, &context);
-        self.emit(&ScraperEvent::ActionChosen {
+        self.emit(&ScrapeEvent::ActionChosen {
             site: target.site.clone(),
             action,
         });
@@ -255,25 +255,25 @@ impl BrowserScraper {
     /// Carries out `action`.
     pub(super) async fn act(
         &mut self,
-        action: Action,
+        action: Mitigation,
         target: &Target,
-        state: &mut DomainState,
+        state: &mut SiteRecord,
         snapshot: &PageSnapshot,
         attempt: u32,
     ) -> Result<Step, ScrapeError> {
         match action {
-            Action::Proceed => return Ok(Step::Finish),
-            Action::Solve => {
+            Mitigation::Proceed => return Ok(Step::Finish),
+            Mitigation::Solve => {
                 self.solve_challenge().await?;
             }
-            Action::Retry { after } => tokio::time::sleep(after).await,
-            Action::RotateEgress => {
+            Mitigation::Retry { after } => tokio::time::sleep(after).await,
+            Mitigation::RotateProxy => {
                 self.rotate_or_give_up(target, &snapshot.detection, attempt)
                     .await?;
             }
-            Action::RotateProfile => self.rotate_profile().await?,
-            Action::Cooldown { until } => return Err(self.cool_down(target, state, until)),
-            Action::GiveUp(reason) => {
+            Mitigation::RotateFingerprint => self.rotate_fingerprint().await?,
+            Mitigation::Cooldown { until } => return Err(self.cool_down(target, state, until)),
+            Mitigation::GiveUp(reason) => {
                 return Err(give_up(target, &snapshot.detection, reason, attempt));
             }
             // An action this loop does not know ends it: nothing is retried blindly.
@@ -289,15 +289,15 @@ impl BrowserScraper {
         Ok(Step::Again)
     }
 
-    /// Rotates the egress; with none left to rotate to, the fetch gives up.
+    /// Rotates the proxy; with none left to rotate to, the fetch gives up.
     async fn rotate_or_give_up(
         &mut self,
         target: &Target,
         detection: &Detection,
         attempt: u32,
     ) -> Result<(), ScrapeError> {
-        match self.rotate_egress().await {
-            Err(ScrapeError::NoEgressAvailable) => Err(give_up(
+        match self.rotate_proxy().await {
+            Err(ScrapeError::NoProxyLeft) => Err(give_up(
                 target,
                 detection,
                 GiveUpReason::NoEgressLeft,
@@ -308,9 +308,9 @@ impl BrowserScraper {
     }
 
     /// Leaves the site alone until `until`, and says so.
-    fn cool_down(&self, target: &Target, state: &mut DomainState, until: u64) -> ScrapeError {
+    fn cool_down(&self, target: &Target, state: &mut SiteRecord, until: u64) -> ScrapeError {
         state.start_cooldown(until);
-        self.emit(&ScraperEvent::CooldownStarted {
+        self.emit(&ScrapeEvent::CooldownStarted {
             site: target.site.clone(),
             until,
         });
@@ -330,7 +330,7 @@ impl BrowserScraper {
         solved: Option<Solved>,
     ) -> BrowserFetch {
         if let Some(solved) = &solved {
-            self.emit(&ScraperEvent::ChallengeSolved {
+            self.emit(&ScrapeEvent::ChallengeSolved {
                 url: target.redacted.clone(),
                 kind: solved.kind,
                 attempts,
@@ -345,17 +345,17 @@ impl BrowserScraper {
             detection: snapshot.detection,
             attempts,
             solved: solved.map(|solved| solved.kind),
-            egress: self.current_key(),
+            proxy: self.current_key(),
         }
     }
 }
 
-/// How the egress fared, by what the site answered.
-fn outcome_of(kind: ChallengeKind) -> EgressOutcome {
+/// How the proxy fared, by what the site answered.
+fn outcome_of(kind: ChallengeKind) -> ProxyOutcome {
     match kind {
-        ChallengeKind::None => EgressOutcome::Success,
-        ChallengeKind::Blocked => EgressOutcome::Blocked,
-        _ => EgressOutcome::Challenged,
+        ChallengeKind::Clear => ProxyOutcome::Success,
+        ChallengeKind::Blocked => ProxyOutcome::Blocked,
+        _ => ProxyOutcome::Challenged,
     }
 }
 

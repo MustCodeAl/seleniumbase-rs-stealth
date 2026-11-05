@@ -3,7 +3,7 @@
 use tokio::io::{duplex, DuplexStream};
 
 use super::*;
-use seleniumbase_rs_codec::akamai::Pseudo;
+use seleniumbase_rs_codec::akamai::PseudoHeader;
 use seleniumbase_rs_codec::client_hello::fixtures::HelloBuilder;
 use seleniumbase_rs_codec::client_hello::ClientHelloError;
 use seleniumbase_rs_codec::h2_frames::CLIENT_PREFACE;
@@ -352,10 +352,10 @@ async fn an_h2c_start_is_read_up_to_the_first_request() {
     assert_eq!(
         preface.pseudo_order().expect("four pseudo-headers"),
         [
-            Pseudo::Method,
-            Pseudo::Scheme,
-            Pseudo::Path,
-            Pseudo::Authority
+            PseudoHeader::Method,
+            PseudoHeader::Scheme,
+            PseudoHeader::Path,
+            PseudoHeader::Authority
         ]
     );
 }

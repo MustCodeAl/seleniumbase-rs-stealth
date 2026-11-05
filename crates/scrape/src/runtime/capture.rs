@@ -13,7 +13,7 @@
 //!
 //! A loopback listener cannot complete a TLS handshake without a certificate, so the TLS capture records
 //! the `ClientHello` and drops the connection. The HTTP/2 capture that needs a certificate belongs to the
-//! mimic crate (`seleniumbase-rs-mimic`).
+//! wire crate (`seleniumbase-rs-wire`).
 
 pub mod args;
 pub mod chrome;
@@ -28,7 +28,7 @@ use thiserror::Error;
 use seleniumbase_rs::SeleniumBaseError;
 use seleniumbase_rs_codec::client_hello::ClientHelloError;
 use seleniumbase_rs_codec::h2_frames::H2CaptureError;
-use seleniumbase_rs_codec::tls_spec::SpecError;
+use seleniumbase_rs_codec::tls_spec::TlsSpecError;
 
 pub use chrome::{measure_hints, measure_tls, ChromeOptions};
 pub use hints::{HintsMeasurement, HintsServer};
@@ -76,7 +76,7 @@ pub enum CaptureError {
     },
     /// Several hellos meant to show one client disagree in more than extension order.
     #[error("the captured hellos do not show one client: {0}")]
-    Spec(#[from] SpecError),
+    Spec(#[from] TlsSpecError),
     /// The hellos of one browser have different JA4 values, so the capture is not stable.
     #[error("the captured hellos have different JA4 values: {first} and {other}")]
     Unstable {

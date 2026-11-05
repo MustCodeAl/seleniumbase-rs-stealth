@@ -1,7 +1,7 @@
 # Changelog
 
 All notable changes to the unified `seleniumbase-rs-stealth` facade and its
-`seleniumbase-rs-codec`, `seleniumbase-rs-scrape` and `seleniumbase-rs-mimic` implementations. The format follows
+`seleniumbase-rs-codec`, `seleniumbase-rs-scrape` and `seleniumbase-rs-wire` (formerly `seleniumbase-rs-mimic`) implementations. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). The crates are experimental
 and not published to crates.io, so their types and paths may change between commits.
 
@@ -17,6 +17,51 @@ at `c0bd111`; a core from before that change does not compile against these crat
 Only `scrape` and `mimic` were affected; `codec` holds no fingerprint.
 
 ### Breaking
+
+- **The stealth API is named after seleniumbase-rs, not after the project it was ported
+  from** (design note `docs/design/stealth_names.md`, PR #4). The features stay; the names
+  and shapes that were copied with them change. No shims.
+  - The `mimic` crate is `seleniumbase-rs-wire` (folder `crates/wire`, facade feature and
+    path `wire`).
+  - codec: the `emulation` module and `Emulation` are `measurement` and `WireMeasurement`
+    (`WireMeasurementError`; the lookups are called through the module:
+    `measurement::all`, `measurement::for_kind`, `measurement::get`, and the root aliases are
+    gone); the spec errors are `H2SpecError` and `TlsSpecError` everywhere
+    (the aliases `emulation::SpecError` and `Http2Spec` are gone); `Pseudo` ->
+    `PseudoHeader`, `Extension` -> `TlsExtension`, `PeetField` -> `PeetprintField`, `Slot`
+    -> `PeetprintSlot`, `HeaderValue` -> `HeaderSource`, `HeaderIdentity` -> `ClientHeaders`.
+  - scrape: egress becomes proxy (`ProxyRoute`, `ProxyKey`, `ProxyRouteError`,
+    `ProxyOutcome`, `ProxySwitch` in module `proxy_switch`, `ProxyLocale`, `proxy_route()`,
+    the `proxy` fields, `rotate_proxy`, `ScrapeError::Proxy`, `NoProxyLeft`); `Mode` ->
+    `FetchKind` (`fetch_kind`); `Transition` -> `Escalation`; `SessionPolicy` ->
+    `EscalationPolicy`; `Action` -> `Mitigation` (`RotateFingerprint`, `RotateProxy`); the
+    `StateStore` family -> `Ledger`, `InMemoryLedger`, `JsonLedger`, `LedgerError`,
+    `DomainState` -> `SiteRecord`; `StealthIdentity` -> `Identity` (`wire_measurement`, `verify` -> `validate`); `CookieJar::store` -> `receive`;
+    `Evidence` -> `ChallengeEvidence`; `Vendor` -> `ProtectionVendor`;
+    `ChallengeKind::None` -> `Clear`; `ScraperEvent` -> `ScrapeEvent` with the event names
+    `fetch_kind_changed`, `proxy_rotated`, `fingerprint_rotated`; builder setters without
+    `with_` (`geo_proxies`, `max_challenge_attempts`, `ledger`, `event_sink`),
+    `per_site_rate` -> `rate_limit`, `rotate_profile` -> `rotate_fingerprint`.
+  - wire: `ImpersonationProfile` -> `WireFormat` (`WireFormat::builder()`, `h2_spec()`,
+    `client_headers()`), `CustomProfileBuilder` -> `WireFormatBuilder`, `ImpersonateError` ->
+    `WireFormatError`, the free function `impersonation_client` -> the method `WireFormat::client_builder`; `HttpReply` ->
+    `HttpResponse`, `HttpOptions` -> `HttpSessionOptions` (`rate_limit`), the
+    `http_session` types under their exported names (`HttpAttempt`, `HttpFetch`,
+    `ResponseHeaders`, `HttpRules`, `HttpVerdict`, fields `escalation`); `MitmProxy`:
+    `proxy_url`, `launch_args`, `swap_proxy`, `swap_wire_format`; `spki_launch_arg`;
+    `LeafCert`; `StealthSession::http_session()`, `fetch_kind()`, and on its builder
+    `escalation_policy`, `identity`, `http_session_options`.
+  - Removed as copies: the facade's root re-export of `evasion::*` (use
+    `evasion::fingerprint::...`), wire's `ReplyProtocol` (`HttpResponse::protocol` returns
+    `WireProtocol`) and wire's own `Clock` (it re-exports scrape's).
+  - Serialized names follow the renames (identity files, ledger files, event JSON).
+  - Rust API naming review: `wire_client` is the method `WireFormat::client_builder()` (a
+    function with an obvious receiver is a method, and it returns a builder); the codec root
+    aliases are gone (`measurement::all`, `measurement::for_kind`, `measurement::get`;
+    `measured` and `try_measured` are `all` and `try_all`); `Identity::verify` is `validate`;
+    `CookieJar::store` is `receive`; `ProxyOutcome::ConnectError` is `ConnectFailed`.
+    `WireProtocol`, `KnownGap`, `SetCookieOutcome` and `ProxyRouteError` are
+    `#[non_exhaustive]`: each will grow (HTTP/3, newly found gaps, new outcomes).
 
 - **The core module `seleniumbase_rs::stealth` is now `seleniumbase_rs::evasion`.** The crates
   import it under the new name, and the facade re-exports it as

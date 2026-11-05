@@ -1,10 +1,10 @@
 //! Stealth scraping without TLS spoofing: one pure module per concern, and the runtime that does the I/O.
 //!
 //! The main types are re-exported here, so a caller does not need the module paths:
-//! `BrowserScraper` and its builder, `ScrapeError`, the egress types (`EgressRef`, `EgressKey`,
-//! `ProxyPool`, `EgressSwitch`), the identity (`StealthIdentity`, `SessionPolicy`), the cookie
+//! `BrowserScraper` and its builder, `ScrapeError`, the egress types (`ProxyRoute`, `ProxyKey`,
+//! `ProxyPool`, `ProxySwitch`), the identity (`Identity`, `EscalationPolicy`), the cookie
 //! jar (`CookieJar`), the challenge types (`Detection`, `ChallengeKind`, `MitigationPolicy`, ...)
-//! and the events with their sinks (`ScraperEvent`, `EventSink` and the three sinks that ship).
+//! and the events with their sinks (`ScrapeEvent`, `EventSink` and the three sinks that ship).
 //! The pure modules stay as they were; the I/O sits under `runtime`.
 //!
 //! The scrape layer is experimental, like the rest of the stealth layer: its types may change
@@ -21,21 +21,25 @@ pub mod passport;
 pub mod runtime;
 mod sync;
 
-pub use challenge::detect::{ChallengeKind, Detection, Evidence, ResponseView, Vendor};
-pub use challenge::mitigation::{Action, AttemptContext, GiveUpReason, MitigationPolicy, Mode};
+pub use challenge::detect::{
+    ChallengeEvidence, ChallengeKind, Detection, ProtectionVendor, ResponseView,
+};
+pub use challenge::mitigation::{
+    AttemptContext, FetchKind, GiveUpReason, Mitigation, MitigationPolicy,
+};
 pub use egress::geo::{CountryCode, GeoResolver, LocaleExt, StaticGeoResolver};
 pub use egress::pool::{ProxyPool, RotationStrategy};
 pub use egress::redact::{RedactedUrl, Secret};
-pub use egress::route::{EgressKey, EgressRef};
+pub use egress::route::{ProxyKey, ProxyRoute};
 pub use error::ScrapeError;
 pub use jar::store::CookieJar;
-pub use ledger::events::{CollectingEventSink, EventSink, NoopEventSink, ScraperEvent};
-pub use ledger::state::{DomainState, InMemoryStateStore, StateStore};
-pub use passport::identity::{EmulationRef, IdentityError, StealthIdentity};
-pub use passport::policy::{SessionPolicy, Transition};
+pub use ledger::events::{CollectingEventSink, EventSink, NoopEventSink, ScrapeEvent};
+pub use ledger::state::{InMemoryLedger, Ledger, SiteRecord};
+pub use passport::identity::{Identity, IdentityError, WireMeasurementRef};
+pub use passport::policy::{Escalation, EscalationPolicy};
 pub use runtime::browser_scraper::{
     BrowserFetch, BrowserLauncher, BrowserScraper, BrowserScraperBuilder, ChromeLauncher,
 };
-pub use runtime::egress_switch::{ContextProxySwitch, EgressSwitch};
-pub use runtime::json_store::JsonStateStore;
+pub use runtime::json_store::JsonLedger;
+pub use runtime::proxy_switch::{ContextProxySwitch, ProxySwitch};
 pub use runtime::tracing_sink::TracingEventSink;

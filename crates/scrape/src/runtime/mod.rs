@@ -5,7 +5,7 @@
 pub mod browser_scraper;
 pub mod capture;
 pub mod cdp;
-pub mod egress_switch;
 pub mod identity_file;
 pub mod json_store;
+pub mod proxy_switch;
 pub mod tracing_sink;

@@ -2,7 +2,7 @@
 //!
 //! A response is a challenge only when it carries an interstitial marker (see
 //! [`markers`](super::markers)). A vendor header, a CAPTCHA widget, or a bare 403 is evidence and
-//! nothing more: [`detect`] returns [`ChallengeKind::None`] with that evidence attached.
+//! nothing more: [`detect`] returns [`ChallengeKind::Clear`] with that evidence attached.
 
 use serde::{Deserialize, Serialize};
 
@@ -19,7 +19,7 @@ const RATE_LIMITED_STATUS: u16 = 429;
 /// A bot-protection vendor.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[non_exhaustive]
-pub enum Vendor {
+pub enum ProtectionVendor {
     /// Cloudflare (Turnstile and the JavaScript challenge).
     Cloudflare,
     /// `DataDome`.
@@ -41,7 +41,7 @@ pub enum Vendor {
 #[non_exhaustive]
 pub enum ChallengeKind {
     /// The page is not a challenge.
-    None,
+    Clear,
     /// A script must run and answer before the page is real.
     JsChallenge,
     /// A widget the user, or a solver, must complete.
@@ -64,17 +64,17 @@ impl ChallengeKind {
             Self::Interactive => 3,
             Self::JsChallenge => 2,
             Self::Blocked => 1,
-            Self::None | Self::RateLimited { .. } => 0,
+            Self::Clear | Self::RateLimited { .. } => 0,
         }
     }
 }
 
 /// What the scan found, kept with the verdict so a caller can log why.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct Evidence {
+pub struct ChallengeEvidence {
     /// The vendor behind the verdict, or the vendor a header says fronts the site when there is
     /// no verdict.
-    pub vendor: Option<Vendor>,
+    pub vendor: Option<ProtectionVendor>,
     /// The markers and header names that matched, in table order. A header such as `cf-ray`
     /// appears here too, though it never decides anything.
     pub markers: Vec<&'static str>,
@@ -88,7 +88,7 @@ pub struct Detection {
     /// What the response asks of the client.
     pub kind: ChallengeKind,
     /// What the scan saw.
-    pub evidence: Evidence,
+    pub evidence: ChallengeEvidence,
 }
 
 /// The parts of a response that detection reads.
@@ -109,7 +109,7 @@ pub struct ResponseView<'a> {
 #[derive(Clone, Copy)]
 struct Finding {
     kind: ChallengeKind,
-    vendor: Vendor,
+    vendor: ProtectionVendor,
 }
 
 /// Decides what `view` asks of the client.
@@ -120,9 +120,9 @@ struct Finding {
 #[must_use]
 pub fn detect(view: &ResponseView<'_>) -> Detection {
     let body = scan_window(view.body).to_ascii_lowercase();
-    let mut evidence = Evidence {
+    let mut evidence = ChallengeEvidence {
         widget: find_widget(&body),
-        ..Evidence::default()
+        ..ChallengeEvidence::default()
     };
     let mut strongest: Option<Finding> = None;
 
@@ -165,7 +165,7 @@ pub fn detect(view: &ResponseView<'_>) -> Detection {
                 retry_after_secs: retry_after(view.headers),
             }
         } else {
-            ChallengeKind::None
+            ChallengeKind::Clear
         }
     };
     Detection { kind, evidence }
@@ -173,15 +173,15 @@ pub fn detect(view: &ResponseView<'_>) -> Detection {
 
 /// The cookie that proves a vendor's challenge was passed, once it is set.
 #[must_use]
-pub fn clearance_cookie(vendor: Vendor) -> Option<&'static str> {
+pub fn clearance_cookie(vendor: ProtectionVendor) -> Option<&'static str> {
     match vendor {
-        Vendor::Cloudflare => Some("cf_clearance"),
-        Vendor::DataDome => Some("datadome"),
-        Vendor::PerimeterX => Some("_px3"),
-        Vendor::Akamai => Some("_abck"),
-        Vendor::AwsWaf => Some("aws-waf-token"),
-        Vendor::Imperva => Some("reese84"),
-        Vendor::Kasada => None,
+        ProtectionVendor::Cloudflare => Some("cf_clearance"),
+        ProtectionVendor::DataDome => Some("datadome"),
+        ProtectionVendor::PerimeterX => Some("_px3"),
+        ProtectionVendor::Akamai => Some("_abck"),
+        ProtectionVendor::AwsWaf => Some("aws-waf-token"),
+        ProtectionVendor::Imperva => Some("reese84"),
+        ProtectionVendor::Kasada => None,
     }
 }
 
@@ -223,7 +223,7 @@ fn retry_after(headers: &[(String, String)]) -> Option<u64> {
 }
 
 /// The stronger of the finding so far and one more marker. The first of equals is kept.
-fn stronger(so_far: Option<Finding>, kind: ChallengeKind, vendor: Vendor) -> Finding {
+fn stronger(so_far: Option<Finding>, kind: ChallengeKind, vendor: ProtectionVendor) -> Finding {
     match so_far {
         Some(current) if current.kind.strength() >= kind.strength() => current,
         _ => Finding { kind, vendor },
@@ -250,7 +250,7 @@ mod tests {
         status: u16,
         headers: Headers,
         kind: ChallengeKind,
-        vendor: Option<Vendor>,
+        vendor: Option<ProtectionVendor>,
     }
 
     const CF_HEADERS: Headers = &[
@@ -266,7 +266,7 @@ mod tests {
         status: u16,
         headers: Headers,
         kind: ChallengeKind,
-        vendor: Option<Vendor>,
+        vendor: Option<ProtectionVendor>,
     ) -> Case {
         Case {
             name,
@@ -279,11 +279,11 @@ mod tests {
     }
 
     const JS: ChallengeKind = ChallengeKind::JsChallenge;
-    const NONE: ChallengeKind = ChallengeKind::None;
+    const NONE: ChallengeKind = ChallengeKind::Clear;
 
     /// The Cloudflare fixtures, with the response each was served in.
     fn cloudflare_cases() -> Vec<Case> {
-        let cloudflare = Some(Vendor::Cloudflare);
+        let cloudflare = Some(ProtectionVendor::Cloudflare);
         vec![
             case(
                 "cloudflare_managed",
@@ -337,7 +337,7 @@ mod tests {
                 403,
                 &[("x-datadome", "protected")],
                 ChallengeKind::Interactive,
-                Some(Vendor::DataDome),
+                Some(ProtectionVendor::DataDome),
             ),
             case(
                 "perimeterx_block",
@@ -345,7 +345,7 @@ mod tests {
                 403,
                 &[],
                 ChallengeKind::Interactive,
-                Some(Vendor::PerimeterX),
+                Some(ProtectionVendor::PerimeterX),
             ),
             case(
                 "akamai_bm_verify",
@@ -353,7 +353,7 @@ mod tests {
                 200,
                 &[("server", "AkamaiGHost")],
                 JS,
-                Some(Vendor::Akamai),
+                Some(ProtectionVendor::Akamai),
             ),
             case(
                 "akamai_access_denied",
@@ -361,7 +361,7 @@ mod tests {
                 403,
                 &[("Server", "AkamaiGHost")],
                 ChallengeKind::Blocked,
-                Some(Vendor::Akamai),
+                Some(ProtectionVendor::Akamai),
             ),
             case(
                 "imperva_incident",
@@ -369,7 +369,7 @@ mod tests {
                 403,
                 &[("x-iinfo", "12-34-56 NNNN CT(0 0 0) RT(1 2)")],
                 ChallengeKind::Blocked,
-                Some(Vendor::Imperva),
+                Some(ProtectionVendor::Imperva),
             ),
             case(
                 "imperva_pardon",
@@ -377,7 +377,7 @@ mod tests {
                 200,
                 &[],
                 JS,
-                Some(Vendor::Imperva),
+                Some(ProtectionVendor::Imperva),
             ),
         ]
     }
@@ -391,7 +391,7 @@ mod tests {
                 429,
                 &[],
                 JS,
-                Some(Vendor::Kasada),
+                Some(ProtectionVendor::Kasada),
             ),
             case(
                 "aws_waf_challenge",
@@ -399,7 +399,7 @@ mod tests {
                 202,
                 &[("x-amzn-waf-action", "challenge")],
                 JS,
-                Some(Vendor::AwsWaf),
+                Some(ProtectionVendor::AwsWaf),
             ),
             case(
                 "aws_waf_captcha",
@@ -407,7 +407,7 @@ mod tests {
                 405,
                 &[("x-amzn-waf-action", "captcha")],
                 ChallengeKind::Interactive,
-                Some(Vendor::AwsWaf),
+                Some(ProtectionVendor::AwsWaf),
             ),
             case(
                 "rate_limited",
@@ -530,8 +530,8 @@ mod tests {
     #[test]
     fn a_bare_cf_ray_is_not_a_challenge() {
         let found = detect_with("", 200, &[("cf-ray", "8a1b2c3d4e5f6071-AMS")]);
-        assert_eq!(found.kind, ChallengeKind::None);
-        assert_eq!(found.evidence.vendor, Some(Vendor::Cloudflare));
+        assert_eq!(found.kind, ChallengeKind::Clear);
+        assert_eq!(found.evidence.vendor, Some(ProtectionVendor::Cloudflare));
         assert_eq!(found.evidence.markers, ["cf-ray"]);
         assert_eq!(found.evidence.widget, None);
     }
@@ -539,14 +539,14 @@ mod tests {
     #[test]
     fn a_cloudflare_page_with_its_beacon_script_is_not_a_challenge() {
         let found = detect_with(fixture!("cloudflare_normal_page.html"), 200, CF_PLAIN);
-        assert_eq!(found.kind, ChallengeKind::None);
+        assert_eq!(found.kind, ChallengeKind::Clear);
         assert_eq!(found.evidence.markers, ["cf-ray", "server: cloudflare"]);
     }
 
     #[test]
     fn a_bare_turnstile_widget_is_not_a_challenge() {
         let found = detect_with(fixture!("turnstile_login_form.html"), 200, &[]);
-        assert_eq!(found.kind, ChallengeKind::None);
+        assert_eq!(found.kind, ChallengeKind::Clear);
         assert_eq!(found.evidence.widget, Some(Captcha::Turnstile));
         assert_eq!(found.evidence.markers, Vec::<&str>::new());
         assert_eq!(found.evidence.vendor, None);
@@ -556,26 +556,26 @@ mod tests {
     fn a_forbidden_status_alone_is_not_a_challenge() {
         for status in [401, 403, 404, 500, 503] {
             let found = detect_with("Forbidden", status, &[("server", "cloudflare")]);
-            assert_eq!(found.kind, ChallengeKind::None, "{status}");
-            assert_eq!(found.evidence.vendor, Some(Vendor::Cloudflare));
+            assert_eq!(found.kind, ChallengeKind::Clear, "{status}");
+            assert_eq!(found.evidence.vendor, Some(ProtectionVendor::Cloudflare));
         }
     }
 
     #[test]
     fn words_in_an_article_are_not_markers() {
         let found = detect_with(fixture!("plain_article.html"), 200, &[]);
-        assert_eq!(found.kind, ChallengeKind::None);
+        assert_eq!(found.kind, ChallengeKind::Clear);
         assert_eq!(found.evidence.markers, Vec::<&str>::new());
     }
 
     #[test]
     fn a_vendor_sdk_on_a_normal_page_is_not_a_challenge() {
         let normal = detect_with(fixture!("kasada_sdk_on_normal_page.html"), 200, &[]);
-        assert_eq!(normal.kind, ChallengeKind::None);
+        assert_eq!(normal.kind, ChallengeKind::Clear);
         // The same text in a 429 is Kasada's challenge, not a plain rate limit.
         let challenge = detect_with(fixture!("kasada_sdk_on_normal_page.html"), 429, &[]);
         assert_eq!(challenge.kind, ChallengeKind::JsChallenge);
-        assert_eq!(challenge.evidence.vendor, Some(Vendor::Kasada));
+        assert_eq!(challenge.evidence.vendor, Some(ProtectionVendor::Kasada));
     }
 
     #[test]
@@ -584,7 +584,7 @@ mod tests {
         assert_eq!(found.kind, ChallengeKind::JsChallenge);
         assert_eq!(found.evidence.markers, ["cf-mitigated: challenge"]);
         let other = detect_with("", 403, &[("cf-mitigated", "block")]);
-        assert_eq!(other.kind, ChallengeKind::None);
+        assert_eq!(other.kind, ChallengeKind::Clear);
     }
 
     #[test]
@@ -633,7 +633,7 @@ mod tests {
         );
         let found = detect_with(&body, 403, &[]);
         assert_eq!(found.kind, ChallengeKind::JsChallenge);
-        assert_eq!(found.evidence.vendor, Some(Vendor::Cloudflare));
+        assert_eq!(found.evidence.vendor, Some(ProtectionVendor::Cloudflare));
         assert!(found.evidence.markers.contains(&"incapsula incident id"));
     }
 
@@ -681,15 +681,15 @@ mod tests {
     #[test]
     fn retry_after_means_nothing_without_a_429() {
         let found = detect_with("", 200, &[("Retry-After", "30")]);
-        assert_eq!(found.kind, ChallengeKind::None);
+        assert_eq!(found.kind, ChallengeKind::Clear);
         let unavailable = detect_with("", 503, &[("Retry-After", "30")]);
-        assert_eq!(unavailable.kind, ChallengeKind::None);
+        assert_eq!(unavailable.kind, ChallengeKind::Clear);
     }
 
     #[test]
     fn a_rate_limit_keeps_the_vendor_evidence() {
         let found = detect_with("", 429, &[("cf-ray", "x"), ("Retry-After", "9")]);
-        assert_eq!(found.evidence.vendor, Some(Vendor::Cloudflare));
+        assert_eq!(found.evidence.vendor, Some(ProtectionVendor::Cloudflare));
         assert_eq!(
             found.kind,
             ChallengeKind::RateLimited {
@@ -715,7 +715,7 @@ mod tests {
     fn a_marker_past_the_scan_window_is_ignored() {
         let marker = "cf_chl_opt";
         let after = format!("{}{marker}", "a".repeat(MAX_SCAN_BYTES));
-        assert_eq!(detect_with(&after, 403, &[]).kind, ChallengeKind::None);
+        assert_eq!(detect_with(&after, 403, &[]).kind, ChallengeKind::Clear);
         let before = format!("{marker}{}", "a".repeat(MAX_SCAN_BYTES * 4));
         assert_eq!(
             detect_with(&before, 403, &[]).kind,
@@ -731,7 +731,10 @@ mod tests {
             "a".repeat(MAX_SCAN_BYTES - 6),
             "a".repeat(10)
         );
-        assert_eq!(detect_with(&straddling, 403, &[]).kind, ChallengeKind::None);
+        assert_eq!(
+            detect_with(&straddling, 403, &[]).kind,
+            ChallengeKind::Clear
+        );
     }
 
     #[test]
@@ -751,7 +754,7 @@ mod tests {
         ] {
             let body = format!("{}é€😀cf_chl_opt", "a".repeat(lead));
             let found = detect_with(&body, 403, &[]);
-            assert_eq!(found.kind, ChallengeKind::None, "lead {lead}");
+            assert_eq!(found.kind, ChallengeKind::Clear, "lead {lead}");
         }
         let body = format!("{}é", "a".repeat(MAX_SCAN_BYTES - 1));
         assert_eq!(scan_window(&body).len(), MAX_SCAN_BYTES - 1);
@@ -761,7 +764,7 @@ mod tests {
     fn a_huge_body_is_scanned_in_bounded_time_and_memory() {
         let body = "x".repeat(16 * 1024 * 1024);
         let found = detect_with(&body, 200, &[]);
-        assert_eq!(found.kind, ChallengeKind::None);
+        assert_eq!(found.kind, ChallengeKind::Clear);
     }
 
     #[test]
@@ -771,11 +774,11 @@ mod tests {
             let bytes: Vec<u8> = (0..4096).map(|_| rng.next_u64().to_le_bytes()[0]).collect();
             let junk = String::from_utf8_lossy(&bytes).into_owned();
             let found = detect_with(&junk, 200, &[]);
-            assert_eq!(found.kind, ChallengeKind::None);
+            assert_eq!(found.kind, ChallengeKind::Clear);
             assert_eq!(found.evidence.markers, Vec::<&str>::new());
         }
         let nul = "\u{0}".repeat(2 * MAX_SCAN_BYTES);
-        assert_eq!(detect_with(&nul, 403, &[]).kind, ChallengeKind::None);
+        assert_eq!(detect_with(&nul, 403, &[]).kind, ChallengeKind::Clear);
         let controls = "\u{1}\u{7}\u{8}\u{1b}[0m\u{feff}\u{202e}cf_chl_opt";
         assert_eq!(
             detect_with(controls, 403, &[]).kind,
@@ -804,7 +807,7 @@ mod tests {
                 retry_after_secs: None
             }
         );
-        assert_eq!(found.evidence.vendor, Some(Vendor::Cloudflare));
+        assert_eq!(found.evidence.vendor, Some(ProtectionVendor::Cloudflare));
         let many: Vec<(String, String)> = (0..20_000)
             .map(|i| (format!("x-h-{i}"), "v".to_owned()))
             .collect();
@@ -814,7 +817,7 @@ mod tests {
             headers: &many,
             body: "",
         });
-        assert_eq!(found.kind, ChallengeKind::None);
+        assert_eq!(found.kind, ChallengeKind::Clear);
     }
 
     #[test]
@@ -833,13 +836,13 @@ mod tests {
     #[test]
     fn each_vendor_has_the_cookie_that_proves_clearance() {
         let table = [
-            (Vendor::Cloudflare, Some("cf_clearance")),
-            (Vendor::DataDome, Some("datadome")),
-            (Vendor::PerimeterX, Some("_px3")),
-            (Vendor::Akamai, Some("_abck")),
-            (Vendor::AwsWaf, Some("aws-waf-token")),
-            (Vendor::Imperva, Some("reese84")),
-            (Vendor::Kasada, None),
+            (ProtectionVendor::Cloudflare, Some("cf_clearance")),
+            (ProtectionVendor::DataDome, Some("datadome")),
+            (ProtectionVendor::PerimeterX, Some("_px3")),
+            (ProtectionVendor::Akamai, Some("_abck")),
+            (ProtectionVendor::AwsWaf, Some("aws-waf-token")),
+            (ProtectionVendor::Imperva, Some("reese84")),
+            (ProtectionVendor::Kasada, None),
         ];
         for (vendor, cookie) in table {
             assert_eq!(clearance_cookie(vendor), cookie, "{vendor:?}");
@@ -849,7 +852,7 @@ mod tests {
     #[test]
     fn kinds_and_vendors_survive_serde() {
         let kinds = [
-            ChallengeKind::None,
+            ChallengeKind::Clear,
             ChallengeKind::JsChallenge,
             ChallengeKind::Interactive,
             ChallengeKind::Blocked,
@@ -867,10 +870,10 @@ mod tests {
                 kind
             );
         }
-        let json = serde_json::to_string(&Vendor::AwsWaf).expect("serializes");
+        let json = serde_json::to_string(&ProtectionVendor::AwsWaf).expect("serializes");
         assert_eq!(
-            serde_json::from_str::<Vendor>(&json).expect("parses"),
-            Vendor::AwsWaf
+            serde_json::from_str::<ProtectionVendor>(&json).expect("parses"),
+            ProtectionVendor::AwsWaf
         );
     }
 }

@@ -5,7 +5,7 @@ use std::fmt;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
-use super::route::{EgressKey, EgressRef};
+use super::route::{ProxyKey, ProxyRoute};
 use seleniumbase_rs::evasion::fingerprint::{Fingerprint, FingerprintError, Geolocation};
 use seleniumbase_rs::evasion::humanize::Rng;
 pub use seleniumbase_rs::evasion::randomize::{Locale, LOCALES};
@@ -69,7 +69,7 @@ pub enum GeoError {
     NoLocale(CountryCode),
     /// The egress has no country, so nothing can be looked up for it.
     #[error("no geo information for egress {0}")]
-    Unknown(EgressKey),
+    Unknown(ProxyKey),
 }
 
 /// What the scrape layer adds to the core's [`Locale`].
@@ -208,7 +208,7 @@ pub trait GeoResolver: Send + Sync {
     /// # Errors
     ///
     /// Returns [`GeoError`] when the egress has no country or the country has no locale.
-    async fn resolve(&self, egress: &EgressRef) -> Result<GeoInfo, GeoError>;
+    async fn resolve(&self, egress: &ProxyRoute) -> Result<GeoInfo, GeoError>;
 }
 
 /// Answers from the country given with the proxy spec, through the locale table. No network lookup
@@ -218,7 +218,7 @@ pub struct StaticGeoResolver;
 
 #[async_trait]
 impl GeoResolver for StaticGeoResolver {
-    async fn resolve(&self, egress: &EgressRef) -> Result<GeoInfo, GeoError> {
+    async fn resolve(&self, egress: &ProxyRoute) -> Result<GeoInfo, GeoError> {
         let key = egress.key();
         let country = key.country.ok_or_else(|| GeoError::Unknown(key.clone()))?;
         let locale = Locale::for_country(country).ok_or(GeoError::NoLocale(country))?;
@@ -240,7 +240,7 @@ mod tests {
         CountryCode::new(code).expect("valid code")
     }
 
-    fn resolve(egress: &EgressRef) -> Result<GeoInfo, GeoError> {
+    fn resolve(egress: &ProxyRoute) -> Result<GeoInfo, GeoError> {
         // The resolver awaits nothing, so one poll finishes it. No runtime is needed, which
         // keeps this pure module free of tokio, even in its tests.
         StaticGeoResolver
@@ -444,7 +444,7 @@ mod tests {
     #[test]
     fn the_static_resolver_answers_from_the_spec_country() {
         let de = country("DE");
-        let egress = EgressRef::parse("proxy.example:8080", Some(de)).expect("valid spec");
+        let egress = ProxyRoute::parse("proxy.example:8080", Some(de)).expect("valid spec");
         let info = resolve(&egress).expect("resolves");
         assert_eq!(info.country, de);
         assert_eq!(info.timezone.as_deref(), Some("Europe/Berlin"));
@@ -453,7 +453,7 @@ mod tests {
 
     #[test]
     fn the_static_resolver_refuses_an_egress_without_a_country() {
-        let egress = EgressRef::parse("proxy.example:8080", None).expect("valid spec");
+        let egress = ProxyRoute::parse("proxy.example:8080", None).expect("valid spec");
         let err = resolve(&egress).expect_err("no country");
         assert!(matches!(err, GeoError::Unknown(_)));
     }
@@ -461,7 +461,7 @@ mod tests {
     #[test]
     fn the_static_resolver_refuses_a_country_with_no_locale() {
         let zz = country("ZZ");
-        let egress = EgressRef::parse("proxy.example:8080", Some(zz)).expect("valid spec");
+        let egress = ProxyRoute::parse("proxy.example:8080", Some(zz)).expect("valid spec");
         let err = resolve(&egress).expect_err("no locale");
         assert!(matches!(err, GeoError::NoLocale(code) if code == zz));
     }
@@ -469,7 +469,7 @@ mod tests {
     #[test]
     fn a_geo_error_names_the_egress_but_not_its_credentials() {
         let egress =
-            EgressRef::parse("http://alice:s3cret@proxy.example:8080", None).expect("valid spec");
+            ProxyRoute::parse("http://alice:s3cret@proxy.example:8080", None).expect("valid spec");
         let err = resolve(&egress).expect_err("no country");
         let shown = format!("{err} {err:?}");
         assert!(shown.contains("proxy.example"), "{shown}");

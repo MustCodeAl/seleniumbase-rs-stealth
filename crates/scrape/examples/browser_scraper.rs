@@ -25,7 +25,7 @@ use std::thread;
 use std::time::Duration;
 
 use seleniumbase_rs::sb_cdp::LaunchOptions;
-use seleniumbase_rs_scrape::{BrowserScraper, CollectingEventSink, ScraperEvent};
+use seleniumbase_rs_scrape::{BrowserScraper, CollectingEventSink, ScrapeEvent};
 
 /// The cookie that proves the challenge was passed.
 const CLEARANCE: &str = "cf_clearance";
@@ -182,7 +182,7 @@ async fn run() -> Result<(), Box<dyn Error>> {
     let sink = CollectingEventSink::new();
     let mut scraper = BrowserScraper::builder()
         .launch_options(LaunchOptions::builder().headless(true))
-        .with_event_sink(Arc::new(sink.clone()))
+        .event_sink(Arc::new(sink.clone()))
         .solve_timeout(SOLVE_WITHIN)
         .build()
         .await?;
@@ -204,10 +204,10 @@ async fn run() -> Result<(), Box<dyn Error>> {
     println!("\nwhat the scraper reported");
     for event in sink.events() {
         match event {
-            ScraperEvent::ChallengeDetected { kind, vendor, .. } => {
+            ScrapeEvent::ChallengeDetected { kind, vendor, .. } => {
                 println!("  challenge detected: {kind:?}, vendor {vendor:?}");
             }
-            ScraperEvent::ChallengeSolved {
+            ScrapeEvent::ChallengeSolved {
                 kind,
                 attempts,
                 elapsed_ms,

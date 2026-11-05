@@ -10,8 +10,8 @@ use serde_json::json;
 
 use crate::egress::geo::CountryCode;
 use crate::error::ScrapeError;
-use crate::ledger::events::{CollectingEventSink, ScraperEvent};
-use crate::ledger::state::InMemoryStateStore;
+use crate::ledger::events::{CollectingEventSink, ScrapeEvent};
+use crate::ledger::state::InMemoryLedger;
 use crate::runtime::browser_scraper::{BrowserLauncher, BrowserScraperBuilder};
 use crate::runtime::cdp::testkit::{Served, Site};
 use crate::sync::locked;
@@ -124,7 +124,7 @@ pub(super) struct Rig {
     pub(super) launcher: Arc<TestLauncher>,
     pub(super) site: Site,
     pub(super) sink: CollectingEventSink,
-    pub(super) store: InMemoryStateStore,
+    pub(super) store: InMemoryLedger,
     pub(super) clock: Arc<AtomicU64>,
 }
 
@@ -145,7 +145,7 @@ impl Rig {
             }),
             site,
             sink: CollectingEventSink::new(),
-            store: InMemoryStateStore::new(),
+            store: InMemoryLedger::new(),
             clock: Arc::new(AtomicU64::new(NOW)),
         }
     }
@@ -156,8 +156,8 @@ impl Rig {
         let launcher = Arc::clone(&self.launcher);
         crate::runtime::browser_scraper::BrowserScraper::builder()
             .launcher(launcher)
-            .with_event_sink(Arc::new(self.sink.clone()))
-            .with_state_store(Arc::new(self.store.clone()))
+            .event_sink(Arc::new(self.sink.clone()))
+            .ledger(Arc::new(self.store.clone()))
             .clock(Arc::new(move || clock.load(Ordering::SeqCst)))
             .solve_timeout(BRIEF_SOLVE)
             .seed(SEED)
@@ -170,7 +170,7 @@ impl Rig {
 
     /// The names of the events so far, oldest first.
     pub(super) fn event_names(&self) -> Vec<&'static str> {
-        self.sink.events().iter().map(ScraperEvent::name).collect()
+        self.sink.events().iter().map(ScrapeEvent::name).collect()
     }
 }
 

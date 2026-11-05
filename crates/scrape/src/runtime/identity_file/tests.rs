@@ -17,7 +17,7 @@ fn temp() -> tempfile::TempDir {
 }
 
 /// A saved sample identity: its directory, the file and the identity.
-fn saved() -> (tempfile::TempDir, PathBuf, StealthIdentity) {
+fn saved() -> (tempfile::TempDir, PathBuf, Identity) {
     let dir = temp();
     let path = dir.path().join("identity.json");
     let identity = identity_with_clearance();
@@ -245,7 +245,7 @@ mod unix {
 
     /// Loads `path` on another thread, so that a load that waits for a writer fails the test
     /// instead of stopping it.
-    fn load_without_waiting(path: &Path) -> Result<StealthIdentity, IdentityFileError> {
+    fn load_without_waiting(path: &Path) -> Result<Identity, IdentityFileError> {
         let (sender, receiver) = std::sync::mpsc::channel();
         let target = path.to_path_buf();
         std::thread::spawn(move || {

@@ -22,7 +22,7 @@ use std::time::Duration;
 use seleniumbase_rs::sb_cdp::LaunchOptions;
 use seleniumbase_rs_scrape::challenge::detect::ChallengeKind;
 use seleniumbase_rs_scrape::egress::geo::CountryCode;
-use seleniumbase_rs_scrape::ledger::events::{CollectingEventSink, ScraperEvent};
+use seleniumbase_rs_scrape::ledger::events::{CollectingEventSink, ScrapeEvent};
 use seleniumbase_rs_scrape::runtime::browser_scraper::{BrowserScraper, BrowserScraperBuilder};
 use serde_json::json;
 
@@ -165,7 +165,7 @@ fn headless() -> seleniumbase_rs::sb_cdp::LaunchOptionsBuilder {
 fn builder(sink: &CollectingEventSink) -> BrowserScraperBuilder {
     BrowserScraper::builder()
         .launch_options(headless())
-        .with_event_sink(Arc::new(sink.clone()))
+        .event_sink(Arc::new(sink.clone()))
         .solve_timeout(SOLVE_TIMEOUT)
 }
 
@@ -193,7 +193,7 @@ async fn a_script_challenge_is_passed_by_a_real_chrome() {
         .events()
         .into_iter()
         .filter_map(|event| match event {
-            ScraperEvent::ChallengeDetected { kind, .. } => Some(kind),
+            ScrapeEvent::ChallengeDetected { kind, .. } => Some(kind),
             _ => None,
         })
         .collect();
@@ -238,7 +238,7 @@ async fn the_egress_decides_the_language_and_the_time_zone_and_rotating_moves_th
     let france = Server::start("proxy-fr");
     let sink = CollectingEventSink::new();
     let mut scraper = builder(&sink)
-        .with_geo_proxies([
+        .geo_proxies([
             (germany.proxy(), country("DE")),
             (france.proxy(), country("FR")),
         ])
@@ -271,7 +271,7 @@ async fn the_egress_decides_the_language_and_the_time_zone_and_rotating_moves_th
         germany.last_accept_language()
     );
 
-    scraper.rotate_egress().await.expect("the egress rotates");
+    scraper.rotate_proxy().await.expect("the egress rotates");
     let second = scraper
         .fetch(&format!("{SHOP}plain"))
         .await
@@ -318,7 +318,10 @@ async fn rotating_the_profile_starts_a_new_chrome_that_reports_the_new_profile()
         .expect("it reads");
     assert_eq!(cores_before, json!(before.hardware_concurrency().value()));
 
-    scraper.rotate_profile().await.expect("the profile rotates");
+    scraper
+        .rotate_fingerprint()
+        .await
+        .expect("the profile rotates");
     scraper
         .fetch(&server.url("/plain"))
         .await
@@ -344,6 +347,6 @@ async fn rotating_the_profile_starts_a_new_chrome_that_reports_the_new_profile()
     assert!(sink
         .events()
         .iter()
-        .any(|event| matches!(event, ScraperEvent::ProfileRotated { .. })));
+        .any(|event| matches!(event, ScrapeEvent::FingerprintRotated { .. })));
     scraper.close().await.expect("Chrome closes");
 }

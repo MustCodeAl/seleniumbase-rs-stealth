@@ -4,9 +4,9 @@
 //! capitalisation, for two request shapes: a top-level navigation ([`RequestShape::Document`])
 //! and a script-issued request ([`RequestShape::Fetch`]). Most values are literal. The ones
 //! that belong to the caller's identity are placeholders, resolved at request time from a
-//! [`HeaderIdentity`]: the `User-Agent`, `Accept-Language`, the client hints and the cookie.
+//! [`ClientHeaders`]: the `User-Agent`, `Accept-Language`, the client hints and the cookie.
 //! Because the caller supplies them, any of them can be changed without touching the spec,
-//! and any header can be replaced by name with [`HeaderIdentity::with_override`] or
+//! and any header can be replaced by name with [`ClientHeaders::with_override`] or
 //! [`HeaderSpec::with_header`].
 //!
 //! A spec is built from a captured header list ([`HeaderSpec::from_captured`]), or written by
@@ -18,11 +18,11 @@
 //! and goes last in the header block.
 //!
 //! ```
-//! use seleniumbase_rs_codec::header_spec::{HeaderIdentity, HeaderSpec, RequestShape};
+//! use seleniumbase_rs_codec::header_spec::{ClientHeaders, HeaderSpec, RequestShape};
 //!
 //! let captured = [("Accept", "*/*"), ("User-Agent", "Agent/1.0"), ("Host", "example.test")];
 //! let spec = HeaderSpec::from_captured(&captured, &captured)?;
-//! let identity = HeaderIdentity::new("Agent/2.0");
+//! let identity = ClientHeaders::new("Agent/2.0");
 //! let headers = spec.render(RequestShape::Fetch, &identity)?;
 //! // `Host` belongs to the connection; the user agent is the caller's.
 //! assert_eq!(
@@ -81,7 +81,7 @@ pub enum RequestShape {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 #[non_exhaustive]
-pub enum HeaderValue {
+pub enum HeaderSource {
     /// Exactly this text.
     Literal(String),
     /// The identity's `User-Agent`.
@@ -104,10 +104,10 @@ pub enum HeaderValue {
 pub struct HeaderSpec {
     /// Headers of a navigation, in order.
     #[serde(default)]
-    pub document: Vec<(String, HeaderValue)>,
+    pub document: Vec<(String, HeaderSource)>,
     /// Headers of a script-issued request, in order.
     #[serde(default)]
-    pub fetch: Vec<(String, HeaderValue)>,
+    pub fetch: Vec<(String, HeaderSource)>,
     /// The HTTP/2 `priority` header value for each `Sec-Fetch-Dest` value.
     #[serde(default)]
     pub priority_by_dest: Vec<(String, String)>,
@@ -117,7 +117,7 @@ pub struct HeaderSpec {
 ///
 /// The cookie is a secret, so `Debug` shows it and the override values only as `<redacted>`.
 #[derive(Clone, PartialEq, Eq)]
-pub struct HeaderIdentity {
+pub struct ClientHeaders {
     /// The `User-Agent` value.
     pub user_agent: String,
     /// The `Accept-Language` value, when the request has one.
@@ -172,10 +172,10 @@ pub enum HeaderSpecError {
     PriorityWithoutDestination,
 }
 
-impl fmt::Debug for HeaderIdentity {
+impl fmt::Debug for ClientHeaders {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let redacted = |value: &Option<String>| value.as_ref().map(|_| "<redacted>");
-        f.debug_struct("HeaderIdentity")
+        f.debug_struct("ClientHeaders")
             .field("user_agent", &self.user_agent)
             .field("accept_language", &self.accept_language)
             .field("sec_ch_ua", &self.sec_ch_ua)
@@ -194,7 +194,7 @@ impl fmt::Debug for HeaderIdentity {
     }
 }
 
-impl HeaderIdentity {
+impl ClientHeaders {
     /// An identity with a user agent and nothing else.
     #[must_use]
     pub fn new(user_agent: impl Into<String>) -> Self {
@@ -277,15 +277,15 @@ impl HeaderIdentity {
     }
 
     /// The value a placeholder stands for, or `None` when the identity has no such value.
-    fn resolve<'a>(&'a self, value: &'a HeaderValue) -> Option<&'a str> {
+    fn resolve<'a>(&'a self, value: &'a HeaderSource) -> Option<&'a str> {
         match value {
-            HeaderValue::Literal(text) => Some(text),
-            HeaderValue::UserAgent => Some(&self.user_agent),
-            HeaderValue::SecChUa => self.sec_ch_ua.as_deref(),
-            HeaderValue::SecChUaMobile => self.sec_ch_ua_mobile.as_deref(),
-            HeaderValue::SecChUaPlatform => self.sec_ch_ua_platform.as_deref(),
-            HeaderValue::AcceptLanguage => self.accept_language.as_deref(),
-            HeaderValue::Cookie => self.cookie.as_deref(),
+            HeaderSource::Literal(text) => Some(text),
+            HeaderSource::UserAgent => Some(&self.user_agent),
+            HeaderSource::SecChUa => self.sec_ch_ua.as_deref(),
+            HeaderSource::SecChUaMobile => self.sec_ch_ua_mobile.as_deref(),
+            HeaderSource::SecChUaPlatform => self.sec_ch_ua_platform.as_deref(),
+            HeaderSource::AcceptLanguage => self.accept_language.as_deref(),
+            HeaderSource::Cookie => self.cookie.as_deref(),
         }
     }
 }
@@ -293,7 +293,7 @@ impl HeaderIdentity {
 impl HeaderSpec {
     /// Builds a spec from the headers of one captured navigation and one captured fetch.
     ///
-    /// Pseudo-headers and the transport headers in [`TRANSPORT_HEADERS`] are dropped. The
+    /// PseudoHeader-headers and the transport headers in [`TRANSPORT_HEADERS`] are dropped. The
     /// identity headers become placeholders. A `priority` header (an HTTP/2 capture) moves to
     /// the priority table, keyed by the same request's `Sec-Fetch-Dest`.
     ///
@@ -331,7 +331,7 @@ impl HeaderSpec {
 
     /// The header list of a request shape.
     #[must_use]
-    pub fn headers(&self, shape: RequestShape) -> &[(String, HeaderValue)] {
+    pub fn headers(&self, shape: RequestShape) -> &[(String, HeaderSource)] {
         match shape {
             RequestShape::Document => &self.document,
             RequestShape::Fetch => &self.fetch,
@@ -349,7 +349,7 @@ impl HeaderSpec {
     pub fn render(
         &self,
         shape: RequestShape,
-        identity: &HeaderIdentity,
+        identity: &ClientHeaders,
     ) -> Result<Vec<(String, String)>, HeaderSpecError> {
         let mut out = Vec::new();
         for (name, value) in self.headers(shape) {
@@ -383,7 +383,7 @@ impl HeaderSpec {
         &self,
         shape: RequestShape,
         name: &str,
-        value: HeaderValue,
+        value: HeaderSource,
     ) -> Result<Self, HeaderSpecError> {
         validate_name(name)?;
         let mut next = self.clone();
@@ -438,14 +438,14 @@ impl HeaderSpec {
 }
 
 /// The placeholder for a lowercase header name that carries the caller's identity.
-fn placeholder_for(lower_name: &str) -> Option<HeaderValue> {
+fn placeholder_for(lower_name: &str) -> Option<HeaderSource> {
     match lower_name {
-        "user-agent" => Some(HeaderValue::UserAgent),
-        "accept-language" => Some(HeaderValue::AcceptLanguage),
-        "sec-ch-ua" => Some(HeaderValue::SecChUa),
-        "sec-ch-ua-mobile" => Some(HeaderValue::SecChUaMobile),
-        "sec-ch-ua-platform" => Some(HeaderValue::SecChUaPlatform),
-        "cookie" => Some(HeaderValue::Cookie),
+        "user-agent" => Some(HeaderSource::UserAgent),
+        "accept-language" => Some(HeaderSource::AcceptLanguage),
+        "sec-ch-ua" => Some(HeaderSource::SecChUa),
+        "sec-ch-ua-mobile" => Some(HeaderSource::SecChUaMobile),
+        "sec-ch-ua-platform" => Some(HeaderSource::SecChUaPlatform),
+        "cookie" => Some(HeaderSource::Cookie),
         _ => None,
     }
 }
@@ -454,7 +454,7 @@ fn placeholder_for(lower_name: &str) -> Option<HeaderValue> {
 fn captured_list<N: AsRef<str>, V: AsRef<str>>(
     raw: &[(N, V)],
     priority_table: &mut Vec<(String, String)>,
-) -> Result<Vec<(String, HeaderValue)>, HeaderSpecError> {
+) -> Result<Vec<(String, HeaderSource)>, HeaderSpecError> {
     let mut entries = Vec::new();
     let mut destination: Option<String> = None;
     let mut priority: Option<String> = None;
@@ -476,7 +476,7 @@ fn captured_list<N: AsRef<str>, V: AsRef<str>>(
             _ => {}
         }
         let kept =
-            placeholder_for(&lower).unwrap_or_else(|| HeaderValue::Literal(value.to_owned()));
+            placeholder_for(&lower).unwrap_or_else(|| HeaderSource::Literal(value.to_owned()));
         entries.push((name.to_owned(), kept));
     }
     if let Some(priority) = priority {
@@ -545,7 +545,7 @@ fn validate_value(name: &str, value: &str) -> Result<(), HeaderSpecError> {
     }
 }
 
-fn validate_list(list: &[(String, HeaderValue)]) -> Result<(), HeaderSpecError> {
+fn validate_list(list: &[(String, HeaderSource)]) -> Result<(), HeaderSpecError> {
     if list.len() > MAX_HEADERS {
         return Err(HeaderSpecError::TooManyHeaders);
     }
@@ -559,7 +559,7 @@ fn validate_list(list: &[(String, HeaderValue)]) -> Result<(), HeaderSpecError> 
         if seen.contains(&lower) {
             return Err(HeaderSpecError::DuplicateName(lower));
         }
-        if let HeaderValue::Literal(text) = value {
+        if let HeaderSource::Literal(text) = value {
             validate_value(name, text)?;
         }
         seen.push(lower);

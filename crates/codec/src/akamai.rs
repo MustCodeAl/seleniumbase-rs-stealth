@@ -53,7 +53,7 @@ pub const MAX_PRIORITY_FRAMES: usize = 64;
 /// `non_exhaustive`: a pseudo-header order is a permutation of exactly these four.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
-pub enum Pseudo {
+pub enum PseudoHeader {
     /// `:method`, written `m`.
     Method,
     /// `:authority`, written `a`.
@@ -64,23 +64,23 @@ pub enum Pseudo {
     Path,
 }
 
-impl Pseudo {
+impl PseudoHeader {
     /// The four pseudo-headers in the order `m,a,s,p`.
-    pub const ALL: [Pseudo; 4] = [
-        Pseudo::Method,
-        Pseudo::Authority,
-        Pseudo::Scheme,
-        Pseudo::Path,
+    pub const ALL: [PseudoHeader; 4] = [
+        PseudoHeader::Method,
+        PseudoHeader::Authority,
+        PseudoHeader::Scheme,
+        PseudoHeader::Path,
     ];
 
     /// The letter used in the Akamai string.
     #[must_use]
     pub const fn letter(self) -> char {
         match self {
-            Pseudo::Method => 'm',
-            Pseudo::Authority => 'a',
-            Pseudo::Scheme => 's',
-            Pseudo::Path => 'p',
+            PseudoHeader::Method => 'm',
+            PseudoHeader::Authority => 'a',
+            PseudoHeader::Scheme => 's',
+            PseudoHeader::Path => 'p',
         }
     }
 
@@ -88,10 +88,10 @@ impl Pseudo {
     #[must_use]
     pub const fn header_name(self) -> &'static str {
         match self {
-            Pseudo::Method => ":method",
-            Pseudo::Authority => ":authority",
-            Pseudo::Scheme => ":scheme",
-            Pseudo::Path => ":path",
+            PseudoHeader::Method => ":method",
+            PseudoHeader::Authority => ":authority",
+            PseudoHeader::Scheme => ":scheme",
+            PseudoHeader::Path => ":path",
         }
     }
 
@@ -147,7 +147,7 @@ pub struct Akamai {
     /// PRIORITY frames in the order they were sent.
     pub priority_frames: Vec<PriorityFrame>,
     /// The order of the four request pseudo-headers.
-    pub pseudo_order: [Pseudo; 4],
+    pub pseudo_order: [PseudoHeader; 4],
 }
 
 /// Why an Akamai string was refused.
@@ -304,21 +304,21 @@ fn parse_priority_frame(token: &str) -> Option<PriorityFrame> {
     })
 }
 
-fn parse_pseudo_order(section: &str) -> Result<[Pseudo; 4], AkamaiError> {
+fn parse_pseudo_order(section: &str) -> Result<[PseudoHeader; 4], AkamaiError> {
     let malformed = || AkamaiError::PseudoOrder(section.to_owned());
-    let mut order: Vec<Pseudo> = Vec::with_capacity(Pseudo::ALL.len());
+    let mut order: Vec<PseudoHeader> = Vec::with_capacity(PseudoHeader::ALL.len());
     for token in section.split(',') {
         let mut chars = token.chars();
         let (Some(letter), None) = (chars.next(), chars.next()) else {
             return Err(malformed());
         };
-        let pseudo = Pseudo::from_letter(letter).ok_or_else(malformed)?;
+        let pseudo = PseudoHeader::from_letter(letter).ok_or_else(malformed)?;
         if order.contains(&pseudo) {
             return Err(malformed());
         }
         order.push(pseudo);
     }
-    <[Pseudo; 4]>::try_from(order).map_err(|_incomplete| malformed())
+    <[PseudoHeader; 4]>::try_from(order).map_err(|_incomplete| malformed())
 }
 
 impl FromStr for Akamai {
@@ -402,7 +402,7 @@ mod tests {
                 },
             ]
         );
-        assert_eq!(a.pseudo_order, Pseudo::ALL);
+        assert_eq!(a.pseudo_order, PseudoHeader::ALL);
     }
 
     #[test]
@@ -414,10 +414,10 @@ mod tests {
         assert_eq!(
             a.pseudo_order,
             [
-                Pseudo::Method,
-                Pseudo::Path,
-                Pseudo::Authority,
-                Pseudo::Scheme
+                PseudoHeader::Method,
+                PseudoHeader::Path,
+                PseudoHeader::Authority,
+                PseudoHeader::Scheme
             ]
         );
     }
@@ -680,16 +680,19 @@ mod tests {
 
     #[test]
     fn pseudo_helpers_agree_with_each_other() {
-        for pseudo in Pseudo::ALL {
-            assert_eq!(Pseudo::from_letter(pseudo.letter()), Some(pseudo));
-            assert_eq!(Pseudo::from_header_name(pseudo.header_name()), Some(pseudo));
+        for pseudo in PseudoHeader::ALL {
+            assert_eq!(PseudoHeader::from_letter(pseudo.letter()), Some(pseudo));
+            assert_eq!(
+                PseudoHeader::from_header_name(pseudo.header_name()),
+                Some(pseudo)
+            );
             assert!(pseudo.header_name().starts_with(':'));
         }
-        assert_eq!(Pseudo::from_letter('x'), None);
-        assert_eq!(Pseudo::from_letter('M'), None);
-        assert_eq!(Pseudo::from_header_name(":status"), None);
-        assert_eq!(Pseudo::from_header_name("method"), None);
-        assert_eq!(Pseudo::from_header_name(":Method"), None);
+        assert_eq!(PseudoHeader::from_letter('x'), None);
+        assert_eq!(PseudoHeader::from_letter('M'), None);
+        assert_eq!(PseudoHeader::from_header_name(":status"), None);
+        assert_eq!(PseudoHeader::from_header_name("method"), None);
+        assert_eq!(PseudoHeader::from_header_name(":Method"), None);
     }
 
     #[test]

@@ -6,15 +6,15 @@ use std::sync::Arc;
 use async_trait::async_trait;
 
 use super::rig::{country, real_page, script_challenge, Rig, SEED};
-use crate::challenge::detect::{ChallengeKind, Detection, Evidence};
+use crate::challenge::detect::{ChallengeEvidence, ChallengeKind, Detection};
 use crate::challenge::mitigation::MitigationPolicy;
 use crate::egress::geo::{GeoError, GeoInfo, GeoResolver};
-use crate::egress::route::EgressRef;
+use crate::egress::route::ProxyRoute;
 use crate::error::ScrapeError;
 use crate::runtime::browser_scraper::fetch::Target;
 use crate::runtime::browser_scraper::launcher::{claimed_major, major_of, persona_for};
 use crate::runtime::browser_scraper::{BrowserFetch, BrowserScraper};
-use crate::runtime::egress_switch::{ContextProxySwitch, EgressSwitch};
+use crate::runtime::proxy_switch::{ContextProxySwitch, ProxySwitch};
 use seleniumbase_rs::evasion::fingerprint::{Fingerprint, OsType};
 use seleniumbase_rs::sb_cdp::{Browser, LaunchOptions, Page, SessionStore};
 
@@ -153,7 +153,7 @@ async fn the_first_egress_sets_the_locale_and_the_browser_works_behind_its_proxy
 
     let scraper = rig
         .builder()
-        .with_geo_proxies([("http://alice:s3cret@de.proxy.example:8080", country("DE"))])
+        .geo_proxies([("http://alice:s3cret@de.proxy.example:8080", country("DE"))])
         .expect("a valid spec")
         .build()
         .await
@@ -176,7 +176,7 @@ async fn the_first_egress_sets_the_locale_and_the_browser_works_behind_its_proxy
         "T2",
         "the tab is the one in the proxy's context"
     );
-    let key = scraper.egress().expect("an egress is in use");
+    let key = scraper.proxy_route().expect("an proxy is in use");
     assert_eq!(key.to_string(), "http://de.proxy.example:8080");
     assert_eq!(key.country, Some(country("DE")));
     let shown = format!("{scraper:?}");
@@ -192,7 +192,7 @@ async fn a_country_without_a_locale_fails_before_any_browser_starts() {
 
     let result = rig
         .builder()
-        .with_geo_proxies([("http://p.example:8080", country("ZZ"))])
+        .geo_proxies([("http://p.example:8080", country("ZZ"))])
         .expect("a valid spec")
         .build()
         .await;
@@ -207,11 +207,11 @@ async fn a_country_without_a_locale_fails_before_any_browser_starts() {
 #[test]
 fn a_bad_proxy_spec_is_refused_without_echoing_its_credentials() {
     let error = BrowserScraper::builder()
-        .with_geo_proxies([("ftp://alice:s3cret@p.example:21", country("DE"))])
+        .geo_proxies([("ftp://alice:s3cret@p.example:21", country("DE"))])
         .expect_err("ftp is not a proxy scheme");
 
     let shown = format!("{error} {error:?}");
-    assert!(matches!(error, ScrapeError::Egress(_)));
+    assert!(matches!(error, ScrapeError::Proxy(_)));
     assert!(
         !shown.contains("s3cret") && !shown.contains("alice"),
         "{shown}"
@@ -238,7 +238,7 @@ async fn the_builder_and_a_fetch_print_no_secret() {
     let rig = Rig::new(vec![real_page()]);
     let builder = rig
         .builder()
-        .with_geo_proxies([("http://alice:s3cret@de.proxy.example:8080", country("DE"))])
+        .geo_proxies([("http://alice:s3cret@de.proxy.example:8080", country("DE"))])
         .expect("a valid spec");
     let shown = format!("{builder:?}");
     assert!(
@@ -253,12 +253,12 @@ async fn the_builder_and_a_fetch_print_no_secret() {
         headers: vec![("Set-Cookie".to_owned(), "sid=abc123".to_owned())],
         body: "<html>secret body</html>".to_owned(),
         detection: Detection {
-            kind: ChallengeKind::None,
-            evidence: Evidence::default(),
+            kind: ChallengeKind::Clear,
+            evidence: ChallengeEvidence::default(),
         },
         attempts: 1,
         solved: None,
-        egress: None,
+        proxy: None,
     };
     let shown = format!("{fetched:?}");
     for secret in ["alice", "s3cret", "hunter2", "abc123", "secret body"] {
@@ -266,13 +266,13 @@ async fn the_builder_and_a_fetch_print_no_secret() {
     }
 }
 
-/// A resolver that puts every egress in a time zone of its own choosing.
+/// A resolver that puts every proxy in a time zone of its own choosing.
 struct Vienna;
 
 #[async_trait]
 impl GeoResolver for Vienna {
-    async fn resolve(&self, egress: &EgressRef) -> Result<GeoInfo, GeoError> {
-        let key = egress.key();
+    async fn resolve(&self, proxy: &ProxyRoute) -> Result<GeoInfo, GeoError> {
+        let key = proxy.key();
         Ok(GeoInfo {
             country: key.country.ok_or_else(|| GeoError::Unknown(key.clone()))?,
             timezone: Some("Europe/Vienna".to_owned()),
@@ -288,14 +288,14 @@ struct CountingSwitch {
 }
 
 #[async_trait]
-impl EgressSwitch for CountingSwitch {
+impl ProxySwitch for CountingSwitch {
     async fn switch(
         &self,
         browser: &Browser,
-        egress: Option<&EgressRef>,
+        proxy: Option<&ProxyRoute>,
     ) -> Result<Page, ScrapeError> {
         self.calls.fetch_add(1, Ordering::SeqCst);
-        self.inner.switch(browser, egress).await
+        self.inner.switch(browser, proxy).await
     }
 }
 
@@ -314,13 +314,13 @@ async fn the_ports_the_caller_supplies_are_the_ones_used() {
     };
     let mut scraper = rig
         .builder()
-        .with_geo_proxies([("http://de.proxy.example:8080", country("DE"))])
+        .geo_proxies([("http://de.proxy.example:8080", country("DE"))])
         .expect("a valid spec")
         .geo_resolver(Arc::new(Vienna))
-        .egress_switch(Box::new(switch))
+        .proxy_switch(Box::new(switch))
         .session_store(sessions.clone())
         .mitigation(policy)
-        .with_max_challenge_attempts(1)
+        .max_challenge_attempts(1)
         .build()
         .await
         .expect("the scraper builds");

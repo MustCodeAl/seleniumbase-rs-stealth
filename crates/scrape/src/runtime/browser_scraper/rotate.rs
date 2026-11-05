@@ -1,60 +1,60 @@
-//! Rotating the egress and the profile of a browser scraper, and moving identities and sessions.
+//! Rotating the proxy and the profile of a browser scraper, and moving identities and sessions.
 
 use super::launcher::{claimed_major, host_os, persona_for};
 use super::{BrowserScraper, Current};
-use crate::egress::route::EgressRef;
+use crate::egress::route::ProxyRoute;
 use crate::error::ScrapeError;
-use crate::ledger::events::ScraperEvent;
-use crate::passport::identity::{EmulationRef, StealthIdentity};
-use crate::runtime::cdp::{self, EgressLocale};
+use crate::ledger::events::ScrapeEvent;
+use crate::passport::identity::{Identity, WireMeasurementRef};
+use crate::runtime::cdp::{self, ProxyLocale};
 use seleniumbase_rs::evasion::fingerprint::Fingerprint;
 use seleniumbase_rs::evasion::humanize::Rng;
 use seleniumbase_rs::sb_cdp::Browser;
 use seleniumbase_rs_codec::BrowserKind;
 
 impl BrowserScraper {
-    /// Leaves through another egress of the pool.
+    /// Leaves through another proxy of the pool.
     ///
     /// A new browser context is opened behind the new proxy (see
-    /// [`ContextProxySwitch`](super::super::egress_switch::ContextProxySwitch)) and the one before is
+    /// [`ContextProxySwitch`](super::super::proxy_switch::ContextProxySwitch)) and the one before is
     /// dropped with its cookies: a clearance belongs to the address that earned it. The profile, the
     /// seed and what is known of each site stay.
     ///
-    /// When the new egress is in another country, the browser is also started again, with the same
+    /// When the new proxy is in another country, the browser is also started again, with the same
     /// profile in the language and time zone of that country. The fingerprint a tab carries is
     /// written into every document before its own scripts run, so a time zone set over the protocol
     /// afterwards would not show. The old browser is closed once the new one is up.
     ///
     /// # Errors
     ///
-    /// Returns [`ScrapeError::NoEgressAvailable`] when the pool has no other egress that is in
-    /// rotation, [`ScrapeError::Geo`] when the new egress's country has no locale,
+    /// Returns [`ScrapeError::NoProxyLeft`] when the pool has no other proxy that is in
+    /// rotation, [`ScrapeError::Geo`] when the new proxy's country has no locale,
     /// [`ScrapeError::Fingerprint`] when the profile cannot be moved to it, and
     /// [`ScrapeError::Browser`] when the browser refuses. On an error the scraper is as it was.
     #[tracing::instrument(skip_all)]
-    pub async fn rotate_egress(&mut self) -> Result<(), ScrapeError> {
+    pub async fn rotate_proxy(&mut self) -> Result<(), ScrapeError> {
         let next = self.next_egress()?;
-        let placed = EgressLocale::resolve(&*self.wiring.geo, &next).await?;
+        let placed = ProxyLocale::resolve(&*self.wiring.geo, &next).await?;
         let from = self.current_key();
         let to = next.key().clone();
         let current = Current {
-            egress: next,
+            proxy: next,
             placed,
         };
         if self.presents(&current.placed) {
             let page = self
                 .wiring
                 .switch
-                .switch(&self.browser, Some(&current.egress))
+                .switch(&self.browser, Some(&current.proxy))
                 .await?;
             self.page = page;
             self.last = None;
-            self.egress.current = Some(current);
+            self.proxy.current = Some(current);
         } else {
             let fingerprint = current.placed.localize(&self.persona.fingerprint)?;
             self.relaunch(fingerprint, Some(current)).await?;
         }
-        self.emit(&ScraperEvent::EgressRotated { from, to: Some(to) });
+        self.emit(&ScrapeEvent::ProxyRotated { from, to: Some(to) });
         Ok(())
     }
 
@@ -62,42 +62,42 @@ impl BrowserScraper {
     ///
     /// The seed is replaced by one derived from it, a new fingerprint is drawn for the same
     /// operating system, claiming the version of the Chrome that is running, in the locale of the
-    /// egress in use. The browser is started again with it and the old one is closed. The new browser
-    /// leaves through the same egress, in a context of its own, so its cookies and clearances start
+    /// proxy in use. The browser is started again with it and the old one is closed. The new browser
+    /// leaves through the same proxy, in a context of its own, so its cookies and clearances start
     /// empty. What is known of each site stays.
     ///
     /// # Errors
     ///
     /// Returns [`ScrapeError::Fingerprint`] when the new profile cannot be moved to the locale of
-    /// the egress, and [`ScrapeError::Browser`] when the new browser cannot be started. On an
+    /// the proxy, and [`ScrapeError::Browser`] when the new browser cannot be started. On an
     /// error the old browser is still the scraper's.
     #[tracing::instrument(skip_all)]
-    pub async fn rotate_profile(&mut self) -> Result<(), ScrapeError> {
+    pub async fn rotate_fingerprint(&mut self) -> Result<(), ScrapeError> {
         let from_seed = self.persona.seed;
         let to_seed = Rng::new(from_seed).next_u64();
         let os = self.persona.fingerprint.os_type();
         let mut fingerprint = persona_for(os, to_seed, self.persona.major);
-        if let Some(current) = &self.egress.current {
+        if let Some(current) = &self.proxy.current {
             fingerprint = current.placed.localize(&fingerprint)?;
         }
-        self.relaunch(fingerprint, self.egress.current.clone())
+        self.relaunch(fingerprint, self.proxy.current.clone())
             .await?;
         self.persona.seed = to_seed;
-        self.emit(&ScraperEvent::ProfileRotated { from_seed, to_seed });
+        self.emit(&ScrapeEvent::FingerprintRotated { from_seed, to_seed });
         Ok(())
     }
 
     /// Takes the identity out of the scraper: the fingerprint, the cookies the browser holds, the
-    /// clearances among them, and the egress they were earned through.
+    /// clearances among them, and the proxy they were earned through.
     ///
     /// # Errors
     ///
     /// Returns [`ScrapeError::Identity`] when the fingerprint is not coherent and
     /// [`ScrapeError::Browser`] when the cookies cannot be read.
     #[tracing::instrument(skip_all)]
-    pub async fn export_identity(&self) -> Result<StealthIdentity, ScrapeError> {
+    pub async fn export_identity(&self) -> Result<Identity, ScrapeError> {
         let now = self.now();
-        let mut identity = StealthIdentity::new(
+        let mut identity = Identity::new(
             self.persona.fingerprint.clone(),
             self.emulation(),
             self.current_key(),
@@ -105,7 +105,7 @@ impl BrowserScraper {
         )?;
         identity.cookies = cdp::export_cookies(&self.page, now).await?;
         identity.refresh_clearances(now);
-        self.emit(&ScraperEvent::IdentityExported {
+        self.emit(&ScrapeEvent::IdentityExported {
             cookies: identity.cookies.len(),
         });
         Ok(identity)
@@ -114,28 +114,28 @@ impl BrowserScraper {
     /// Puts an identity into the scraper: the browser is started again with its fingerprint when it
     /// differs from the one in use, and its cookies are set.
     ///
-    /// The identity must belong to the egress in use: a clearance cookie is bound to the address
+    /// The identity must belong to the proxy in use: a clearance cookie is bound to the address
     /// that earned it, so one carried to another address would be refused and could mark it.
     ///
     /// # Errors
     ///
-    /// Returns [`ScrapeError::Identity`] when the identity is not valid, belongs to another egress,
+    /// Returns [`ScrapeError::Identity`] when the identity is not valid, belongs to another proxy,
     /// or was made for another version of Chrome than the one running; [`ScrapeError::Browser`]
     /// when the browser refuses.
     #[tracing::instrument(skip_all)]
-    pub async fn import_identity(&mut self, identity: &StealthIdentity) -> Result<(), ScrapeError> {
-        identity.verify()?;
-        identity.check_egress(self.egress())?;
+    pub async fn import_identity(&mut self, identity: &Identity) -> Result<(), ScrapeError> {
+        identity.validate()?;
+        identity.check_proxy(self.proxy_route())?;
         if self.persona.major.is_some() {
-            identity.check_emulation(&self.emulation())?;
+            identity.check_wire_measurement(&self.emulation())?;
         }
         if identity.fingerprint != self.persona.fingerprint {
-            self.relaunch(identity.fingerprint.clone(), self.egress.current.clone())
+            self.relaunch(identity.fingerprint.clone(), self.proxy.current.clone())
                 .await?;
             self.persona.seed = identity.fingerprint.seed();
         }
         cdp::import_cookies(&self.page, &identity.cookies, self.now()).await?;
-        self.emit(&ScraperEvent::IdentityRestored {
+        self.emit(&ScrapeEvent::IdentityRestored {
             cookies: identity.cookies.len(),
         });
         Ok(())
@@ -170,30 +170,26 @@ impl BrowserScraper {
         Ok(true)
     }
 
-    /// The egress to move to: not the one in use, and in rotation.
-    fn next_egress(&self) -> Result<EgressRef, ScrapeError> {
-        let pool = self
-            .egress
-            .pool
-            .as_ref()
-            .ok_or(ScrapeError::NoEgressAvailable)?;
-        let site = self.egress.site.as_deref();
-        let picked = match self.egress() {
+    /// The proxy to move to: not the one in use, and in rotation.
+    fn next_egress(&self) -> Result<ProxyRoute, ScrapeError> {
+        let pool = self.proxy.pool.as_ref().ok_or(ScrapeError::NoProxyLeft)?;
+        let site = self.proxy.site.as_deref();
+        let picked = match self.proxy_route() {
             Some(current) => pool.pick_other(current, site, self.now()),
             None => pool.pick(site, self.now()),
         };
-        picked.ok_or(ScrapeError::NoEgressAvailable)
+        picked.ok_or(ScrapeError::NoProxyLeft)
     }
 
     /// Whether the profile already presents the language and the time zone of `placed`, so that a
     /// new context is enough to move there.
-    fn presents(&self, placed: &EgressLocale) -> bool {
+    fn presents(&self, placed: &ProxyLocale) -> bool {
         let fingerprint = &self.persona.fingerprint;
         fingerprint.locale().as_str() == Some(placed.locale.tag)
             && fingerprint.timezone().as_str() == Some(placed.timezone.as_str())
     }
 
-    /// Starts a new browser with `fingerprint`, opens its first tab behind the egress `current`, and
+    /// Starts a new browser with `fingerprint`, opens its first tab behind the proxy `current`, and
     /// closes the old browser. The old one is kept when anything before that fails.
     async fn relaunch(
         &mut self,
@@ -212,7 +208,7 @@ impl BrowserScraper {
         let old = std::mem::replace(&mut self.browser, browser);
         self.page = page;
         self.persona.fingerprint = fingerprint;
-        self.egress.current = current;
+        self.proxy.current = current;
         self.last = None;
         close_quietly(&old).await;
         Ok(())
@@ -220,13 +216,13 @@ impl BrowserScraper {
 
     /// The measured browser an identity is for: the Chrome that is running, on this machine's
     /// operating system.
-    fn emulation(&self) -> EmulationRef {
+    fn emulation(&self) -> WireMeasurementRef {
         let major = self
             .persona
             .major
             .or_else(|| claimed_major(&self.persona.fingerprint))
             .unwrap_or_default();
-        EmulationRef {
+        WireMeasurementRef {
             kind: BrowserKind::Chrome,
             major,
             os: host_os(),

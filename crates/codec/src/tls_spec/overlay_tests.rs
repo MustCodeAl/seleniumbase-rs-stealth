@@ -4,10 +4,10 @@ use super::overlay::versions_with_max;
 use super::tests::{
     chrome, duplicate, hello, ja3, refused, sigalg, CHROME_JA3, CHROME_JA3_HASH, CIPHERS,
 };
-use super::{KnownGap, SpecError, TlsSpec};
+use super::{KnownGap, TlsSpec, TlsSpecError};
 use crate::client_hello::ext_id;
 use crate::client_hello::fixtures::{HelloBuilder, CHROME_CIPHERS, JA4_EXAMPLE_EXTENSIONS};
-use crate::ja3::peetprint::{PeetField, Slot};
+use crate::ja3::peetprint::{PeetprintField, PeetprintSlot};
 use crate::ja3::{Ja3, Peetprint};
 use crate::ja4::{Ja4Order, Ja4Section};
 
@@ -59,26 +59,26 @@ fn a_custom_ja3_prunes_key_shares_to_the_groups_it_offers() {
 #[test]
 fn rejects_custom_ja3_strings_boringssl_cannot_send() {
     let exts = "0-10-11-13-16-43-51";
-    let cases: Vec<(&str, Ja3, SpecError)> = vec![
+    let cases: Vec<(&str, Ja3, TlsSpecError)> = vec![
         (
             "version",
             Ja3::parse("770,4865,0,29,0").expect("parses"),
-            SpecError::LegacyVersion(770),
+            TlsSpecError::LegacyVersion(770),
         ),
         (
             "reference example",
             Ja3::parse("769,47-53-5-10-49161,0-10-11,23-24-25,0").expect("parses"),
-            SpecError::LegacyVersion(769),
+            TlsSpecError::LegacyVersion(769),
         ),
         (
             "DHE cipher",
             Ja3::parse(&format!("771,{CIPHERS}-51,{exts},29,0")).expect("parses"),
-            SpecError::UnsupportedCipher(51),
+            TlsSpecError::UnsupportedCipher(51),
         ),
         (
             "TLS 1.3 subset",
             Ja3::parse(&format!("771,4865-47,{exts},29,0")).expect("parses"),
-            SpecError::Tls13Suites,
+            TlsSpecError::Tls13Suites,
         ),
         (
             "pre_shared_key",
@@ -88,27 +88,27 @@ fn rejects_custom_ja3_strings_boringssl_cannot_send() {
         (
             "repeated extension",
             ja3("0-0-10-11-13-16-43-51", "29", "0"),
-            SpecError::DuplicateExtension(0),
+            TlsSpecError::DuplicateExtension(0),
         ),
         (
             "x448",
             ja3(exts, "29-30", "0"),
-            SpecError::UnsupportedGroup(30),
+            TlsSpecError::UnsupportedGroup(30),
         ),
         (
             "compressed points",
             ja3(exts, "29", "1"),
-            SpecError::PointFormats(vec![1]),
+            TlsSpecError::PointFormats(vec![1]),
         ),
         (
             "points without the extension",
             ja3("0-10-13-16-43-51", "29", "0"),
-            SpecError::PointFormats(vec![0]),
+            TlsSpecError::PointFormats(vec![0]),
         ),
         (
             "groups missing",
             ja3(exts, "", "0"),
-            SpecError::ExtensionContent(0x000A),
+            TlsSpecError::ExtensionContent(0x000A),
         ),
     ];
     for (label, wanted, want) in cases {
@@ -124,7 +124,7 @@ fn a_custom_ja3_cannot_invent_content_the_base_lacks() {
     let wanted = ja3("0-10-11-13-16-43-51", "29", "0");
     assert_eq!(
         base.with_ja3(&wanted),
-        Err(SpecError::ExtensionContent(ext_id::ALPN))
+        Err(TlsSpecError::ExtensionContent(ext_id::ALPN))
     );
 }
 
@@ -136,13 +136,13 @@ fn custom_signature_algorithms_replace_the_base_list() {
         .expect("reproducible");
     assert_eq!(spec.signature_algorithms, [0x0804, 0x0403]);
     assert_eq!(spec.check_reproducible(), Ok(()));
-    let cases: Vec<(&[u16], SpecError)> = vec![
+    let cases: Vec<(&[u16], TlsSpecError)> = vec![
         (&[0x0403, 0x0904], sigalg(0x0904, "ml_dsa_44")),
         (&[0x0403, 0x0403], duplicate("signature_algorithms", 0x0403)),
         (&[0x0808], sigalg(0x0808, "ed448")),
         (
             &[],
-            SpecError::ExtensionContent(ext_id::SIGNATURE_ALGORITHMS),
+            TlsSpecError::ExtensionContent(ext_id::SIGNATURE_ALGORITHMS),
         ),
     ];
     for (ids, want) in cases {
@@ -155,7 +155,7 @@ fn custom_signature_algorithms_replace_the_base_list() {
     without.signature_algorithms.clear();
     assert_eq!(
         without.with_signature_algorithms(&[0x0403]),
-        Err(SpecError::ExtensionContent(ext_id::SIGNATURE_ALGORITHMS))
+        Err(TlsSpecError::ExtensionContent(ext_id::SIGNATURE_ALGORITHMS))
     );
 }
 
@@ -221,7 +221,7 @@ fn rejects_custom_ja4_strings_that_cannot_be_reproduced() {
     };
     assert_eq!(
         with(|r| r.ciphers.push(0x0033)),
-        Err(SpecError::UnsupportedCipher(0x0033))
+        Err(TlsSpecError::UnsupportedCipher(0x0033))
     );
     assert_eq!(
         with(|r| r.ciphers.push(0x1301)),
@@ -229,12 +229,12 @@ fn rejects_custom_ja4_strings_that_cannot_be_reproduced() {
     );
     assert_eq!(
         with(|r| r.a = "t12d1516h2".to_owned()),
-        Err(SpecError::Tls13Suites),
+        Err(TlsSpecError::Tls13Suites),
         "a 1.2 client cannot send the TLS 1.3 suites"
     );
     assert_eq!(
         with(|r| r.a = "t13d".to_owned()),
-        Err(SpecError::Ja4Mismatch(Ja4Section::A))
+        Err(TlsSpecError::Ja4Mismatch(Ja4Section::A))
     );
     assert_eq!(
         with(|r| r.signature_algorithms.push(0x0904)),
@@ -242,30 +242,30 @@ fn rejects_custom_ja4_strings_that_cannot_be_reproduced() {
     );
     assert_eq!(
         with(|r| r.a = "t99d1516h2".to_owned()),
-        Err(SpecError::Ja4Mismatch(Ja4Section::A))
+        Err(TlsSpecError::Ja4Mismatch(Ja4Section::A))
     );
     assert_eq!(
         with(|r| r.a = "t13d1516zz".to_owned()),
-        Err(SpecError::Ja4Alpn("zz".to_owned()))
+        Err(TlsSpecError::Ja4Alpn("zz".to_owned()))
     );
     assert_eq!(
         with(|r| r.a = "t13d2016h2".to_owned()),
-        Err(SpecError::Ja4Mismatch(Ja4Section::A))
+        Err(TlsSpecError::Ja4Mismatch(Ja4Section::A))
     );
     assert_eq!(
         with(|r| r.extensions.insert(0, 0x0000)),
-        Err(SpecError::Ja4Mismatch(Ja4Section::Extensions))
+        Err(TlsSpecError::Ja4Mismatch(Ja4Section::Extensions))
     );
     assert_eq!(
         with(|r| r.extensions.retain(|&id| id != 0x000D)),
-        Err(SpecError::ExtensionContent(ext_id::SIGNATURE_ALGORITHMS))
+        Err(TlsSpecError::ExtensionContent(ext_id::SIGNATURE_ALGORITHMS))
     );
     let original = base.ja4_raw(Ja4Order::Original);
     let mut no_sni = original;
     no_sni.extensions.retain(|&id| id != ext_id::SERVER_NAME);
     assert_eq!(
         base.with_ja4_raw(&no_sni, Ja4Order::Original),
-        Err(SpecError::Ja4Mismatch(Ja4Section::A))
+        Err(TlsSpecError::Ja4Mismatch(Ja4Section::A))
     );
 }
 
@@ -301,8 +301,12 @@ fn a_custom_peetprint_overlays_the_base_and_reproduces_exactly() {
     let base = chrome();
     assert_eq!(base.with_peetprint(&base.peetprint()), Ok(base.clone()));
     let mut wanted = base.peetprint();
-    wanted.ciphers.retain(|slot| *slot != Slot::Id(53));
-    wanted.groups = vec![Slot::Grease, Slot::Id(29), Slot::Id(23)];
+    wanted.ciphers.retain(|slot| *slot != PeetprintSlot::Id(53));
+    wanted.groups = vec![
+        PeetprintSlot::Grease,
+        PeetprintSlot::Id(29),
+        PeetprintSlot::Id(23),
+    ];
     let spec = base.with_peetprint(&wanted).expect("reproducible");
     assert!(!spec.cipher_suites.contains(&0x0035));
     assert_eq!(spec.supported_groups, [29, 23]);
@@ -332,31 +336,36 @@ fn rejects_custom_peetprints_that_cannot_be_reproduced() {
         base.with_peetprint(&wanted)
     };
     assert_eq!(
-        with(|p| p.ciphers.insert(0, Slot::Grease)),
-        Err(SpecError::PeetprintMismatch(PeetField::Ciphers))
+        with(|p| p.ciphers.insert(0, PeetprintSlot::Grease)),
+        Err(TlsSpecError::PeetprintMismatch(PeetprintField::Ciphers))
     );
     assert_eq!(
-        with(|p| p.groups.push(Slot::Id(30))),
-        Err(SpecError::UnsupportedGroup(30))
+        with(|p| p.groups.push(PeetprintSlot::Id(30))),
+        Err(TlsSpecError::UnsupportedGroup(30))
     );
     assert_eq!(
-        with(|p| p.extensions.push(Slot::Id(0))),
-        Err(SpecError::DuplicateExtension(0))
+        with(|p| p.extensions.push(PeetprintSlot::Id(0))),
+        Err(TlsSpecError::DuplicateExtension(0))
     );
-    assert_eq!(with(|p| p.extensions.push(Slot::Id(41))), Err(refused(41)));
+    assert_eq!(
+        with(|p| p.extensions.push(PeetprintSlot::Id(41))),
+        Err(refused(41))
+    );
     assert_eq!(
         with(|p| p.psk_modes.clear()),
-        Err(SpecError::ExtensionContent(ext_id::PSK_KEY_EXCHANGE_MODES))
+        Err(TlsSpecError::ExtensionContent(
+            ext_id::PSK_KEY_EXCHANGE_MODES
+        ))
     );
     assert_eq!(
         with(|p| p
             .ciphers
-            .retain(|s| !matches!(s, Slot::Id(0x1300..=0x13FF)))),
-        Err(SpecError::Tls13Suites)
+            .retain(|s| !matches!(s, PeetprintSlot::Id(0x1300..=0x13FF)))),
+        Err(TlsSpecError::Tls13Suites)
     );
     assert_eq!(
-        with(|p| p.ciphers.push(Slot::Id(0x0033))),
-        Err(SpecError::UnsupportedCipher(0x0033))
+        with(|p| p.ciphers.push(PeetprintSlot::Id(0x0033))),
+        Err(TlsSpecError::UnsupportedCipher(0x0033))
     );
 }
 
@@ -408,7 +417,7 @@ fn comparing_hellos_detects_extension_permutation() {
     ));
     assert_eq!(
         spec.with_observed_order(&fewer),
-        Err(SpecError::HellosDiffer)
+        Err(TlsSpecError::HellosDiffer)
     );
     let other_ciphers = hello(&HelloBuilder::new(
         &CHROME_CIPHERS[..10],
@@ -416,13 +425,13 @@ fn comparing_hellos_detects_extension_permutation() {
     ));
     assert_eq!(
         spec.with_observed_order(&other_ciphers),
-        Err(SpecError::HellosDiffer)
+        Err(TlsSpecError::HellosDiffer)
     );
 }
 
 #[test]
 fn error_messages_name_the_offending_value() {
-    let text = SpecError::UnsupportedSigalg {
+    let text = TlsSpecError::UnsupportedSigalg {
         id: 0x0904,
         name: "ml_dsa_44",
     }
@@ -431,6 +440,6 @@ fn error_messages_name_the_offending_value() {
         text.contains("ml_dsa_44") && text.contains("0904"),
         "{text}"
     );
-    let text = SpecError::UnsupportedCipher(0x0033).to_string();
+    let text = TlsSpecError::UnsupportedCipher(0x0033).to_string();
     assert!(text.contains("0033"), "{text}");
 }
