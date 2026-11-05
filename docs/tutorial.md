@@ -936,7 +936,7 @@ use seleniumbase_rs_stealth::codec::BrowserKind;
 let profile = WireFormat::measured(BrowserKind::Chrome)?;
 let mitm =
     MitmProxy::start(profile, None, MitmOptions::default(), Arc::new(NoopEventSink)).await?;
-let options = mitm.configure_launch(LaunchOptions::builder()).build()?;
+let options = mitm.configure_launch(LaunchOptions::builder().build()?)?;
 let browser = Browser::launch(options).await?;
 let page = browser.new_page_at("https://example.com/").await?;
 # drop(page);
@@ -982,7 +982,8 @@ An absolute-form `http://` request is checked the same way and forwarded without
 
 ### What Chrome must be told
 
-`mitm.configure_launch(builder)` sets the proxy, makes the proxy's priming page
+`mitm.configure_launch(options)` takes built `LaunchOptions`, returns them made
+again (a `Result`) with the proxy set, makes the proxy's priming page
 the start page (see [the priming page](#the-priming-page)) and adds
 `mitm.launch_args()`: the `--ignore-certificate-errors-spki-list` switch with the
 leaf pin only (never
@@ -1099,7 +1100,8 @@ given it only ever sees the `404`. `configure_launch` makes the priming page the
 start page, so `Browser::launch` loads it in the first tab before it returns, and
 a WebSocket may then be a new tab's first request. A start page you set before
 `configure_launch` is kept (an `http(s)://` one takes the credentials just as
-well; an `about:` or `data:` one does not), and one set after it replaces the
+well; an `about:` or `data:` one does not), and one set after it with
+`LaunchOptions::with_url` replaces the
 priming page.
 
 A browser context keeps a cache of its own, and one created after the launch
@@ -1261,7 +1263,7 @@ HTTP preferred, and a profile drawn from a random seed.
 
 | Setting | What it does |
 |---|---|
-| `launch_options(builder)`, `launcher(..)` | How the browser starts. A setting made in the options (a user agent, say) wins over the fingerprint's, and the proxy is always the MITM proxy's. |
+| `launch_options(options)`, `launcher(..)` | How the browser starts. `options` is a built `LaunchOptions`; the session makes a copy of it with its fingerprint (`LaunchOptions::with_fingerprint`). A setting made in the options (a user agent, say) wins over the fingerprint's, and the proxy is always the MITM proxy's. |
 | `geo_proxies([(spec, country)])`, `proxy_strategy(..)` | The egress pool and how it picks, as for `BrowserScraper`. Both legs leave through the same egress. |
 | `max_challenge_attempts(n)`, `mitigation(policy)` | Loads per fetch (zero reads as one) and the whole mitigation policy. |
 | `policy(EscalationPolicy)` | The mode it prefers, whether HTTP needs a clearance, the clearance margin, whether a solve sends it back to HTTP. |

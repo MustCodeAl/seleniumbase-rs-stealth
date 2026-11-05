@@ -19,6 +19,26 @@ Only `scrape` and `mimic` were affected; `codec` holds no fingerprint.
 
 ### Breaking
 
+- **The launch options are built `LaunchOptions`, not builders.** The core crate keeps what
+  `LaunchOptions` was built from (`LaunchOptions::fingerprint()`) and makes it again with
+  `with_fingerprint`, `with_headless`, `with_proxy`, `with_args` and `with_url`, under one rule
+  (a value set on the options wins over the fingerprint's, in any order). So
+  `BrowserScraperBuilder::launch_options` and `StealthSessionBuilder::launch_options` take a
+  `LaunchOptions` (add `.build()?` to the chain you passed), the scraper and the session give
+  their fingerprint to a copy of it with `with_fingerprint` (a rotation replaces the previous
+  fingerprint and nothing else), and `MitmProxy::configure_launch` takes built `LaunchOptions`
+  and returns `Result<LaunchOptions, SeleniumBaseError>`: it reads a start page already set
+  with `LaunchOptions::url()` instead of building a copy, and a start page set after it is
+  `with_url`. Before and after:
+
+  ```rust
+  // Before
+  let options = mitm.configure_launch(LaunchOptions::builder().headless(true)).build()?;
+  // After
+  let options = mitm.configure_launch(LaunchOptions::builder().headless(true).build()?)?;
+  ```
+
+
 - **The stealth API is named after seleniumbase-rs, not after the project it was ported
   from** (design note `docs/design/stealth_names.md`, PR #4). The features stay; the names
   and shapes that were copied with them change. No shims.
