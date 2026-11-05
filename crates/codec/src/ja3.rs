@@ -386,15 +386,15 @@ pub mod peetprint {
 
     /// A list entry: a GREASE value or a concrete id.
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-    pub enum Slot {
+    pub enum PeetprintSlot {
         /// Any GREASE value (RFC 8701).
         Grease,
         /// A concrete id.
         Id(u16),
     }
 
-    impl Slot {
-        /// The slot for a wire id: GREASE ids collapse into [`Slot::Grease`].
+    impl PeetprintSlot {
+        /// The slot for a wire id: GREASE ids collapse into [`PeetprintSlot::Grease`].
         #[must_use]
         pub fn from_id(id: u16) -> Self {
             if is_grease(id) {
@@ -414,7 +414,7 @@ pub mod peetprint {
 
     /// One of the eight fields of a peetprint.
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-    pub enum PeetField {
+    pub enum PeetprintField {
         /// Supported TLS versions.
         Versions,
         /// ALPN protocols.
@@ -433,7 +433,7 @@ pub mod peetprint {
         Extensions,
     }
 
-    impl fmt::Display for PeetField {
+    impl fmt::Display for PeetprintField {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
             f.write_str(match self {
                 Self::Versions => "versions",
@@ -458,7 +458,7 @@ pub mod peetprint {
         #[error("the peetprint {field} field holds `{token}`, which is not a valid value")]
         Token {
             /// The field that holds the token.
-            field: PeetField,
+            field: PeetprintField,
             /// The offending text.
             token: String,
         },
@@ -471,21 +471,21 @@ pub mod peetprint {
     #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
     pub struct Peetprint {
         /// Supported TLS versions as sent.
-        pub versions: Vec<Slot>,
+        pub versions: Vec<PeetprintSlot>,
         /// ALPN protocol names (`h2`, `http/1.1`, ...) as sent.
         pub alpn: Vec<String>,
         /// Supported groups as sent.
-        pub groups: Vec<Slot>,
+        pub groups: Vec<PeetprintSlot>,
         /// Signature algorithms as sent.
-        pub signature_algorithms: Vec<Slot>,
+        pub signature_algorithms: Vec<PeetprintSlot>,
         /// PSK key exchange modes as sent.
         pub psk_modes: Vec<u8>,
         /// Certificate compression algorithms as sent.
         pub cert_compression: Vec<u16>,
         /// Cipher suites as sent.
-        pub ciphers: Vec<Slot>,
+        pub ciphers: Vec<PeetprintSlot>,
         /// Extensions; [`Peetprint::of`] sorts them, parsing keeps the given order.
-        pub extensions: Vec<Slot>,
+        pub extensions: Vec<PeetprintSlot>,
     }
 
     impl Peetprint {
@@ -545,14 +545,14 @@ pub mod peetprint {
                 return Err(PeetprintError::FieldCount(fields.len()));
             };
             Ok(Self {
-                versions: list(versions, PeetField::Versions, slot)?,
-                alpn: list(alpn, PeetField::Alpn, alpn_name)?,
-                groups: list(groups, PeetField::Groups, slot)?,
-                signature_algorithms: list(sigalgs, PeetField::SignatureAlgorithms, slot)?,
-                psk_modes: list(psk, PeetField::PskModes, number)?,
-                cert_compression: list(compression, PeetField::CertCompression, number)?,
-                ciphers: list(ciphers, PeetField::Ciphers, slot)?,
-                extensions: list(extensions, PeetField::Extensions, slot)?,
+                versions: list(versions, PeetprintField::Versions, slot)?,
+                alpn: list(alpn, PeetprintField::Alpn, alpn_name)?,
+                groups: list(groups, PeetprintField::Groups, slot)?,
+                signature_algorithms: list(sigalgs, PeetprintField::SignatureAlgorithms, slot)?,
+                psk_modes: list(psk, PeetprintField::PskModes, number)?,
+                cert_compression: list(compression, PeetprintField::CertCompression, number)?,
+                ciphers: list(ciphers, PeetprintField::Ciphers, slot)?,
+                extensions: list(extensions, PeetprintField::Extensions, slot)?,
             })
         }
     }
@@ -585,24 +585,24 @@ pub mod peetprint {
 
     /// GREASE-collapsed slots of a list of wire ids.
     #[must_use]
-    pub fn slots(values: &[u16]) -> Vec<Slot> {
-        values.iter().map(|&id| Slot::from_id(id)).collect()
+    pub fn slots(values: &[u16]) -> Vec<PeetprintSlot> {
+        values.iter().map(|&id| PeetprintSlot::from_id(id)).collect()
     }
 
     /// The concrete ids of a slot list, GREASE dropped.
     #[must_use]
-    pub fn ids(values: &[Slot]) -> Vec<u16> {
+    pub fn ids(values: &[PeetprintSlot]) -> Vec<u16> {
         let raw: Vec<u16> = values
             .iter()
             .filter_map(|slot| match slot {
-                Slot::Id(id) => Some(*id),
-                Slot::Grease => None,
+                PeetprintSlot::Id(id) => Some(*id),
+                PeetprintSlot::Grease => None,
             })
             .collect();
         without_grease(&raw)
     }
 
-    fn join_slots(values: &[Slot]) -> String {
+    fn join_slots(values: &[PeetprintSlot]) -> String {
         let tokens: Vec<String> = values.iter().map(|slot| slot.token()).collect();
         tokens.join("-")
     }
@@ -623,7 +623,7 @@ pub mod peetprint {
     /// Splits a field into tokens and converts each; the empty field is the empty list.
     fn list<T>(
         text: &str,
-        field: PeetField,
+        field: PeetprintField,
         convert: fn(&str) -> Option<T>,
     ) -> Result<Vec<T>, PeetprintError> {
         if text.is_empty() {
@@ -646,11 +646,11 @@ pub mod peetprint {
         token.parse().ok()
     }
 
-    fn slot(token: &str) -> Option<Slot> {
+    fn slot(token: &str) -> Option<PeetprintSlot> {
         if token == GREASE_TOKEN {
-            return Some(Slot::Grease);
+            return Some(PeetprintSlot::Grease);
         }
-        number::<u16>(token).map(Slot::from_id)
+        number::<u16>(token).map(PeetprintSlot::from_id)
     }
 
     fn alpn_name(token: &str) -> Option<String> {

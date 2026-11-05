@@ -303,7 +303,7 @@ async fn a_proxy_that_cannot_be_reached_leaks_no_credentials() {
     let major = measured_major();
     let base = identity_of(
         fingerprint(seleniumbase_rs::evasion::fingerprint::OsType::Macos, major),
-        seleniumbase_rs_scrape::passport::identity::EmulationRef {
+        seleniumbase_rs_scrape::passport::identity::WireMeasurementRef {
             kind: seleniumbase_rs_codec::BrowserKind::Chrome,
             major,
             os: seleniumbase_rs::evasion::fingerprint::OsType::Macos,

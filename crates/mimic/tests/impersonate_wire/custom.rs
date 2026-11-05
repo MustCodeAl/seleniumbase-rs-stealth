@@ -8,12 +8,12 @@
 use seleniumbase_rs::evasion::fingerprint::{BrandVersion, ClientHints};
 use seleniumbase_rs_codec::akamai::Akamai;
 use seleniumbase_rs_codec::client_hello::{ext_id, ClientHello};
-use seleniumbase_rs_codec::h2_spec::SpecError as H2SpecError;
-use seleniumbase_rs_codec::header_spec::{HeaderValue, RequestShape};
+use seleniumbase_rs_codec::h2_spec::H2SpecError;
+use seleniumbase_rs_codec::header_spec::{HeaderSource, RequestShape};
 use seleniumbase_rs_codec::ja3::peetprint::Slot;
 use seleniumbase_rs_codec::ja3::{Ja3, Peetprint};
 use seleniumbase_rs_codec::ja4::{Ja4, Ja4Order, Ja4Raw};
-use seleniumbase_rs_codec::tls_spec::SpecError as TlsSpecError;
+use seleniumbase_rs_codec::tls_spec::TlsSpecError;
 use seleniumbase_rs_codec::BrowserKind;
 use seleniumbase_rs_mimic::client::{ImpersonateError, ImpersonationProfile, WireProtocol};
 use seleniumbase_rs_mimic::convert::ConvertError;
@@ -516,12 +516,12 @@ async fn a_custom_header_set_arrives_in_its_order_with_its_values() {
         .header(
             RequestShape::Document,
             "X-Probe",
-            HeaderValue::Literal("one".to_owned()),
+            HeaderSource::Literal("one".to_owned()),
         )
         .header(
             RequestShape::Document,
             "Accept",
-            HeaderValue::Literal("text/plain".to_owned()),
+            HeaderSource::Literal("text/plain".to_owned()),
         )
         .without_header(RequestShape::Document, "Sec-Fetch-User")
         .header_order(RequestShape::Document, ["User-Agent", "Accept"])
@@ -591,7 +591,7 @@ async fn a_custom_header_set_keeps_its_spelling_over_http1() {
         .header(
             RequestShape::Document,
             "X-Mixed-Case",
-            HeaderValue::Literal("1".to_owned()),
+            HeaderSource::Literal("1".to_owned()),
         )
         .build()
         .expect("builds");

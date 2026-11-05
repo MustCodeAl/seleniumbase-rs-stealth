@@ -109,11 +109,11 @@ client hints, and where it came from:
 
 ```rust
 use seleniumbase_rs_stealth::evasion::fingerprint::OsType;
-use seleniumbase_rs_stealth::codec::emulation::{self, EmulationError};
+use seleniumbase_rs_stealth::codec::measurement::{self, WireMeasurementError};
 use seleniumbase_rs_stealth::codec::BrowserKind;
 
-# fn demo() -> Result<(), EmulationError> {
-let chrome = emulation::get(BrowserKind::Chrome, OsType::Macos)?;
+# fn demo() -> Result<(), WireMeasurementError> {
+let chrome = measurement::get(BrowserKind::Chrome, OsType::Macos)?;
 assert_eq!(chrome.major, 155);
 println!("{} captured on {}", chrome.provenance.browser, chrome.provenance.captured_on);
 // The JA4 of the measured hello. The capture recorded t13d1517h2_8daaf6152771_cb7bf5808d99
@@ -121,16 +121,16 @@ println!("{} captured on {}", chrome.provenance.browser, chrome.provenance.captu
 println!("{}", chrome.tls.ja4());
 
 // A system nobody measured is an error, never a nearby guess.
-let windows = emulation::get(BrowserKind::Chrome, OsType::Windows);
-assert!(matches!(windows, Err(EmulationError::NotMeasured { .. })));
+let windows = measurement::get(BrowserKind::Chrome, OsType::Windows);
+assert!(matches!(windows, Err(WireMeasurementError::NotMeasured { .. })));
 # Ok(())
 # }
 ```
 
-`EmulationError::NotMeasured { kind, os }` is the error the design plan calls
-`SpecError::NotMeasured`; `codec::emulation::SpecError` is an alias for
-`EmulationError`. The TLS and HTTP/2 refusals live in two other enums with the
-same name, `codec::tls_spec::SpecError` and `codec::h2_spec::SpecError`.
+`WireMeasurementError::NotMeasured { kind, os }` is the error the design plan calls
+`SpecError::NotMeasured`; `codec::measurement::SpecError` is an alias for
+`WireMeasurementError`. The TLS and HTTP/2 refusals live in two other enums with the
+same name, `codec::tls_spec::TlsSpecError` and `codec::h2_spec::H2SpecError`.
 
 Why an unmeasured system is refused rather than approximated: a made-up persona
 is worse than no persona. A TLS stack that claims to be Chrome on Windows with
@@ -141,7 +141,7 @@ and commits the result. The same rule shows up higher up:
 
 - `ImpersonationProfile::for_system(BrowserKind::Chrome, OsType::Windows)` and
   `ImpersonationProfile::from_fingerprint` of a Windows `Fingerprint` return
-  `ImpersonateError::Emulation(EmulationError::NotMeasured { .. })`.
+  `ImpersonateError::Measurement(WireMeasurementError::NotMeasured { .. })`.
 - `ImpersonationProfile::from_fingerprint` of a fingerprint whose user agent
   claims another Chrome major than the measured one returns
   `ImpersonateError::VersionMismatch`: Chrome 155's handshake under a Chrome 153
@@ -192,7 +192,7 @@ new version:
    `--probes N`, `--timeout SECS`, `--headless`, `--no-sandbox`, `--snippet` and
    `--help`.
 3. Add the new file to the `SOURCES` list in `crates/codec/src/emulation.rs`. The test
-   `crates/codec/tests/wire_emulation.rs` fails when a file in `crates/codec/src/measured` is missing
+   `crates/codec/tests/wire_measurement.rs` fails when a file in `crates/codec/src/measured` is missing
    from that list.
 4. Run the wire tests, including `tests/impersonate_wire.rs`. They compare what
    our client sends with the measured file and fail, by name, when a known gap
@@ -247,7 +247,7 @@ Compare JA4 when you compare a browser with a client.
 
 The spec types sit on top of the parsers. A `TlsSpec`
 (`TlsSpec::from_client_hello`) is the whole TLS profile as plain data, and an
-`H2Spec` (alias `Http2Spec`; `H2Spec::from_capture`, `H2Spec::from_akamai`) is
+`H2Spec` (alias `H2Spec`; `H2Spec::from_capture`, `H2Spec::from_akamai`) is
 the HTTP/2 start. Each has `check_reproducible()`, which says whether the
 BoringSSL and wreq stack can send it, and names what it cannot.
 
@@ -341,7 +341,7 @@ BoringSSL and wreq cannot emit everything a browser can. Anything they cannot
 reproduce is refused with a named error before a client exists, and
 `tests/impersonate_wire.rs` proves on the wire that an accepted input arrives as
 given. The errors are variants of `ImpersonateError`: `Tls(..)` wraps
-`codec::tls_spec::SpecError`, `Http2(..)` wraps `codec::h2_spec::SpecError`,
+`codec::tls_spec::TlsSpecError`, `Http2(..)` wraps `codec::h2_spec::H2SpecError`,
 `Convert(..)` wraps the rules that belong to the client stack itself. A string that
 is not well formed at all is `Ja3(..)`, `Ja4(..)`, `Peetprint(..)` or `Akamai(..)`.
 
@@ -361,7 +361,7 @@ cannot write:
 
 ```rust
 use seleniumbase_rs_stealth::mimic::client::{ImpersonateError, ImpersonationProfile};
-use seleniumbase_rs_stealth::codec::tls_spec::SpecError;
+use seleniumbase_rs_stealth::codec::tls_spec::TlsSpecError;
 
 # fn demo(ja3_with_trust_anchors: &str) {
 let refused = ImpersonationProfile::custom().ja3(ja3_with_trust_anchors);
@@ -426,19 +426,19 @@ between runs.
 
 A `StealthIdentity` (`scrape::passport::identity`) is what a scrape session
 presents to a site: the `Fingerprint`, a reference to the measured browser its
-wire behaviour comes from (`EmulationRef`), the cookies it earned, the client
+wire behaviour comes from (`WireMeasurementRef`), the cookies it earned, the client
 hints each origin asked for, the clearances found in the jar, and the egress
 those cookies were earned through.
 
 ```rust
-use seleniumbase_rs_stealth::scrape::passport::identity::{EmulationRef, StealthIdentity};
+use seleniumbase_rs_stealth::scrape::passport::identity::{WireMeasurementRef, StealthIdentity};
 use seleniumbase_rs_stealth::scrape::runtime::identity_file;
 use seleniumbase_rs_stealth::evasion::fingerprint::{Fingerprint, OsType};
 use seleniumbase_rs_stealth::codec::BrowserKind;
 
 # async fn demo(now: u64) -> Result<(), Box<dyn std::error::Error>> {
 let fingerprint = Fingerprint::randomized_with_major(OsType::Macos, 7, 155);
-let emulation = EmulationRef { kind: BrowserKind::Chrome, major: 155, os: OsType::Macos };
+let emulation = WireMeasurementRef { kind: BrowserKind::Chrome, major: 155, os: OsType::Macos };
 let identity = StealthIdentity::new(fingerprint, emulation, None, now)?;
 
 identity_file::save("identity.json", &identity).await?;

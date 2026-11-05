@@ -83,17 +83,17 @@ fn literal(name: &str, value: &str, huffman_coded: bool) -> Vec<u8> {
     out
 }
 
-fn pseudo_value(pseudo: Pseudo) -> &'static str {
+fn pseudo_value(pseudo: PseudoHeader) -> &'static str {
     match pseudo {
-        Pseudo::Method => "GET",
-        Pseudo::Authority => "example.test",
-        Pseudo::Scheme => "https",
-        Pseudo::Path => "/index",
+        PseudoHeader::Method => "GET",
+        PseudoHeader::Authority => "example.test",
+        PseudoHeader::Scheme => "https",
+        PseudoHeader::Path => "/index",
     }
 }
 
 /// A request header block: the pseudo-headers in `order`, then `extra`, alternating coding.
-fn request_block(order: &[Pseudo], extra: &[(&str, &str)]) -> Vec<u8> {
+fn request_block(order: &[PseudoHeader], extra: &[(&str, &str)]) -> Vec<u8> {
     let mut block = Vec::new();
     let pseudo = order.iter().map(|p| (p.header_name(), pseudo_value(*p)));
     for (index, (name, value)) in pseudo.chain(extra.iter().copied()).enumerate() {
@@ -102,11 +102,11 @@ fn request_block(order: &[Pseudo], extra: &[(&str, &str)]) -> Vec<u8> {
     block
 }
 
-const ORDER: [Pseudo; 4] = [
-    Pseudo::Method,
-    Pseudo::Scheme,
-    Pseudo::Path,
-    Pseudo::Authority,
+const ORDER: [PseudoHeader; 4] = [
+    PseudoHeader::Method,
+    PseudoHeader::Scheme,
+    PseudoHeader::Path,
+    PseudoHeader::Authority,
 ];
 const EXTRA: [(&str, &str); 3] = [
     ("user-agent", "TestAgent/1.0 (unit test)"),
@@ -221,10 +221,10 @@ fn builds_the_akamai_string_of_a_capture() {
     assert_eq!(
         preface.pseudo_order(),
         Ok([
-            Pseudo::Method,
-            Pseudo::Scheme,
-            Pseudo::Path,
-            Pseudo::Authority
+            PseudoHeader::Method,
+            PseudoHeader::Scheme,
+            PseudoHeader::Path,
+            PseudoHeader::Authority
         ])
     );
 }
@@ -335,7 +335,7 @@ fn a_header_block_split_over_continuation_frames_decodes_whole() {
 
 #[test]
 fn a_header_block_must_not_be_interrupted() {
-    let block = request_block(&Pseudo::ALL, &[]);
+    let block = request_block(&PseudoHeader::ALL, &[]);
     let open = headers_frame(1, 0, None, &block[..4]);
     let after = |next: Vec<u8>| error_of(&start(&[settings_frame(&SETTINGS), open.clone(), next]));
     assert_eq!(
@@ -414,7 +414,7 @@ fn irrelevant_frames_are_skipped_and_the_first_values_win() {
             11,
             flag::END_HEADERS,
             None,
-            &request_block(&Pseudo::ALL, &[]),
+            &request_block(&PseudoHeader::ALL, &[]),
         ),
     ]);
     let preface = read(&bytes);
@@ -430,7 +430,7 @@ fn a_request_without_any_settings_is_refused() {
         1,
         flag::END_HEADERS,
         None,
-        &request_block(&Pseudo::ALL, &[]),
+        &request_block(&PseudoHeader::ALL, &[]),
     )]);
     assert_eq!(error_of(&bytes), H2CaptureError::MissingSettings);
 }
@@ -443,7 +443,7 @@ fn no_window_update_means_zero() {
             1,
             flag::END_HEADERS,
             None,
-            &request_block(&Pseudo::ALL, &[]),
+            &request_block(&PseudoHeader::ALL, &[]),
         ),
     ]);
     let preface = read(&bytes);
@@ -489,17 +489,17 @@ fn pseudo_header_sets_that_are_not_a_permutation_are_named() {
         ]))
     };
     let missing = with(request_block(
-        &[Pseudo::Method, Pseudo::Path, Pseudo::Scheme],
+        &[PseudoHeader::Method, PseudoHeader::Path, PseudoHeader::Scheme],
         &[],
     ));
     assert_eq!(missing.pseudo_order(), Err(H2CaptureError::PseudoOrder));
     let twice = with(request_block(
-        &[Pseudo::Method, Pseudo::Method, Pseudo::Path, Pseudo::Scheme],
+        &[PseudoHeader::Method, PseudoHeader::Method, PseudoHeader::Path, PseudoHeader::Scheme],
         &[],
     ));
     assert_eq!(twice.akamai(), Err(H2CaptureError::PseudoOrder));
     let mut late = request_block(
-        &[Pseudo::Method, Pseudo::Path, Pseudo::Scheme],
+        &[PseudoHeader::Method, PseudoHeader::Path, PseudoHeader::Scheme],
         &[("x-a", "1")],
     );
     late.extend(literal(":authority", "example.test", false));

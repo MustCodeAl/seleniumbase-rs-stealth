@@ -107,7 +107,7 @@ fn the_websocket_bounds_have_defaults_and_show_in_debug() {
 fn the_websocket_hello_is_the_measured_one_without_its_gaps_and_offers_http1_only() {
     let profile = ImpersonationProfile::measured(BrowserKind::Chrome).expect("measured");
     let spec = websocket_spec(&profile).expect("a WebSocket hello is measured");
-    let entry = emulation::get(profile.kind(), profile.os()).expect("the entry");
+    let entry = measurement::get(profile.kind(), profile.os()).expect("the entry");
     let measured = entry.tls_websocket.as_ref().expect("measured");
     assert_eq!(
         spec,

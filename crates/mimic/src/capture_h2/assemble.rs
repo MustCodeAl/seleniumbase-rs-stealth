@@ -1,5 +1,5 @@
 //! From what the browser sent to the specs: the evidence the tool stores, and the pure functions
-//! that turn it into an [`Http2Spec`] and a [`HeaderSpec`].
+//! that turn it into an [`H2Spec`] and a [`HeaderSpec`].
 //!
 //! Everything here works on bytes and header lists already in memory. The evidence is what the
 //! measured JSON keeps under `capture.h2` and `capture.h1`, so the specs can be derived again from
@@ -24,7 +24,7 @@ use super::probes::{Probe, DOCUMENT, FETCH, PROBES};
 use super::site::{Observed, Seen};
 use super::CaptureH2Error;
 use seleniumbase_rs_codec::h2_frames::{read_preface, H2Preface, HeadersPriority};
-use seleniumbase_rs_codec::h2_spec::Http2Spec;
+use seleniumbase_rs_codec::h2_spec::H2Spec;
 use seleniumbase_rs_codec::header_spec::{HeaderSpec, CREDENTIAL_HEADERS, TRANSPORT_HEADERS};
 use seleniumbase_rs_scrape::runtime::capture::record::{from_hex, to_hex};
 
@@ -76,7 +76,7 @@ pub struct H1Evidence {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Derived {
     /// The start of the browser's HTTP/2 connections.
-    pub http2: Http2Spec,
+    pub http2: H2Spec,
     /// The header lists and the `priority` header per destination.
     pub headers: HeaderSpec,
     /// Where HTTP/1 and HTTP/2 disagree on header order or values; empty when they agree.
@@ -278,16 +278,16 @@ pub fn derive(h2: &[H2Evidence], h1: &[H1Evidence]) -> Result<Derived, CaptureH2
 }
 
 /// The spec of the navigation's connection, once every other probe's connection agrees with it.
-fn http2_spec(prefaces: &[(&H2Evidence, H2Preface)]) -> Result<Http2Spec, CaptureH2Error> {
+fn http2_spec(prefaces: &[(&H2Evidence, H2Preface)]) -> Result<H2Spec, CaptureH2Error> {
     let (_, document) = prefaces
         .iter()
         .find(|(evidence, _)| evidence.probe == DOCUMENT.name)
         .ok_or(CaptureH2Error::MissingProbe {
             probe: DOCUMENT.name,
         })?;
-    let spec = Http2Spec::from_preface(document)?;
+    let spec = H2Spec::from_preface(document)?;
     for (evidence, preface) in prefaces {
-        if Http2Spec::from_preface(preface)?.akamai() != spec.akamai() {
+        if H2Spec::from_preface(preface)?.akamai() != spec.akamai() {
             return Err(CaptureH2Error::ProbesDisagree {
                 probe: evidence.probe.clone(),
             });

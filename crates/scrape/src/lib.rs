@@ -31,7 +31,7 @@ pub use error::ScrapeError;
 pub use jar::store::CookieJar;
 pub use ledger::events::{CollectingEventSink, EventSink, NoopEventSink, ScraperEvent};
 pub use ledger::state::{DomainState, InMemoryStateStore, StateStore};
-pub use passport::identity::{EmulationRef, IdentityError, StealthIdentity};
+pub use passport::identity::{WireMeasurementRef, IdentityError, StealthIdentity};
 pub use passport::policy::{SessionPolicy, Transition};
 pub use runtime::browser_scraper::{
     BrowserFetch, BrowserLauncher, BrowserScraper, BrowserScraperBuilder, ChromeLauncher,

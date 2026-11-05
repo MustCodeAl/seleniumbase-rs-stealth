@@ -27,7 +27,7 @@ use seleniumbase_rs_mimic::tls_server::{
     accept, acceptor, EphemeralCa, ALPN_HTTP1, DEFAULT_HANDSHAKE_TIMEOUT,
 };
 use seleniumbase_rs_scrape::egress::route::{EgressKey, EgressRef};
-use seleniumbase_rs_scrape::passport::identity::{EmulationRef, StealthIdentity};
+use seleniumbase_rs_scrape::passport::identity::{WireMeasurementRef, StealthIdentity};
 use seleniumbase_rs_scrape::runtime::capture::stream::read_h2c_preface;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
@@ -209,7 +209,7 @@ impl Site {
 
 /// The measured Chrome major version on macOS.
 pub fn measured_major() -> u32 {
-    emulation::get(BrowserKind::Chrome, OsType::Macos)
+    measurement::get(BrowserKind::Chrome, OsType::Macos)
         .expect("macOS is measured")
         .major
 }
@@ -230,7 +230,7 @@ pub fn fingerprint(os: OsType, major: u32) -> Fingerprint {
 /// An identity behind `egress` whose emulation is `emulation` and whose fingerprint is `fp`.
 pub fn identity_of(
     fp: Fingerprint,
-    emulation: EmulationRef,
+    emulation: WireMeasurementRef,
     egress: Option<EgressKey>,
 ) -> StealthIdentity {
     StealthIdentity::new(fp, emulation, egress, now()).expect("a coherent fingerprint")
@@ -241,7 +241,7 @@ pub fn identity() -> StealthIdentity {
     let major = measured_major();
     identity_of(
         fingerprint(OsType::Macos, major),
-        EmulationRef {
+        WireMeasurementRef {
             kind: BrowserKind::Chrome,
             major,
             os: OsType::Macos,

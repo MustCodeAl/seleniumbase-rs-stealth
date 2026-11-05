@@ -1,6 +1,6 @@
 //! Tests of `TlsSpec`: building it from a hello, the reproducibility check and the three overlays.
 
-use super::{Alps, SpecError, TlsSpec};
+use super::{Alps, TlsSpecError, TlsSpec};
 use crate::client_hello::fixtures::{
     HelloBuilder, CHROME_CIPHERS, CHROME_SIGALGS, JA4_EXAMPLE_EXTENSIONS,
 };
@@ -132,27 +132,27 @@ fn the_spec_round_trips_through_json_and_defaults_missing_content() {
     assert!(!minimal.grease && minimal.alpn.is_empty() && minimal.alps.is_none());
 }
 
-pub(super) fn refused(id: u16) -> SpecError {
+pub(super) fn refused(id: u16) -> TlsSpecError {
     let reason = REFUSED_EXTENSIONS
         .iter()
         .find(|&&(refused, _)| refused == id)
         .map(|&(_, reason)| reason)
         .expect("the id is in the refused table");
-    SpecError::UnsupportedExtension { id, reason }
+    TlsSpecError::UnsupportedExtension { id, reason }
 }
 
-pub(super) fn duplicate(list: &'static str, id: u16) -> SpecError {
-    SpecError::Duplicate { list, id }
+pub(super) fn duplicate(list: &'static str, id: u16) -> TlsSpecError {
+    TlsSpecError::Duplicate { list, id }
 }
 
-pub(super) fn sigalg(id: u16, name: &'static str) -> SpecError {
-    SpecError::UnsupportedSigalg { id, name }
+pub(super) fn sigalg(id: u16, name: &'static str) -> TlsSpecError {
+    TlsSpecError::UnsupportedSigalg { id, name }
 }
 
 type Mutation = fn(&mut TlsSpec);
 
 /// Applies each mutation to the base spec and expects the named error.
-fn assert_rejected(cases: Vec<(&str, Mutation, SpecError)>) {
+fn assert_rejected(cases: Vec<(&str, Mutation, TlsSpecError)>) {
     for (label, mutate, want) in cases {
         let mut spec = chrome();
         mutate(&mut spec);
@@ -166,12 +166,12 @@ fn rejects_versions_ciphers_and_extensions_boringssl_cannot_emit() {
         (
             "TLS 1.3 as the legacy version",
             |s| s.legacy_version = 0x0304,
-            SpecError::LegacyVersion(0x0304),
+            TlsSpecError::LegacyVersion(0x0304),
         ),
         (
             "SSL 3.0 offered",
             |s| s.supported_versions.push(0x0300),
-            SpecError::UnsupportedVersion(0x0300),
+            TlsSpecError::UnsupportedVersion(0x0300),
         ),
         (
             "repeated protocol version",
@@ -186,32 +186,32 @@ fn rejects_versions_ciphers_and_extensions_boringssl_cannot_emit() {
         (
             "no ciphers",
             |s| s.cipher_suites.clear(),
-            SpecError::NoCipherSuites,
+            TlsSpecError::NoCipherSuites,
         ),
         (
             "DHE",
             |s| s.cipher_suites.push(0x0033),
-            SpecError::UnsupportedCipher(0x0033),
+            TlsSpecError::UnsupportedCipher(0x0033),
         ),
         (
             "CCM",
             |s| s.cipher_suites.push(0x1304),
-            SpecError::UnsupportedCipher(0x1304),
+            TlsSpecError::UnsupportedCipher(0x1304),
         ),
         (
             "SCSV",
             |s| s.cipher_suites.push(0x00FF),
-            SpecError::UnsupportedCipher(0x00FF),
+            TlsSpecError::UnsupportedCipher(0x00FF),
         ),
         (
             "RC4",
             |s| s.cipher_suites.push(0x0005),
-            SpecError::UnsupportedCipher(0x0005),
+            TlsSpecError::UnsupportedCipher(0x0005),
         ),
         (
             "unknown cipher",
             |s| s.cipher_suites.push(0xBEEF),
-            SpecError::UnsupportedCipher(0xBEEF),
+            TlsSpecError::UnsupportedCipher(0xBEEF),
         ),
         (
             "repeated cipher",
@@ -221,17 +221,17 @@ fn rejects_versions_ciphers_and_extensions_boringssl_cannot_emit() {
         (
             "TLS 1.3 subset",
             |s| s.cipher_suites.retain(|&c| c != 0x1302),
-            SpecError::Tls13Suites,
+            TlsSpecError::Tls13Suites,
         ),
         (
             "TLS 1.3 without suites",
             |s| s.cipher_suites.retain(|&c| c >> 8 != 0x13),
-            SpecError::Tls13Suites,
+            TlsSpecError::Tls13Suites,
         ),
         (
             "TLS 1.3 suites for a 1.2 client",
             |s| s.supported_versions = vec![0x0303],
-            SpecError::Tls13Suites,
+            TlsSpecError::Tls13Suites,
         ),
         (
             "pre_shared_key",
@@ -246,7 +246,7 @@ fn rejects_versions_ciphers_and_extensions_boringssl_cannot_emit() {
         (
             "repeated extension",
             |s| s.extensions.push(0x0000),
-            SpecError::DuplicateExtension(0),
+            TlsSpecError::DuplicateExtension(0),
         ),
     ]);
 }
@@ -257,17 +257,17 @@ fn rejects_groups_formats_signature_algorithms_and_alpn_boringssl_cannot_emit() 
         (
             "x448",
             |s| s.supported_groups.push(0x001E),
-            SpecError::UnsupportedGroup(0x001E),
+            TlsSpecError::UnsupportedGroup(0x001E),
         ),
         (
             "ffdhe6144",
             |s| s.supported_groups.push(0x0103),
-            SpecError::UnsupportedGroup(0x0103),
+            TlsSpecError::UnsupportedGroup(0x0103),
         ),
         (
             "unknown group",
             |s| s.supported_groups.push(0xFFFF),
-            SpecError::UnsupportedGroup(0xFFFF),
+            TlsSpecError::UnsupportedGroup(0xFFFF),
         ),
         (
             "repeated group",
@@ -277,22 +277,22 @@ fn rejects_groups_formats_signature_algorithms_and_alpn_boringssl_cannot_emit() 
         (
             "key share for a group not offered",
             |s| s.key_share_groups = vec![0x0019],
-            SpecError::KeyShareNotOffered(0x0019),
+            TlsSpecError::KeyShareNotOffered(0x0019),
         ),
         (
             "compressed point format",
             |s| s.point_formats = vec![1],
-            SpecError::PointFormats(vec![1]),
+            TlsSpecError::PointFormats(vec![1]),
         ),
         (
             "point formats dropped",
             |s| s.point_formats.clear(),
-            SpecError::PointFormats(vec![]),
+            TlsSpecError::PointFormats(vec![]),
         ),
         (
             "point formats without the extension",
             |s| s.extensions.retain(|&e| e != 0x000B),
-            SpecError::PointFormats(vec![0]),
+            TlsSpecError::PointFormats(vec![0]),
         ),
         (
             "ML-DSA",
@@ -322,12 +322,12 @@ fn rejects_groups_formats_signature_algorithms_and_alpn_boringssl_cannot_emit() 
         (
             "empty ALPN name",
             |s| s.alpn[0].clear(),
-            SpecError::Alpn(String::new()),
+            TlsSpecError::Alpn(String::new()),
         ),
         (
             "oversized ALPN name",
             |s| s.alpn[0] = "x".repeat(256),
-            SpecError::Alpn("x".repeat(256)),
+            TlsSpecError::Alpn("x".repeat(256)),
         ),
     ]);
 }
@@ -338,7 +338,7 @@ fn rejects_unknown_and_grease_extension_ids() {
         let mut spec = chrome();
         spec.extensions.push(id);
         assert!(
-            matches!(spec.check_reproducible(), Err(SpecError::UnsupportedExtension { id: bad, .. }) if bad == id),
+            matches!(spec.check_reproducible(), Err(TlsSpecError::UnsupportedExtension { id: bad, .. }) if bad == id),
             "{id:#06x}"
         );
     }
@@ -403,7 +403,7 @@ fn rejects_an_extension_and_its_content_that_disagree() {
         mutate(&mut spec);
         assert_eq!(
             spec.check_reproducible(),
-            Err(SpecError::ExtensionContent(id)),
+            Err(TlsSpecError::ExtensionContent(id)),
             "{label}"
         );
     }

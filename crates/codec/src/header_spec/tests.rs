@@ -36,7 +36,7 @@ fn spec() -> HeaderSpec {
     HeaderSpec::from_captured(&DOCUMENT, &FETCH).expect("a valid capture")
 }
 
-fn names(list: &[(String, HeaderValue)]) -> Vec<&str> {
+fn names(list: &[(String, HeaderSource)]) -> Vec<&str> {
     list.iter().map(|(name, _)| name.as_str()).collect()
 }
 
@@ -46,8 +46,8 @@ fn owned(list: &[(&str, &str)]) -> Vec<(String, String)> {
         .collect()
 }
 
-fn lit(text: &str) -> HeaderValue {
-    HeaderValue::Literal(text.to_owned())
+fn lit(text: &str) -> HeaderSource {
+    HeaderSource::Literal(text.to_owned())
 }
 
 #[test]
@@ -77,15 +77,15 @@ fn a_capture_becomes_placeholders_and_literals_in_order() {
             .find(|(n, _)| n == name)
             .map(|(_, v)| v.clone())
     };
-    assert_eq!(value("User-Agent"), Some(HeaderValue::UserAgent));
-    assert_eq!(value("sec-ch-ua"), Some(HeaderValue::SecChUa));
-    assert_eq!(value("sec-ch-ua-mobile"), Some(HeaderValue::SecChUaMobile));
+    assert_eq!(value("User-Agent"), Some(HeaderSource::UserAgent));
+    assert_eq!(value("sec-ch-ua"), Some(HeaderSource::SecChUa));
+    assert_eq!(value("sec-ch-ua-mobile"), Some(HeaderSource::SecChUaMobile));
     assert_eq!(
         value("sec-ch-ua-platform"),
-        Some(HeaderValue::SecChUaPlatform)
+        Some(HeaderSource::SecChUaPlatform)
     );
-    assert_eq!(value("Accept-Language"), Some(HeaderValue::AcceptLanguage));
-    assert_eq!(value("Cookie"), Some(HeaderValue::Cookie));
+    assert_eq!(value("Accept-Language"), Some(HeaderSource::AcceptLanguage));
+    assert_eq!(value("Cookie"), Some(HeaderSource::Cookie));
     assert_eq!(value("Accept"), Some(lit("text/html,*/*;q=0.8")));
     assert_eq!(value("Sec-Fetch-Dest"), Some(lit("document")));
     assert_eq!(
@@ -105,13 +105,13 @@ fn a_capture_becomes_placeholders_and_literals_in_order() {
 #[test]
 fn rendering_the_capturing_identity_reproduces_the_capture() {
     let s = spec();
-    let identity = HeaderIdentity::from_captured(&DOCUMENT).expect("has a user agent");
+    let identity = ClientHeaders::from_captured(&DOCUMENT).expect("has a user agent");
     let want: Vec<(String, String)> = owned(&DOCUMENT)
         .into_iter()
         .filter(|(n, _)| n != "Host" && n != "Connection")
         .collect();
     assert_eq!(s.render(RequestShape::Document, &identity), Ok(want));
-    let fetch_identity = HeaderIdentity::from_captured(&FETCH).expect("has a user agent");
+    let fetch_identity = ClientHeaders::from_captured(&FETCH).expect("has a user agent");
     let rendered = s
         .render(RequestShape::Fetch, &fetch_identity)
         .expect("renders");
@@ -124,7 +124,7 @@ fn rendering_the_capturing_identity_reproduces_the_capture() {
 
 #[test]
 fn the_identity_read_from_a_capture_has_each_value() {
-    let id = HeaderIdentity::from_captured(&DOCUMENT).expect("has a user agent");
+    let id = ClientHeaders::from_captured(&DOCUMENT).expect("has a user agent");
     assert_eq!(id.user_agent, "TestAgent/1.0");
     assert_eq!(id.accept_language.as_deref(), Some("en-US"));
     assert_eq!(id.sec_ch_ua.as_deref(), Some("\"Test\";v=\"1\""));
@@ -132,14 +132,14 @@ fn the_identity_read_from_a_capture_has_each_value() {
     assert_eq!(id.sec_ch_ua_platform.as_deref(), Some("\"TestOS\""));
     assert_eq!(id.cookie.as_deref(), Some("a=b; c=d"));
     assert_eq!(id.overrides, Vec::<(String, String)>::new());
-    assert_eq!(HeaderIdentity::from_captured(&[("Accept", "*/*")]), None);
+    assert_eq!(ClientHeaders::from_captured(&[("Accept", "*/*")]), None);
 }
 
 #[test]
 fn a_placeholder_without_a_value_leaves_its_header_out() {
     let s = spec();
     let rendered = s
-        .render(RequestShape::Document, &HeaderIdentity::new("Other/9"))
+        .render(RequestShape::Document, &ClientHeaders::new("Other/9"))
         .expect("renders");
     let kept: Vec<&str> = rendered.iter().map(|(n, _)| n.as_str()).collect();
     assert_eq!(
@@ -160,7 +160,7 @@ fn a_placeholder_without_a_value_leaves_its_header_out() {
 #[test]
 fn every_identity_value_can_be_supplied_by_the_caller() {
     let s = spec();
-    let identity = HeaderIdentity::new("Mine/3")
+    let identity = ClientHeaders::new("Mine/3")
         .with_accept_language("de-DE,de;q=0.9")
         .with_client_hints("\"Mine\";v=\"3\"", "?1", "\"MineOS\"")
         .with_cookie("k=v");
@@ -185,7 +185,7 @@ fn every_identity_value_can_be_supplied_by_the_caller() {
 #[test]
 fn overrides_replace_a_value_by_name_without_regard_to_case() {
     let s = spec();
-    let identity = HeaderIdentity::new("A/1")
+    let identity = ClientHeaders::new("A/1")
         .with_override("accept", "application/json")
         .with_override("X-Not-In-The-Spec", "ignored")
         .with_override("user-agent", "Override/2");
@@ -213,7 +213,7 @@ fn a_resolved_value_that_is_not_a_header_value_is_refused_without_echoing_it() {
         "del\x7f",
     ] {
         let err = s
-            .render(RequestShape::Fetch, &HeaderIdentity::new(bad))
+            .render(RequestShape::Fetch, &ClientHeaders::new(bad))
             .expect_err("refused");
         assert_eq!(
             err,
@@ -225,17 +225,17 @@ fn a_resolved_value_that_is_not_a_header_value_is_refused_without_echoing_it() {
     }
     let huge = "x".repeat(MAX_VALUE_LEN + 1);
     assert!(s
-        .render(RequestShape::Fetch, &HeaderIdentity::new(huge))
+        .render(RequestShape::Fetch, &ClientHeaders::new(huge))
         .is_err());
     let ok = "x".repeat(MAX_VALUE_LEN);
     assert!(s
-        .render(RequestShape::Fetch, &HeaderIdentity::new(ok))
+        .render(RequestShape::Fetch, &ClientHeaders::new(ok))
         .is_ok());
 }
 
 #[test]
 fn the_debug_of_an_identity_hides_the_cookie_and_the_override_values() {
-    let identity = HeaderIdentity::new("UA/1")
+    let identity = ClientHeaders::new("UA/1")
         .with_cookie("session=SECRET-COOKIE")
         .with_override("Authorization", "Bearer SECRET-TOKEN");
     let shown = format!("{identity:?}");
@@ -314,7 +314,7 @@ fn bad_captures_are_refused_by_name() {
     );
 }
 
-fn with_document(entries: Vec<(&str, HeaderValue)>) -> HeaderSpec {
+fn with_document(entries: Vec<(&str, HeaderSource)>) -> HeaderSpec {
     HeaderSpec {
         document: entries
             .into_iter()
@@ -365,7 +365,7 @@ fn validation_names_each_kind_of_problem() {
         );
     }
     assert_eq!(
-        err(vec![("X-A", lit("1")), ("x-a", HeaderValue::Cookie)]),
+        err(vec![("X-A", lit("1")), ("x-a", HeaderSource::Cookie)]),
         Err(HeaderSpecError::DuplicateName("x-a".to_owned()))
     );
     for bad in ["a\r\nb", "a\0", "\u{7f}", " a", "a ", "\ta"] {
@@ -476,10 +476,10 @@ fn with_header_replaces_in_place_or_appends() {
         .with_header(
             RequestShape::Document,
             "Accept-Language",
-            HeaderValue::UserAgent,
+            HeaderSource::UserAgent,
         )
         .expect("any placeholder can go anywhere");
-    assert_eq!(swapped.document[10].1, HeaderValue::UserAgent);
+    assert_eq!(swapped.document[10].1, HeaderSource::UserAgent);
     assert_eq!(s, spec(), "the original is not changed");
 }
 
@@ -586,7 +586,7 @@ fn a_spec_built_from_a_decoded_http2_capture_renders_it_back() {
         .collect();
     let spec = HeaderSpec::from_captured(&regular, &regular).expect("valid");
     assert_eq!(spec.priority_for("document"), Some("u=0, i"));
-    let identity = HeaderIdentity::from_captured(&regular).expect("has a user agent");
+    let identity = ClientHeaders::from_captured(&regular).expect("has a user agent");
     let rendered = spec
         .render(RequestShape::Document, &identity)
         .expect("renders");
@@ -633,7 +633,7 @@ fn random_header_lists_are_either_refused_or_valid_and_render_cleanly() {
         "a", "", "document", " a", "a\r\nb", "u=0, i", "x\u{7f}", "ok value",
     ];
     let mut rng = XorShift(0x2545_f491_4f6c_dd1d);
-    let identity = HeaderIdentity::new("UA/1").with_cookie("c=1");
+    let identity = ClientHeaders::new("UA/1").with_cookie("c=1");
     for _ in 0..3000 {
         let len = rng.below(8);
         let list: Vec<(&str, &str)> = (0..len)

@@ -1,7 +1,7 @@
 //! The identity headers of a profile: the user agent, the client hints and `Accept-Language`.
 
 use seleniumbase_rs::evasion::fingerprint::{BrandVersion, ClientHints};
-use seleniumbase_rs_codec::header_spec::HeaderIdentity;
+use seleniumbase_rs_codec::header_spec::ClientHeaders;
 
 /// The locale whose `Accept-Language` a measured profile starts with.
 pub(super) const DEFAULT_LOCALE_TAG: &str = "en-US";
@@ -40,8 +40,8 @@ pub(super) fn identity_for(
     user_agent: &str,
     accept_language: Option<&str>,
     hints: Option<&ClientHints>,
-) -> HeaderIdentity {
-    let mut identity = HeaderIdentity::new(user_agent);
+) -> ClientHeaders {
+    let mut identity = ClientHeaders::new(user_agent);
     if let Some(language) = accept_language {
         identity = identity.with_accept_language(language);
     }
@@ -52,7 +52,7 @@ pub(super) fn identity_for(
 }
 
 /// Sets the three client-hint headers a browser sends on every request.
-pub(super) fn with_hints(identity: HeaderIdentity, hints: &ClientHints) -> HeaderIdentity {
+pub(super) fn with_hints(identity: ClientHeaders, hints: &ClientHints) -> ClientHeaders {
     identity.with_client_hints(
         sec_ch_ua(&hints.brands),
         if hints.mobile { MOBILE } else { NOT_MOBILE },

@@ -6,7 +6,7 @@
 //! context. The measured TLS and HTTP/2 belong to one Chrome major version on one system; a page
 //! whose user agent or browser is another major version is refused with
 //! [`HttpError::VersionMismatch`], and a system that was not measured is refused with
-//! [`NotMeasured`](seleniumbase_rs_codec::emulation::EmulationError::NotMeasured).
+//! [`NotMeasured`](seleniumbase_rs_codec::measurement::WireMeasurementError::NotMeasured).
 //!
 //! A browser-wide proxy (`--proxy-server`) is not visible to a page, but the command line of the
 //! browser process is: `SystemInfo.getInfo` reports it. A session built from a page of such a
@@ -138,7 +138,7 @@ pub(super) fn profile_of(probe: &Probe) -> Result<ImpersonationProfile, HttpErro
         "its user agent names no Chrome version",
     ))?;
     let os = os_of(user_agent)?;
-    let measured = emulation::get(BrowserKind::Chrome, os)
+    let measured = measurement::get(BrowserKind::Chrome, os)
         .map_err(ImpersonateError::from)?
         .major;
     for browser in std::iter::once(claimed).chain(probe.product_major) {
@@ -577,7 +577,7 @@ mod tests {
 
     #[test]
     fn the_measured_major_is_accepted_and_the_user_agent_is_kept() {
-        let measured = emulation::get(BrowserKind::Chrome, OsType::Macos)
+        let measured = measurement::get(BrowserKind::Chrome, OsType::Macos)
             .expect("measured")
             .major;
         let agent = MAC_155.replace("155", &measured.to_string());
@@ -593,7 +593,7 @@ mod tests {
 
     #[test]
     fn another_chrome_major_is_a_version_mismatch_whoever_reports_it() {
-        let measured = emulation::get(BrowserKind::Chrome, OsType::Macos)
+        let measured = measurement::get(BrowserKind::Chrome, OsType::Macos)
             .expect("measured")
             .major;
         let newer = measured + 1;
@@ -620,7 +620,7 @@ mod tests {
         assert!(
             matches!(
                 &error,
-                HttpError::Impersonate(ImpersonateError::Emulation(_))
+                HttpError::Impersonate(ImpersonateError::Measurement(_))
             ),
             "{error}"
         );

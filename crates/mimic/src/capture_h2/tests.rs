@@ -2,7 +2,7 @@
 //! needs a browser; the real-Chrome run is `tests/impersonate_capture_h2_chrome.rs`.
 //!
 //! The values below are made up for the tests (a stand-in browser's settings and headers). The
-//! measured values live in `crates/codec/src/measured` and are checked by `crates/codec/tests/wire_emulation.rs`.
+//! measured values live in `crates/codec/src/measured` and are checked by `crates/codec/tests/wire_measurement.rs`.
 
 mod run;
 mod site;
@@ -15,7 +15,7 @@ use super::site::{Observed, Seen};
 use super::store::{write_h2_fixtures, MeasuredDoc};
 use super::{parse_args, CaptureH2Error, Passes};
 use seleniumbase_rs::evasion::fingerprint::OsType;
-use seleniumbase_rs_codec::akamai::Pseudo;
+use seleniumbase_rs_codec::akamai::PseudoHeader;
 use seleniumbase_rs_codec::h2_frames::{encode_frame, frame_type, read_preface, CLIENT_PREFACE};
 use seleniumbase_rs_codec::BrowserKind;
 use seleniumbase_rs_scrape::runtime::capture::record::{BrowserVersion, EntryId};
@@ -338,10 +338,10 @@ fn derive_builds_the_http2_spec_from_the_navigation() {
     assert_eq!(
         derived.http2.pseudo_order,
         [
-            Pseudo::Method,
-            Pseudo::Authority,
-            Pseudo::Scheme,
-            Pseudo::Path
+            PseudoHeader::Method,
+            PseudoHeader::Authority,
+            PseudoHeader::Scheme,
+            PseudoHeader::Path
         ]
     );
     let priority = derived.http2.headers_priority.expect("HEADERS priority");

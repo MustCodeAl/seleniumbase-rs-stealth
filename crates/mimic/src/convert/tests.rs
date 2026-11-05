@@ -15,7 +15,7 @@ use super::{
 use seleniumbase_rs::evasion::fingerprint::OsType;
 use seleniumbase_rs_codec::akamai::Akamai;
 use seleniumbase_rs_codec::client_hello::ext_id;
-use seleniumbase_rs_codec::emulation::{self, Emulation};
+use seleniumbase_rs_codec::measurement::{self, WireMeasurement};
 use seleniumbase_rs_codec::h2_spec::H2Spec;
 use seleniumbase_rs_codec::ids::{CIPHER_SUITES, SIGNATURE_ALGORITHMS};
 use seleniumbase_rs_codec::tls_spec::{Alps, TlsSpec};
@@ -29,8 +29,8 @@ const BORINGSSL_GROUP_NAMES: [(u16, &str); 4] = [
     (0x0018, "P-384"),
 ];
 
-fn chrome() -> &'static Emulation {
-    emulation::get(BrowserKind::Chrome, OsType::Macos).expect("Chrome on macOS is measured")
+fn chrome() -> &'static WireMeasurement {
+    measurement::get(BrowserKind::Chrome, OsType::Macos).expect("Chrome on macOS is measured")
 }
 
 /// The measured TLS spec with the parts `BoringSSL` cannot send taken out.

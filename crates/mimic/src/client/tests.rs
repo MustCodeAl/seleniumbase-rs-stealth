@@ -6,10 +6,10 @@ use super::{impersonation_client, ImpersonateError, ImpersonationProfile, WirePr
 use crate::convert::ConvertError;
 use seleniumbase_rs::evasion::fingerprint::{BrandVersion, Fingerprint, OsType, Spoof};
 use seleniumbase_rs_codec::client_hello::ext_id;
-use seleniumbase_rs_codec::emulation::{self, Emulation, EmulationError, KnownGap};
-use seleniumbase_rs_codec::h2_spec::SpecError as H2SpecError;
-use seleniumbase_rs_codec::header_spec::{HeaderValue, RequestShape};
-use seleniumbase_rs_codec::tls_spec::SpecError as TlsSpecError;
+use seleniumbase_rs_codec::measurement::{self, WireMeasurement, WireMeasurementError, KnownGap};
+use seleniumbase_rs_codec::h2_spec::H2SpecError;
+use seleniumbase_rs_codec::header_spec::{HeaderSource, RequestShape};
+use seleniumbase_rs_codec::tls_spec::TlsSpecError;
 use seleniumbase_rs_codec::BrowserKind;
 use seleniumbase_rs_scrape::egress::geo::{Locale, LocaleExt};
 
@@ -64,7 +64,7 @@ fn the_measured_profile_keeps_its_gaps_and_sends_a_reproducible_spec() {
     assert!(!profile.tls_spec().has_extension(ext_id::TRUST_ANCHORS));
     assert_eq!(profile.validate(), Ok(()));
     assert_eq!(profile.dropped_settings(), []);
-    let measured = emulation::get(BrowserKind::Chrome, OsType::Macos).expect("measured");
+    let measured = measurement::get(BrowserKind::Chrome, OsType::Macos).expect("measured");
     assert_eq!(profile.user_agent(), measured.user_agent);
     assert_eq!(profile.tls_spec().grease, measured.tls.grease);
     assert_eq!(
@@ -75,7 +75,7 @@ fn the_measured_profile_keeps_its_gaps_and_sends_a_reproducible_spec() {
 
 #[test]
 fn an_entry_without_its_http2_spec_or_hints_is_not_a_profile() {
-    let mut entry = Emulation::from_json("chrome", CHROME_FILE).expect("the measured file");
+    let mut entry = WireMeasurement::from_json("chrome", CHROME_FILE).expect("the measured file");
     let hints = entry.client_hints.take();
     assert!(hints.is_some());
     assert_eq!(
@@ -139,7 +139,7 @@ fn an_unmeasured_system_is_refused_not_guessed() {
             .expect_err("only macOS is measured");
         assert_eq!(
             error,
-            ImpersonateError::Emulation(EmulationError::NotMeasured {
+            ImpersonateError::Measurement(WireMeasurementError::NotMeasured {
                 kind: BrowserKind::Chrome,
                 os
             })
@@ -195,7 +195,7 @@ fn a_cookie_is_added_per_request_in_its_place_and_never_kept() {
     let mut profile = chrome();
     profile.headers = profile
         .headers
-        .with_header(RequestShape::Document, "Cookie", HeaderValue::Cookie)
+        .with_header(RequestShape::Document, "Cookie", HeaderSource::Cookie)
         .expect("valid");
     let with = profile
         .headers_for(RequestShape::Document, Some("sid=1"), WireProtocol::Http1)
@@ -294,8 +294,8 @@ fn a_fingerprint_of_an_unmeasured_system_or_another_browser_is_refused() {
     let windows = Fingerprint::randomized_with_major(OsType::Windows, 3, 155);
     assert!(matches!(
         ImpersonationProfile::from_fingerprint(&windows),
-        Err(ImpersonateError::Emulation(
-            EmulationError::NotMeasured { .. }
+        Err(ImpersonateError::Measurement(
+            WireMeasurementError::NotMeasured { .. }
         ))
     ));
     let firefox = Fingerprint::randomized_with_major(OsType::Macos, 3, 155)
@@ -513,12 +513,12 @@ fn header_inputs_change_names_order_and_values() {
         .header(
             RequestShape::Document,
             "X-Extra",
-            HeaderValue::Literal("1".to_owned()),
+            HeaderSource::Literal("1".to_owned()),
         )
         .header(
             RequestShape::Document,
             "accept",
-            HeaderValue::Literal("text/plain".to_owned()),
+            HeaderSource::Literal("text/plain".to_owned()),
         )
         .without_header(RequestShape::Document, "Sec-Fetch-User")
         .header_order(RequestShape::Document, ["Accept-Language", "User-Agent"])
@@ -545,7 +545,7 @@ fn header_inputs_that_cannot_be_sent_are_refused_by_name() {
         .header(
             RequestShape::Document,
             "Host",
-            HeaderValue::Literal("x".to_owned()),
+            HeaderSource::Literal("x".to_owned()),
         )
         .build();
     assert!(matches!(reserved, Err(ImpersonateError::Headers(_))));
@@ -561,7 +561,7 @@ fn header_inputs_that_cannot_be_sent_are_refused_by_name() {
 #[test]
 fn the_base_can_be_named_and_the_header_lists_replaced_as_a_whole() {
     let replacement = seleniumbase_rs_codec::header_spec::HeaderSpec {
-        document: vec![("X-Only".to_owned(), HeaderValue::Literal("1".to_owned()))],
+        document: vec![("X-Only".to_owned(), HeaderSource::Literal("1".to_owned()))],
         ..Default::default()
     };
     let profile = ImpersonationProfile::custom()
@@ -585,7 +585,7 @@ fn a_base_with_no_capture_is_refused_when_the_builder_needs_it() {
         .expect_err("Windows is not measured");
     assert!(matches!(
         error,
-        ImpersonateError::Emulation(EmulationError::NotMeasured { .. })
+        ImpersonateError::Measurement(WireMeasurementError::NotMeasured { .. })
     ));
 }
 

@@ -5,10 +5,10 @@
 
 use std::collections::BTreeSet;
 
-use super::{duplicate, first_duplicate, SpecError, TlsSpec};
+use super::{duplicate, first_duplicate, TlsSpecError, TlsSpec};
 use crate::client_hello::ext_id;
 use crate::ids::{ALPN_H2, ALPN_HTTP_1_1, EC_POINT_UNCOMPRESSED};
-use crate::ja3::peetprint::{ids as slot_ids, PeetField, Slot};
+use crate::ja3::peetprint::{ids as slot_ids, PeetprintField, PeetprintSlot};
 use crate::ja3::{Ja3, Peetprint};
 use crate::ja4::{alpn_code, version_from_code, Ja4Order, Ja4Raw, Ja4Section, NO_ALPN};
 
@@ -39,11 +39,11 @@ pub(super) fn versions_with_max(versions: &[u16], target: u16) -> Vec<u16> {
 }
 
 /// Rejects repeated ciphers or extensions before a merge would hide them.
-fn reject_duplicates(ciphers: &[u16], extensions: &[u16]) -> Result<(), SpecError> {
+fn reject_duplicates(ciphers: &[u16], extensions: &[u16]) -> Result<(), TlsSpecError> {
     if let Some(id) = first_duplicate(ciphers) {
         return Err(duplicate("cipher_suites", id));
     }
-    first_duplicate(extensions).map_or(Ok(()), |id| Err(SpecError::DuplicateExtension(id)))
+    first_duplicate(extensions).map_or(Ok(()), |id| Err(TlsSpecError::DuplicateExtension(id)))
 }
 
 /// The fields of a JA4 `a` section that change the spec.
@@ -54,8 +54,8 @@ struct PartA {
 }
 
 impl PartA {
-    fn parse(a: &str) -> Result<Self, SpecError> {
-        let mismatch = SpecError::Ja4Mismatch(Ja4Section::A);
+    fn parse(a: &str) -> Result<Self, TlsSpecError> {
+        let mismatch = TlsSpecError::Ja4Mismatch(Ja4Section::A);
         let version = a
             .get(1..3)
             .and_then(version_from_code)
@@ -78,8 +78,8 @@ impl TlsSpec {
     ///
     /// # Errors
     ///
-    /// Returns the [`SpecError`] that makes the result not reproducible.
-    pub fn with_ja3(&self, ja3: &Ja3) -> Result<Self, SpecError> {
+    /// Returns the [`TlsSpecError`] that makes the result not reproducible.
+    pub fn with_ja3(&self, ja3: &Ja3) -> Result<Self, TlsSpecError> {
         let mut spec = self.clone();
         spec.legacy_version = ja3.version;
         spec.cipher_suites.clone_from(&ja3.ciphers);
@@ -97,9 +97,9 @@ impl TlsSpec {
     ///
     /// # Errors
     ///
-    /// Returns [`SpecError::UnsupportedSigalg`] for a scheme `BoringSSL` cannot send, and
-    /// [`SpecError::ExtensionContent`] when the list is empty or the extension is not sent.
-    pub fn with_signature_algorithms(&self, ids: &[u16]) -> Result<Self, SpecError> {
+    /// Returns [`TlsSpecError::UnsupportedSigalg`] for a scheme `BoringSSL` cannot send, and
+    /// [`TlsSpecError::ExtensionContent`] when the list is empty or the extension is not sent.
+    pub fn with_signature_algorithms(&self, ids: &[u16]) -> Result<Self, TlsSpecError> {
         let mut spec = self.clone();
         spec.signature_algorithms = ids.to_vec();
         spec.check_reproducible()?;
@@ -116,9 +116,9 @@ impl TlsSpec {
     ///
     /// # Errors
     ///
-    /// Returns the [`SpecError`] that makes the result not reproducible, or
-    /// [`SpecError::Ja4Mismatch`] when the result would not reproduce `raw`.
-    pub fn with_ja4_raw(&self, raw: &Ja4Raw, order: Ja4Order) -> Result<Self, SpecError> {
+    /// Returns the [`TlsSpecError`] that makes the result not reproducible, or
+    /// [`TlsSpecError::Ja4Mismatch`] when the result would not reproduce `raw`.
+    pub fn with_ja4_raw(&self, raw: &Ja4Raw, order: Ja4Order) -> Result<Self, TlsSpecError> {
         let part = PartA::parse(&raw.a)?;
         let mut spec = self.clone();
         if order == Ja4Order::Original {
@@ -152,9 +152,9 @@ impl TlsSpec {
     ///
     /// # Errors
     ///
-    /// Returns the [`SpecError`] that makes the result not reproducible, or
-    /// [`SpecError::PeetprintMismatch`] when the result would not reproduce `peet`.
-    pub fn with_peetprint(&self, peet: &Peetprint) -> Result<Self, SpecError> {
+    /// Returns the [`TlsSpecError`] that makes the result not reproducible, or
+    /// [`TlsSpecError::PeetprintMismatch`] when the result would not reproduce `peet`.
+    pub fn with_peetprint(&self, peet: &Peetprint) -> Result<Self, TlsSpecError> {
         let ciphers = slot_ids(&peet.ciphers);
         let extensions = slot_ids(&peet.extensions);
         reject_duplicates(&ciphers, &extensions)?;
@@ -169,7 +169,7 @@ impl TlsSpec {
             &peet.extensions,
         ]
         .iter()
-        .any(|list| list.contains(&Slot::Grease));
+        .any(|list| list.contains(&PeetprintSlot::Grease));
         spec.align_content();
         spec.supported_versions = slot_ids(&peet.versions);
         spec.alpn.clone_from(&peet.alpn);
@@ -256,7 +256,7 @@ impl TlsSpec {
     }
 
     /// Puts the ALPN name whose JA4 code is `code` first.
-    fn apply_alpn(&mut self, code: &str) -> Result<(), SpecError> {
+    fn apply_alpn(&mut self, code: &str) -> Result<(), TlsSpecError> {
         if code == NO_ALPN || !self.has_extension(ext_id::ALPN) {
             return Ok(());
         }
@@ -266,7 +266,7 @@ impl TlsSpec {
             .map(String::as_str)
             .chain([ALPN_H2, ALPN_HTTP_1_1, EXTRA_ALPN])
             .find(|name| alpn_code(Some(name.as_bytes())) == code)
-            .ok_or_else(|| SpecError::Ja4Alpn(code.to_owned()))?
+            .ok_or_else(|| TlsSpecError::Ja4Alpn(code.to_owned()))?
             .to_owned();
         self.alpn.retain(|name| *name != pick);
         self.alpn.insert(0, pick);
@@ -274,7 +274,7 @@ impl TlsSpec {
     }
 
     /// Recomputes the JA4 and names the first section that differs from `raw`.
-    fn verify_ja4(&self, raw: &Ja4Raw, order: Ja4Order) -> Result<(), SpecError> {
+    fn verify_ja4(&self, raw: &Ja4Raw, order: Ja4Order) -> Result<(), TlsSpecError> {
         let got = self.ja4_raw(order);
         let section = if got.a != raw.a {
             Ja4Section::A
@@ -287,30 +287,30 @@ impl TlsSpec {
         } else {
             return Ok(());
         };
-        Err(SpecError::Ja4Mismatch(section))
+        Err(TlsSpecError::Ja4Mismatch(section))
     }
 
     /// Recomputes the peetprint and names the first field that differs from `peet`.
-    fn verify_peetprint(&self, peet: &Peetprint) -> Result<(), SpecError> {
+    fn verify_peetprint(&self, peet: &Peetprint) -> Result<(), TlsSpecError> {
         let (got, want) = (self.peetprint(), peet.clone().normalized());
         let fields = [
-            (PeetField::Versions, got.versions == want.versions),
-            (PeetField::Alpn, got.alpn == want.alpn),
-            (PeetField::Groups, got.groups == want.groups),
+            (PeetprintField::Versions, got.versions == want.versions),
+            (PeetprintField::Alpn, got.alpn == want.alpn),
+            (PeetprintField::Groups, got.groups == want.groups),
             (
-                PeetField::SignatureAlgorithms,
+                PeetprintField::SignatureAlgorithms,
                 got.signature_algorithms == want.signature_algorithms,
             ),
-            (PeetField::PskModes, got.psk_modes == want.psk_modes),
+            (PeetprintField::PskModes, got.psk_modes == want.psk_modes),
             (
-                PeetField::CertCompression,
+                PeetprintField::CertCompression,
                 got.cert_compression == want.cert_compression,
             ),
-            (PeetField::Ciphers, got.ciphers == want.ciphers),
-            (PeetField::Extensions, got.extensions == want.extensions),
+            (PeetprintField::Ciphers, got.ciphers == want.ciphers),
+            (PeetprintField::Extensions, got.extensions == want.extensions),
         ];
         match fields.into_iter().find(|&(_, same)| !same) {
-            Some((field, _)) => Err(SpecError::PeetprintMismatch(field)),
+            Some((field, _)) => Err(TlsSpecError::PeetprintMismatch(field)),
             None => Ok(()),
         }
     }

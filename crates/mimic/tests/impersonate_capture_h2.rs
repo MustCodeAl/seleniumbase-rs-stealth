@@ -9,7 +9,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use seleniumbase_rs::evasion::fingerprint::OsType;
-use seleniumbase_rs_codec::emulation::{self, Emulation};
+use seleniumbase_rs_codec::measurement::{self, WireMeasurement};
 use seleniumbase_rs_codec::BrowserKind;
 use seleniumbase_rs_mimic::capture_h2::{derive, H1Evidence, H2Evidence, PROBES};
 use seleniumbase_rs_scrape::runtime::capture::record::to_hex;
@@ -19,8 +19,8 @@ fn root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../codec")
 }
 
-fn chrome() -> &'static Emulation {
-    emulation::get(BrowserKind::Chrome, OsType::Macos).expect("Chrome on macOS is measured")
+fn chrome() -> &'static WireMeasurement {
+    measurement::get(BrowserKind::Chrome, OsType::Macos).expect("Chrome on macOS is measured")
 }
 
 fn file() -> serde_json::Value {

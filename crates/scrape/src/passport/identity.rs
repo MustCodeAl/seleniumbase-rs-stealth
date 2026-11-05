@@ -39,7 +39,7 @@ pub const NO_EXPIRY: u64 = u64::MAX;
 
 /// The measured browser whose TLS, HTTP/2 and headers an identity presents.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct EmulationRef {
+pub struct WireMeasurementRef {
     /// Which browser was measured.
     #[serde(with = "browser_kind")]
     pub kind: BrowserKind,
@@ -110,7 +110,7 @@ pub struct StealthIdentity {
     #[serde(serialize_with = "serialize_without_proxy")]
     pub fingerprint: Fingerprint,
     /// The measured browser the wire behaviour comes from.
-    pub emulation: EmulationRef,
+    pub emulation: WireMeasurementRef,
     /// The cookies the identity holds.
     pub cookies: CookieJar,
     /// The client hints each origin asked for with `Accept-CH`.
@@ -251,7 +251,7 @@ impl StealthIdentity {
     /// becomes `null`, for one), or when it cannot be built again without its proxy.
     pub fn new(
         fingerprint: Fingerprint,
-        emulation: EmulationRef,
+        emulation: WireMeasurementRef,
         egress: Option<EgressKey>,
         now: u64,
     ) -> Result<Self, IdentityError> {
@@ -359,7 +359,7 @@ impl StealthIdentity {
     ///
     /// Returns [`IdentityError::EmulationMismatch`] for another major version and
     /// [`IdentityError::Incoherent`] for another browser or operating system.
-    pub fn check_emulation(&self, measured: &EmulationRef) -> Result<(), IdentityError> {
+    pub fn check_emulation(&self, measured: &WireMeasurementRef) -> Result<(), IdentityError> {
         let own = &self.emulation;
         if own.major != measured.major {
             return Err(IdentityError::EmulationMismatch {

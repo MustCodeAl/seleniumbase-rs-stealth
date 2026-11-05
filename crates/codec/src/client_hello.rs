@@ -42,7 +42,7 @@ const MAX_SESSION_ID_LEN: usize = 32;
 /// Name type of a host name in the `server_name` list (RFC 6066).
 const SERVER_NAME_TYPE_HOST: u8 = 0;
 
-/// Extension ids the parser decodes, plus the ones the spec layer reasons about.
+/// TlsExtension ids the parser decodes, plus the ones the spec layer reasons about.
 pub mod ext_id {
     /// `server_name` (RFC 6066).
     pub const SERVER_NAME: u16 = 0x0000;
@@ -90,7 +90,7 @@ pub mod ext_id {
 
 /// One extension as it arrived: its id and the raw bytes of its body.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Extension {
+pub struct TlsExtension {
     /// The extension type.
     pub id: u16,
     /// The body, without the id and length prefix.
@@ -116,7 +116,7 @@ pub struct ClientHello {
     /// Compression methods in wire order.
     pub compression_methods: Vec<u8>,
     /// Every extension in wire order, with its raw body.
-    pub extensions: Vec<Extension>,
+    pub extensions: Vec<TlsExtension>,
     /// The first host name of `server_name`.
     pub sni: Option<String>,
     /// ALPN protocol names in wire order.
@@ -231,7 +231,7 @@ impl ClientHello {
 
     /// The first extension with this id, if the hello carries one.
     #[must_use]
-    pub fn extension(&self, id: u16) -> Option<&Extension> {
+    pub fn extension(&self, id: u16) -> Option<&TlsExtension> {
         self.extensions.iter().find(|extension| extension.id == id)
     }
 
@@ -547,7 +547,7 @@ fn read_extensions(hello: &mut ClientHello, mut block: Reader<'_>) -> Result<(),
         if seen.insert(id) {
             apply_extension(hello, id, data).map_err(|error| tag_extension(id, error))?;
         }
-        hello.extensions.push(Extension {
+        hello.extensions.push(TlsExtension {
             id,
             data: data.to_vec(),
         });

@@ -360,8 +360,8 @@ async fn the_locale_override_reaches_the_tab() {
         .await
         .expect("the overrides apply");
 
-    let locale = mock.calls_to("Emulation.setLocaleOverride");
-    let zone = mock.calls_to("Emulation.setTimezoneOverride");
+    let locale = mock.calls_to("WireMeasurement.setLocaleOverride");
+    let zone = mock.calls_to("WireMeasurement.setTimezoneOverride");
     assert_eq!(locale.len(), 1);
     assert_eq!(locale[0].params, json!({ "locale": "fr-FR" }));
     assert_eq!(zone[0].params, json!({ "timezoneId": "Europe/Paris" }));
@@ -371,7 +371,7 @@ async fn the_locale_override_reaches_the_tab() {
 #[tokio::test]
 async fn a_refused_override_is_a_browser_error() {
     let (page, mock) = mocked_page().await;
-    mock.fail("Emulation.setLocaleOverride", "no such locale");
+    mock.fail("WireMeasurement.setLocaleOverride", "no such locale");
     let placed = EgressLocale::resolve(&StaticGeoResolver, &egress(Some("DE")))
         .await
         .expect("Germany has a locale");

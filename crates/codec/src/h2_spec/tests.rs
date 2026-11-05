@@ -1,4 +1,4 @@
-//! Tests for `H2Spec`: building from captures and strings, and every `SpecError` case.
+//! Tests for `H2Spec`: building from captures and strings, and every `H2SpecError` case.
 
 use super::super::h2_frames::{encode_frame, frame_type};
 use super::*;
@@ -18,7 +18,7 @@ fn client_start(
     settings: &[(u16, u32)],
     window: u32,
     priority: &[u8],
-    order: &[Pseudo],
+    order: &[PseudoHeader],
     request_stream: u32,
 ) -> Vec<u8> {
     let mut bytes = crate::h2_frames::CLIENT_PREFACE.to_vec();
@@ -66,7 +66,7 @@ fn a_capture_is_recorded_field_by_field() {
         &[(1, 4096), (2, 0), (4, 1_048_576)],
         983_041,
         &priority,
-        &Pseudo::ALL,
+        &PseudoHeader::ALL,
         15,
     );
     let spec = H2Spec::from_capture(&bytes).expect("a valid capture");
@@ -82,14 +82,14 @@ fn a_capture_is_recorded_field_by_field() {
             exclusive: false
         })
     );
-    assert_eq!(spec.pseudo_order, Pseudo::ALL);
+    assert_eq!(spec.pseudo_order, PseudoHeader::ALL);
     assert_eq!(spec.initial_stream_id, Some(15));
     assert_eq!(spec.check_reproducible(), Ok(()));
 }
 
 #[test]
 fn a_first_request_on_stream_one_leaves_the_initial_stream_unset() {
-    let bytes = client_start(&[(4, 65_535)], 0, &[], &Pseudo::ALL, 1);
+    let bytes = client_start(&[(4, 65_535)], 0, &[], &PseudoHeader::ALL, 1);
     let spec = H2Spec::from_capture(&bytes).expect("valid");
     assert_eq!(spec.initial_stream_id, None);
     assert_eq!(spec.window_update, 0);
@@ -98,12 +98,12 @@ fn a_first_request_on_stream_one_leaves_the_initial_stream_unset() {
 #[test]
 fn a_capture_keeps_what_the_stack_cannot_send() {
     let settings = [(0x0a0a, 1), (1, 4096), (4, 1_048_576)];
-    let bytes = client_start(&settings, 0, &[], &Pseudo::ALL, 1);
+    let bytes = client_start(&settings, 0, &[], &PseudoHeader::ALL, 1);
     let spec = H2Spec::from_capture(&bytes).expect("recorded, not judged");
     assert_eq!(spec.settings[0], (0x0a0a, 1));
     assert_eq!(
         spec.check_reproducible(),
-        Err(SpecError::UnsupportedSetting(0x0a0a))
+        Err(H2SpecError::UnsupportedSetting(0x0a0a))
     );
     let (clean, dropped) = spec.without_unsupported_settings();
     assert_eq!(dropped, vec![(0x0a0a, 1)]);
@@ -115,21 +115,21 @@ fn a_capture_keeps_what_the_stack_cannot_send() {
 
 #[test]
 fn capture_errors_are_distinguished() {
-    let bytes = client_start(&[(4, 1)], 0, &[], &Pseudo::ALL, 1);
+    let bytes = client_start(&[(4, 1)], 0, &[], &PseudoHeader::ALL, 1);
     for end in 0..bytes.len() {
         assert_eq!(
             H2Spec::from_capture(&bytes[..end]),
-            Err(SpecError::Incomplete),
+            Err(H2SpecError::Incomplete),
             "{end}"
         );
     }
     assert!(matches!(
         H2Spec::from_capture(b"GET / HTTP/1.1\r\n\r\n"),
-        Err(SpecError::Capture(H2CaptureError::BadPreface))
+        Err(H2SpecError::Capture(H2CaptureError::BadPreface))
     ));
-    let two = [Pseudo::Method, Pseudo::Path];
+    let two = [PseudoHeader::Method, PseudoHeader::Path];
     let missing = client_start(&[(4, 1)], 0, &[], &two, 1);
-    assert_eq!(H2Spec::from_capture(&missing), Err(SpecError::PseudoOrder));
+    assert_eq!(H2Spec::from_capture(&missing), Err(H2SpecError::PseudoOrder));
 }
 
 #[test]
@@ -171,10 +171,10 @@ fn overlaying_a_string_keeps_the_headers_priority_of_the_base() {
     assert_eq!(
         over.pseudo_order,
         [
-            Pseudo::Method,
-            Pseudo::Path,
-            Pseudo::Authority,
-            Pseudo::Scheme
+            PseudoHeader::Method,
+            PseudoHeader::Path,
+            PseudoHeader::Authority,
+            PseudoHeader::Scheme
         ]
     );
     let none = base
@@ -192,7 +192,7 @@ fn overlaying_an_unsendable_string_fails_and_leaves_the_base_alone() {
     let before = base.clone();
     assert_eq!(
         base.with_akamai(&akamai("1:1;4:1;2570:5|0|0|m,a,s,p")),
-        Err(SpecError::UnsupportedSetting(2570))
+        Err(H2SpecError::UnsupportedSetting(2570))
     );
     assert_eq!(base, before);
 }
@@ -206,7 +206,7 @@ fn settings_the_stack_cannot_send_are_named() {
         };
         assert_eq!(
             H2Spec::from_akamai(&a),
-            Err(SpecError::UnsupportedSetting(id))
+            Err(H2SpecError::UnsupportedSetting(id))
         );
     }
 }
@@ -217,7 +217,7 @@ fn a_repeated_setting_is_refused_not_dropped() {
         settings: vec![(4, 1), (1, 2), (4, 3)],
         ..akamai(STANDARD)
     };
-    assert_eq!(H2Spec::from_akamai(&a), Err(SpecError::DuplicateSetting(4)));
+    assert_eq!(H2Spec::from_akamai(&a), Err(H2SpecError::DuplicateSetting(4)));
 }
 
 #[test]
@@ -266,7 +266,7 @@ fn setting_values_follow_rfc_9113() {
         };
         assert_eq!(
             H2Spec::from_akamai(&a),
-            Err(SpecError::SettingValue { id, value }),
+            Err(H2SpecError::SettingValue { id, value }),
             "{id}:{value}"
         );
     }
@@ -277,7 +277,7 @@ fn a_setting_the_stack_always_sends_cannot_be_left_out() {
     for text in ["|0|0|m,a,s,p", "1:4096;2:0|0|0|m,a,s,p"] {
         assert_eq!(
             H2Spec::from_akamai(&akamai(text)),
-            Err(SpecError::SettingAlwaysSent(4)),
+            Err(H2SpecError::SettingAlwaysSent(4)),
             "{text}"
         );
     }
@@ -294,17 +294,17 @@ fn the_connection_window_may_not_pass_its_maximum() {
     assert!(with(MAX_WINDOW_UPDATE).is_ok());
     assert_eq!(
         with(MAX_WINDOW_UPDATE + 1),
-        Err(SpecError::WindowUpdate(MAX_WINDOW_UPDATE + 1))
+        Err(H2SpecError::WindowUpdate(MAX_WINDOW_UPDATE + 1))
     );
     assert_eq!(
         with(MAX_STREAM_ID),
-        Err(SpecError::WindowUpdate(MAX_STREAM_ID))
+        Err(H2SpecError::WindowUpdate(MAX_STREAM_ID))
     );
     assert_eq!(MAX_WINDOW_UPDATE, 2_147_418_112);
 }
 
 /// Checks PRIORITY frames alone: the first-request stream id is left at its default.
-fn priority_reason(frames: Vec<PriorityFrame>) -> Result<(), SpecError> {
+fn priority_reason(frames: Vec<PriorityFrame>) -> Result<(), H2SpecError> {
     let spec = H2Spec {
         priority_frames: frames,
         initial_stream_id: None,
@@ -342,7 +342,7 @@ fn priority_frames_the_stack_would_drop_or_that_are_invalid_are_named() {
     for (bad, reason) in cases {
         assert_eq!(
             priority_reason(vec![frame(1, false, 0, 16), bad]),
-            Err(SpecError::Priority {
+            Err(H2SpecError::Priority {
                 stream: bad.stream_id,
                 reason
             }),
@@ -355,7 +355,7 @@ fn priority_frames_the_stack_would_drop_or_that_are_invalid_are_named() {
             frame(5, false, 1, 16),
             frame(3, true, 0, 32)
         ]),
-        Err(SpecError::Priority {
+        Err(H2SpecError::Priority {
             stream: 3,
             reason: "more than one PRIORITY frame for the stream"
         })
@@ -381,7 +381,7 @@ fn too_many_priority_frames_are_refused() {
     over.push(frame(129, false, 0, 16));
     assert_eq!(
         priority_reason(over),
-        Err(SpecError::Priority {
+        Err(H2SpecError::Priority {
             stream: 129,
             reason: "too many PRIORITY frames"
         })
@@ -411,7 +411,7 @@ fn headers_priority_must_be_in_range() {
         });
         assert_eq!(
             s.check_reproducible(),
-            Err(SpecError::HeadersPriority { reason })
+            Err(H2SpecError::HeadersPriority { reason })
         );
     }
 }
@@ -419,8 +419,8 @@ fn headers_priority_must_be_in_range() {
 #[test]
 fn the_pseudo_order_must_be_a_permutation() {
     let mut s = spec(STANDARD);
-    s.pseudo_order = [Pseudo::Method, Pseudo::Method, Pseudo::Scheme, Pseudo::Path];
-    assert_eq!(s.check_reproducible(), Err(SpecError::PseudoOrder));
+    s.pseudo_order = [PseudoHeader::Method, PseudoHeader::Method, PseudoHeader::Scheme, PseudoHeader::Path];
+    assert_eq!(s.check_reproducible(), Err(H2SpecError::PseudoOrder));
 }
 
 #[test]
@@ -434,7 +434,7 @@ fn the_initial_stream_must_be_an_odd_client_stream() {
         s.initial_stream_id = Some(bad);
         assert_eq!(
             s.check_reproducible(),
-            Err(SpecError::InitialStreamId(bad)),
+            Err(H2SpecError::InitialStreamId(bad)),
             "{bad}"
         );
     }
@@ -444,7 +444,7 @@ fn the_initial_stream_must_be_an_odd_client_stream() {
     };
     assert_eq!(
         H2Spec::from_akamai(&near_the_top),
-        Err(SpecError::InitialStreamId(2_147_483_649))
+        Err(H2SpecError::InitialStreamId(2_147_483_649))
     );
 }
 
@@ -456,12 +456,12 @@ fn problems_are_reported_in_a_fixed_order() {
     s.window_update = u32::MAX;
     assert_eq!(
         s.check_reproducible(),
-        Err(SpecError::UnsupportedSetting(7))
+        Err(H2SpecError::UnsupportedSetting(7))
     );
     s.settings.pop();
     assert_eq!(
         s.check_reproducible(),
-        Err(SpecError::WindowUpdate(u32::MAX))
+        Err(H2SpecError::WindowUpdate(u32::MAX))
     );
 }
 
@@ -500,6 +500,6 @@ fn json_round_trip_and_defaults() {
 
 #[test]
 fn the_plan_name_is_an_alias() {
-    let s: Http2Spec = spec(STANDARD);
+    let s: H2Spec = spec(STANDARD);
     assert_eq!(s, spec(STANDARD));
 }

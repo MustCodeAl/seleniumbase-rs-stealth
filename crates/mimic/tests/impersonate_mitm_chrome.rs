@@ -339,7 +339,7 @@ async fn a_page_opens_a_websocket_through_the_proxy_and_receives_its_echo() {
         .next(WITHIN)
         .await
         .expect("the echo site took the handshake");
-    let measured = emulation::get(BrowserKind::Chrome, OsType::Macos).expect("measured");
+    let measured = measurement::get(BrowserKind::Chrome, OsType::Macos).expect("measured");
     let websocket = measured
         .tls_websocket
         .as_ref()

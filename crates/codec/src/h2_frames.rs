@@ -34,7 +34,7 @@ use hpack::{HeaderField, HpackError};
 
 pub use preface::PrefaceReader;
 
-use super::akamai::{Akamai, PriorityFrame, Pseudo, MAX_STREAM_ID};
+use super::akamai::{Akamai, PriorityFrame, PseudoHeader, MAX_STREAM_ID};
 
 /// The 24 bytes every HTTP/2 client connection starts with (RFC 9113, section 3.4).
 pub const CLIENT_PREFACE: &[u8; 24] = b"PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
@@ -280,8 +280,8 @@ impl H2Preface {
     ///
     /// Returns [`H2CaptureError::PseudoOrder`] unless the request has each of `:method`,
     /// `:authority`, `:scheme` and `:path` exactly once, all before the other headers.
-    pub fn pseudo_order(&self) -> Result<[Pseudo; 4], H2CaptureError> {
-        let mut order: Vec<Pseudo> = Vec::with_capacity(Pseudo::ALL.len());
+    pub fn pseudo_order(&self) -> Result<[PseudoHeader; 4], H2CaptureError> {
+        let mut order: Vec<PseudoHeader> = Vec::with_capacity(PseudoHeader::ALL.len());
         let mut regular_seen = false;
         for field in &self.headers {
             if !field.is_pseudo() {
@@ -289,13 +289,13 @@ impl H2Preface {
                 continue;
             }
             let pseudo =
-                Pseudo::from_header_name(&field.name).ok_or(H2CaptureError::PseudoOrder)?;
+                PseudoHeader::from_header_name(&field.name).ok_or(H2CaptureError::PseudoOrder)?;
             if regular_seen || order.contains(&pseudo) {
                 return Err(H2CaptureError::PseudoOrder);
             }
             order.push(pseudo);
         }
-        <[Pseudo; 4]>::try_from(order).map_err(|_short| H2CaptureError::PseudoOrder)
+        <[PseudoHeader; 4]>::try_from(order).map_err(|_short| H2CaptureError::PseudoOrder)
     }
 
     /// The Akamai fingerprint of this connection start.

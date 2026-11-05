@@ -66,7 +66,7 @@ async fn announce_as_measured(page: &Page) -> String {
         .user_agent()
         .to_owned();
     page.execute(
-        "Emulation.setUserAgentOverride",
+        "WireMeasurement.setUserAgentOverride",
         json!({ "userAgent": agent, "acceptLanguage": LANGUAGES, "platform": "MacIntel" }),
     )
     .await

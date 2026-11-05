@@ -5,14 +5,14 @@ use seleniumbase_rs::evasion::fingerprint::OsType;
 use seleniumbase_rs_codec::BrowserKind;
 use seleniumbase_rs_mimic::client::ImpersonateError;
 use seleniumbase_rs_mimic::http_session::{HttpError, HttpOptions, HttpSession};
-use seleniumbase_rs_scrape::passport::identity::{EmulationRef, IdentityError};
+use seleniumbase_rs_scrape::passport::identity::{WireMeasurementRef, IdentityError};
 
 use crate::site::{egress, fingerprint, identity, identity_of, measured_major};
 
 const SPEC: &str = "http://alice:s3cret@127.0.0.1:9";
 
-fn emulation(major: u32, os: OsType) -> EmulationRef {
-    EmulationRef {
+fn emulation(major: u32, os: OsType) -> WireMeasurementRef {
+    WireMeasurementRef {
         kind: BrowserKind::Chrome,
         major,
         os,
@@ -132,7 +132,7 @@ fn a_system_that_was_not_measured_is_refused_not_approximated() {
         assert!(
             matches!(
                 &error,
-                HttpError::Impersonate(ImpersonateError::Emulation(_))
+                HttpError::Impersonate(ImpersonateError::Measurement(_))
             ),
             "{os:?}: {error}"
         );

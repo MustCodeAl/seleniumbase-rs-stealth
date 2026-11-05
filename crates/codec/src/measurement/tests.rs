@@ -2,7 +2,7 @@
 
 use super::{
     for_kind, get, get_version, measured, measured_systems, newest, newest_on, parse_all,
-    source_names, try_measured, Emulation, EmulationError, KnownGap, SpecError,
+    source_names, try_measured, WireMeasurement, WireMeasurementError, KnownGap,
     MAX_MEASURED_JSON_BYTES, SOURCES,
 };
 use crate::tls_spec::KnownGap as TlsKnownGap;
@@ -20,14 +20,14 @@ fn all_kinds() -> [BrowserKind; 1] {
     [guard(BrowserKind::Chrome)]
 }
 
-fn chrome_macos() -> &'static Emulation {
+fn chrome_macos() -> &'static WireMeasurement {
     get(BrowserKind::Chrome, OsType::Macos).expect("Chrome on macOS is measured")
 }
 
 /// The measured Chrome entry with a different major version and matching text.
-fn with_major(major: u32) -> Emulation {
+fn with_major(major: u32) -> WireMeasurement {
     let base = chrome_macos();
-    Emulation {
+    WireMeasurement {
         major,
         full_version: format!("{major}.0.1.2"),
         user_agent: base.user_agent.replace(
@@ -44,8 +44,8 @@ fn chrome_json() -> serde_json::Value {
     serde_json::from_str(text).expect("embedded JSON is valid")
 }
 
-fn parse_value(value: &serde_json::Value) -> Result<Emulation, EmulationError> {
-    Emulation::from_json("test.json", &value.to_string())
+fn parse_value(value: &serde_json::Value) -> Result<WireMeasurement, WireMeasurementError> {
+    WireMeasurement::from_json("test.json", &value.to_string())
 }
 
 #[test]
@@ -137,14 +137,14 @@ fn unmeasured_systems_are_refused_by_name() {
 
         assert_eq!(
             error,
-            EmulationError::NotMeasured {
+            WireMeasurementError::NotMeasured {
                 kind: BrowserKind::Chrome,
                 os
             }
         );
         assert!(error.to_string().contains("has not been measured"));
         assert!(
-            matches!(error, SpecError::NotMeasured { .. }),
+            matches!(error, WireMeasurementError::NotMeasured { .. }),
             "the plan's name for the error works"
         );
     }
@@ -160,7 +160,7 @@ fn a_measured_system_with_another_major_is_a_version_error() {
     let missing = get_version(BrowserKind::Chrome, OsType::Macos, chrome.major + 1);
     assert_eq!(
         missing.expect_err("another major"),
-        EmulationError::VersionNotMeasured {
+        WireMeasurementError::VersionNotMeasured {
             kind: BrowserKind::Chrome,
             major: chrome.major + 1,
             os: OsType::Macos
@@ -169,7 +169,7 @@ fn a_measured_system_with_another_major_is_a_version_error() {
     let unmeasured = get_version(BrowserKind::Chrome, OsType::Windows, chrome.major);
     assert!(matches!(
         unmeasured,
-        Err(EmulationError::NotMeasured { .. })
+        Err(WireMeasurementError::NotMeasured { .. })
     ));
 }
 
@@ -222,7 +222,7 @@ fn two_files_for_one_entry_are_refused() {
 
     assert_eq!(
         error,
-        EmulationError::Duplicate {
+        WireMeasurementError::Duplicate {
             first: (*name).to_owned(),
             second: "copy.json".to_owned()
         }
@@ -241,7 +241,7 @@ fn the_raw_evidence_is_ignored_and_a_stray_key_is_not() {
 
     value["colour"] = serde_json::json!("blue");
     let error = parse_value(&value).expect_err("an unknown key");
-    assert!(matches!(&error, EmulationError::Parse { reason, .. } if reason.contains("colour")));
+    assert!(matches!(&error, WireMeasurementError::Parse { reason, .. } if reason.contains("colour")));
 }
 
 #[test]
@@ -263,14 +263,14 @@ fn a_file_that_contradicts_itself_is_refused() {
     value["full_version"] = serde_json::json!("1.0.0.0");
     assert!(matches!(
         parse_value(&value),
-        Err(EmulationError::Inconsistent { reason, .. }) if reason.contains("full_version")
+        Err(WireMeasurementError::Inconsistent { reason, .. }) if reason.contains("full_version")
     ));
 
     let mut value = chrome_json();
     value["user_agent"] = serde_json::json!("Mozilla/5.0 Gecko/20100101 Firefox/130.0");
     assert!(matches!(
         parse_value(&value),
-        Err(EmulationError::Inconsistent { reason, .. }) if reason.contains("user_agent")
+        Err(WireMeasurementError::Inconsistent { reason, .. }) if reason.contains("user_agent")
     ));
 }
 
@@ -280,18 +280,18 @@ fn an_unknown_browser_or_a_missing_field_is_a_parse_error() {
     value["kind"] = serde_json::json!("Safari");
     assert!(matches!(
         parse_value(&value),
-        Err(EmulationError::Parse { .. })
+        Err(WireMeasurementError::Parse { .. })
     ));
 
     let mut value = chrome_json();
     value.as_object_mut().expect("an object").remove("tls");
     assert!(matches!(
         parse_value(&value),
-        Err(EmulationError::Parse { reason, .. }) if reason.contains("tls")
+        Err(WireMeasurementError::Parse { reason, .. }) if reason.contains("tls")
     ));
     assert!(matches!(
-        Emulation::from_json("junk.json", "not json"),
-        Err(EmulationError::Parse { .. })
+        WireMeasurement::from_json("junk.json", "not json"),
+        Err(WireMeasurementError::Parse { .. })
     ));
 }
 
@@ -305,7 +305,7 @@ fn an_invalid_header_spec_is_refused_with_the_file_name() {
     let error = parse_value(&value).expect_err("a repeated header");
 
     assert!(
-        matches!(&error, EmulationError::Headers { name, .. } if name == "test.json"),
+        matches!(&error, WireMeasurementError::Headers { name, .. } if name == "test.json"),
         "{error}"
     );
 }
@@ -315,8 +315,8 @@ fn a_huge_file_is_refused_before_it_is_parsed() {
     let huge = " ".repeat(MAX_MEASURED_JSON_BYTES + 1);
 
     assert_eq!(
-        Emulation::from_json("huge.json", &huge),
-        Err(EmulationError::TooLarge {
+        WireMeasurement::from_json("huge.json", &huge),
+        Err(WireMeasurementError::TooLarge {
             name: "huge.json".to_owned()
         })
     );
@@ -327,7 +327,7 @@ fn an_entry_survives_a_trip_through_json() {
     let entry = chrome_macos();
 
     let text = entry.to_json().expect("serializes");
-    let again = Emulation::from_json("again.json", &text).expect("parses again");
+    let again = WireMeasurement::from_json("again.json", &text).expect("parses again");
 
     assert_eq!(&again, entry);
     assert!(!text.contains("\"capture\""), "the evidence is not written");

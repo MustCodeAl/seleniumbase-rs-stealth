@@ -313,7 +313,7 @@ fn client(
 /// The measured WebSocket hello of the profile's browser and system, without the known gaps,
 /// when one is measured for the profile's major version.
 pub(super) fn websocket_spec(profile: &ImpersonationProfile) -> Option<TlsSpec> {
-    let entry = emulation::get(profile.kind(), profile.os()).ok()?;
+    let entry = measurement::get(profile.kind(), profile.os()).ok()?;
     if entry.major != profile.major() {
         return None;
     }

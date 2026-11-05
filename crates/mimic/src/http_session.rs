@@ -89,7 +89,7 @@ use crate::client::{ImpersonationProfile, WireProtocol};
 use seleniumbase_rs_scrape::egress::route::{EgressKey, EgressRef};
 use seleniumbase_rs_scrape::jar::store::CookieJar;
 use seleniumbase_rs_scrape::ledger::events::{EventSink, ScraperEvent};
-use seleniumbase_rs_scrape::passport::identity::{EmulationRef, IdentityError, StealthIdentity};
+use seleniumbase_rs_scrape::passport::identity::{WireMeasurementRef, IdentityError, StealthIdentity};
 
 /// The most origins whose protocol is remembered. Past it the table starts over.
 const MAX_REMEMBERED_ORIGINS: usize = 1024;
@@ -173,7 +173,7 @@ impl HttpSession {
         identity.check_egress(egress.as_ref().map(EgressRef::key))?;
         let profile = ImpersonationProfile::from_fingerprint(&identity.fingerprint)?;
         identity
-            .check_emulation(&EmulationRef {
+            .check_emulation(&WireMeasurementRef {
                 kind: profile.kind(),
                 major: profile.major(),
                 os: profile.os(),

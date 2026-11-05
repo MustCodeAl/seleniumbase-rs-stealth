@@ -9,7 +9,7 @@ use seleniumbase_rs_scrape::challenge::mitigation::Mode;
 use seleniumbase_rs_scrape::egress::route::{EgressKey, EgressRef};
 use seleniumbase_rs_scrape::error::ScrapeError;
 use seleniumbase_rs_scrape::ledger::events::ScraperEvent;
-use seleniumbase_rs_scrape::passport::identity::{EmulationRef, StealthIdentity};
+use seleniumbase_rs_scrape::passport::identity::{WireMeasurementRef, StealthIdentity};
 use seleniumbase_rs_scrape::runtime::cdp::EgressLocale;
 
 /// A fresh persona for `os` and `seed` that claims the Chrome `major`, in the locale of `placed`
@@ -36,7 +36,7 @@ pub(super) fn check_identity(
     identity.verify()?;
     identity.check_egress(egress)?;
     let profile = ImpersonationProfile::from_fingerprint(&identity.fingerprint)?;
-    identity.check_emulation(&EmulationRef {
+    identity.check_emulation(&WireMeasurementRef {
         kind: profile.kind(),
         major: profile.major(),
         os: profile.os(),
@@ -181,8 +181,8 @@ impl StealthSession {
     }
 
     /// The measured browser the session presents.
-    fn emulation(&self) -> EmulationRef {
-        EmulationRef {
+    fn emulation(&self) -> WireMeasurementRef {
+        WireMeasurementRef {
             kind: BrowserKind::Chrome,
             major: self.persona.major,
             os: self.persona.os,
@@ -243,13 +243,13 @@ mod tests {
     use seleniumbase_rs_scrape::passport::identity::IdentityError;
 
     fn measured() -> u32 {
-        emulation::get(BrowserKind::Chrome, OsType::Macos)
+        measurement::get(BrowserKind::Chrome, OsType::Macos)
             .expect("macOS is measured")
             .major
     }
 
-    fn emulation_of(major: u32) -> EmulationRef {
-        EmulationRef {
+    fn emulation_of(major: u32) -> WireMeasurementRef {
+        WireMeasurementRef {
             kind: BrowserKind::Chrome,
             major,
             os: OsType::Macos,

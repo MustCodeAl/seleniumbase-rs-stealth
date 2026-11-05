@@ -28,7 +28,7 @@ const PATIENT_SOLVE: Duration = Duration::from_secs(20);
 
 /// The Chrome major the measured TLS and HTTP/2 of macOS belong to.
 pub fn measured_major() -> u32 {
-    emulation::get(BrowserKind::Chrome, OsType::Macos)
+    measurement::get(BrowserKind::Chrome, OsType::Macos)
         .expect("macOS is measured")
         .major
 }

@@ -10,7 +10,7 @@ use base64::engine::general_purpose::STANDARD;
 use base64::Engine as _;
 use futures_util::{SinkExt as _, StreamExt as _};
 use seleniumbase_rs::evasion::fingerprint::OsType;
-use seleniumbase_rs_codec::emulation::{self, Emulation};
+use seleniumbase_rs_codec::measurement::{self, WireMeasurement};
 use seleniumbase_rs_codec::ja4::{Ja4, Ja4AField};
 use seleniumbase_rs_codec::BrowserKind;
 use seleniumbase_rs_mimic::mitm::{MitmOptions, MitmProxy};
@@ -164,8 +164,8 @@ async fn an_independent_websocket_client_completes_the_handshake_through_the_pro
     socket.close(None).await.expect("closes");
 }
 
-fn chrome() -> &'static Emulation {
-    emulation::get(BrowserKind::Chrome, OsType::Macos).expect("Chrome on macOS is measured")
+fn chrome() -> &'static WireMeasurement {
+    measurement::get(BrowserKind::Chrome, OsType::Macos).expect("Chrome on macOS is measured")
 }
 
 #[tokio::test]

@@ -32,7 +32,7 @@ use wreq::tls::{
     AlpnProtocol, AlpsProtocol, ExtensionType, KeyShare, TlsOptions, TlsOptionsBuilder, TlsVersion,
 };
 
-use seleniumbase_rs_codec::akamai::{PriorityFrame, Pseudo, MAX_STREAM_ID};
+use seleniumbase_rs_codec::akamai::{PriorityFrame, PseudoHeader, MAX_STREAM_ID};
 use seleniumbase_rs_codec::client_hello::ext_id;
 use seleniumbase_rs_codec::h2_spec::{setting_id, H2Spec, INITIAL_CONNECTION_WINDOW};
 use seleniumbase_rs_codec::ids::{
@@ -656,12 +656,12 @@ fn priority(frame: &PriorityFrame) -> Result<Priority, ConvertError> {
 }
 
 /// The wreq pseudo-header id of a pseudo-header.
-fn pseudo_id(pseudo: Pseudo) -> PseudoId {
+fn pseudo_id(pseudo: PseudoHeader) -> PseudoId {
     match pseudo {
-        Pseudo::Method => PseudoId::Method,
-        Pseudo::Authority => PseudoId::Authority,
-        Pseudo::Scheme => PseudoId::Scheme,
-        Pseudo::Path => PseudoId::Path,
+        PseudoHeader::Method => PseudoId::Method,
+        PseudoHeader::Authority => PseudoId::Authority,
+        PseudoHeader::Scheme => PseudoId::Scheme,
+        PseudoHeader::Path => PseudoId::Path,
     }
 }
 

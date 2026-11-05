@@ -17,8 +17,8 @@ use std::fs;
 use std::path::Path;
 
 use seleniumbase_rs::evasion::fingerprint::OsType;
-use seleniumbase_rs_codec::akamai::{Akamai, Pseudo};
-use seleniumbase_rs_codec::emulation::{self, Emulation};
+use seleniumbase_rs_codec::akamai::{Akamai, PseudoHeader};
+use seleniumbase_rs_codec::measurement::{self, WireMeasurement};
 use seleniumbase_rs_codec::BrowserKind;
 use seleniumbase_rs_mimic::capture_h2::{derive, measure_and_write, MeasuredDoc, Passes, PROBES};
 use seleniumbase_rs_scrape::runtime::capture::args::ToolArgs;
@@ -35,7 +35,7 @@ async fn chrome_http2_and_headers_have_the_chrome_shape_and_the_json_round_trips
     ) {
         return;
     }
-    let committed = emulation::get(BrowserKind::Chrome, OsType::Macos).expect("measured");
+    let committed = measurement::get(BrowserKind::Chrome, OsType::Macos).expect("measured");
     let dir = tempfile::tempdir().expect("a temporary directory");
     let name = format!("{}.json", committed.file_stem());
     fs::copy(
@@ -59,10 +59,10 @@ async fn chrome_http2_and_headers_have_the_chrome_shape_and_the_json_round_trips
     assert_eq!(
         akamai.pseudo_order,
         [
-            Pseudo::Method,
-            Pseudo::Authority,
-            Pseudo::Scheme,
-            Pseudo::Path
+            PseudoHeader::Method,
+            PseudoHeader::Authority,
+            PseudoHeader::Scheme,
+            PseudoHeader::Path
         ],
         "Chrome orders its pseudo-headers m,a,s,p: {akamai}"
     );
@@ -100,8 +100,8 @@ async fn chrome_http2_and_headers_have_the_chrome_shape_and_the_json_round_trips
     );
     assert_eq!(derive(&h2, &h1).expect("derives again"), *derived);
     let text = fs::read_to_string(&report.path).expect("the written file");
-    let entry = Emulation::from_json(&name, &text).expect("the written file parses");
-    let again = Emulation::from_json(&name, &entry.to_json().expect("serializes"))
+    let entry = WireMeasurement::from_json(&name, &text).expect("the written file parses");
+    let again = WireMeasurement::from_json(&name, &entry.to_json().expect("serializes"))
         .expect("the serialization parses");
     assert_eq!(again, entry, "the measured JSON round-trips");
     assert_eq!(entry.http2.as_ref(), Some(&derived.http2));

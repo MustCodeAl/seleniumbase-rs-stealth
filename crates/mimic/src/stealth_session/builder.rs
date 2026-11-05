@@ -23,7 +23,7 @@ use seleniumbase_rs_scrape::egress::pool::{ProxyPool, RotationStrategy};
 use seleniumbase_rs_scrape::egress::route::EgressRef;
 use seleniumbase_rs_scrape::ledger::events::EventSink;
 use seleniumbase_rs_scrape::ledger::state::{InMemoryStateStore, StateStore};
-use seleniumbase_rs_scrape::passport::identity::{EmulationRef, StealthIdentity};
+use seleniumbase_rs_scrape::passport::identity::{WireMeasurementRef, StealthIdentity};
 use seleniumbase_rs_scrape::passport::policy::SessionPolicy;
 use seleniumbase_rs_scrape::runtime::browser_scraper::{
     BrowserLauncher, ChromeLauncher, DEFAULT_SOLVE_TIMEOUT,
@@ -416,7 +416,7 @@ async fn start_identity(
             .localize(&fingerprint)?;
     }
     let os = fingerprint.os_type();
-    let emulation = EmulationRef {
+    let emulation = WireMeasurementRef {
         kind: BrowserKind::Chrome,
         major: measured_major(os)?,
         os,
@@ -431,7 +431,7 @@ async fn start_identity(
 
 /// The Chrome major the measured TLS and HTTP/2 of `os` belong to.
 fn measured_major(os: OsType) -> Result<u32, StealthError> {
-    Ok(emulation::get(BrowserKind::Chrome, os)
+    Ok(measurement::get(BrowserKind::Chrome, os)
         .map_err(crate::client::ImpersonateError::from)?
         .major)
 }

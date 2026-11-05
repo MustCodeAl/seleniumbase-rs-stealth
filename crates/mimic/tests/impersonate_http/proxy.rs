@@ -4,7 +4,7 @@
 use seleniumbase_rs::evasion::fingerprint::OsType;
 use seleniumbase_rs_codec::BrowserKind;
 use seleniumbase_rs_mimic::http_session::{HttpError, HttpOptions, HttpSession};
-use seleniumbase_rs_scrape::passport::identity::EmulationRef;
+use seleniumbase_rs_scrape::passport::identity::WireMeasurementRef;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 
@@ -38,7 +38,7 @@ fn session_behind(spec: &str) -> HttpSession {
     let major = measured_major();
     let base = identity_of(
         fingerprint(OsType::Macos, major),
-        EmulationRef {
+        WireMeasurementRef {
             kind: BrowserKind::Chrome,
             major,
             os: OsType::Macos,
@@ -98,7 +98,7 @@ async fn the_bypass_list_sends_a_host_around_the_proxy() {
     let major = measured_major();
     let base = identity_of(
         fingerprint(OsType::Macos, major),
-        EmulationRef {
+        WireMeasurementRef {
             kind: BrowserKind::Chrome,
             major,
             os: OsType::Macos,

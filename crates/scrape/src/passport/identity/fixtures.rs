@@ -2,7 +2,7 @@
 
 use url::Url;
 
-use super::{EmulationRef, StealthIdentity};
+use super::{WireMeasurementRef, StealthIdentity};
 use crate::egress::geo::CountryCode;
 use crate::egress::route::EgressKey;
 use crate::jar::store::StoreOutcome;
@@ -21,8 +21,8 @@ pub(crate) fn fingerprint() -> Fingerprint {
 }
 
 /// The emulation the sample identity was measured against.
-pub(crate) fn emulation() -> EmulationRef {
-    EmulationRef {
+pub(crate) fn emulation() -> WireMeasurementRef {
+    WireMeasurementRef {
         kind: BrowserKind::Chrome,
         major: MAJOR,
         os: OsType::Macos,

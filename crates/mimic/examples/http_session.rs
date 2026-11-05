@@ -30,7 +30,7 @@ use seleniumbase_rs::Fingerprint;
 use seleniumbase_rs_codec::emulation;
 use seleniumbase_rs_codec::BrowserKind;
 use seleniumbase_rs_mimic::HttpSession;
-use seleniumbase_rs_scrape::EmulationRef;
+use seleniumbase_rs_scrape::WireMeasurementRef;
 use seleniumbase_rs_scrape::StealthIdentity;
 use stealth_support::shop::Shop;
 
@@ -63,7 +63,7 @@ async fn run() -> Result<(), Box<dyn Error>> {
     // An identity that claims the measured Chrome: its fingerprint becomes the user agent, the
     // client hints and the languages of every request.
     let fingerprint = Fingerprint::randomized_with_major(os, SEED, major);
-    let emulation_ref = EmulationRef {
+    let emulation_ref = WireMeasurementRef {
         kind: BrowserKind::Chrome,
         major,
         os,
@@ -105,7 +105,7 @@ async fn run() -> Result<(), Box<dyn Error>> {
         println!("  user agent: {agent}");
     }
 
-    let measured = emulation::get(BrowserKind::Chrome, os)?.tls.ja4();
+    let measured = measurement::get(BrowserKind::Chrome, os)?.tls.ja4();
     println!("\nJA4 of the measured Chrome {major} (the client cannot send all of it): {measured}");
     println!(
         "left out of the profile because BoringSSL cannot send it: {:?}",

@@ -5,7 +5,7 @@ use super::{BrowserScraper, Current};
 use crate::egress::route::EgressRef;
 use crate::error::ScrapeError;
 use crate::ledger::events::ScraperEvent;
-use crate::passport::identity::{EmulationRef, StealthIdentity};
+use crate::passport::identity::{WireMeasurementRef, StealthIdentity};
 use crate::runtime::cdp::{self, EgressLocale};
 use seleniumbase_rs::evasion::fingerprint::Fingerprint;
 use seleniumbase_rs::evasion::humanize::Rng;
@@ -220,13 +220,13 @@ impl BrowserScraper {
 
     /// The measured browser an identity is for: the Chrome that is running, on this machine's
     /// operating system.
-    fn emulation(&self) -> EmulationRef {
+    fn emulation(&self) -> WireMeasurementRef {
         let major = self
             .persona
             .major
             .or_else(|| claimed_major(&self.persona.fingerprint))
             .unwrap_or_default();
-        EmulationRef {
+        WireMeasurementRef {
             kind: BrowserKind::Chrome,
             major,
             os: host_os(),

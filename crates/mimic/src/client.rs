@@ -27,7 +27,7 @@
 //! # What is measured, and what is refused
 //!
 //! Only a browser and system pair with a capture exists
-//! ([`NotMeasured`](ImpersonateError::Emulation) otherwise); there is no fallback to another
+//! ([`NotMeasured`](ImpersonateError::Measurement) otherwise); there is no fallback to another
 //! system's values. [`ImpersonationProfile::custom`] layers caller-supplied inputs over a measured
 //! base: a JA3, a `JA4_r` or `JA4_ro`, a peetprint, signature algorithms, an Akamai HTTP/2
 //! fingerprint, header names, order and values, the `User-Agent`, `Accept-Language` and the
@@ -53,14 +53,14 @@ use super::convert::{self, ConvertError};
 use seleniumbase_rs::evasion::fingerprint::{BrowserType, Fingerprint, OsType};
 use seleniumbase_rs_codec::akamai::AkamaiError;
 use seleniumbase_rs_codec::client_hello::ext_id;
-use seleniumbase_rs_codec::emulation::{self, Emulation as Measured, EmulationError, KnownGap};
-use seleniumbase_rs_codec::h2_spec::{H2Spec, SpecError as H2SpecError};
+use seleniumbase_rs_codec::measurement::{self, WireMeasurement as Measured, WireMeasurementError, KnownGap};
+use seleniumbase_rs_codec::h2_spec::{H2Spec, H2SpecError};
 use seleniumbase_rs_codec::header_spec::{
-    HeaderIdentity, HeaderSpec, HeaderSpecError, RequestShape,
+    ClientHeaders, HeaderSpec, HeaderSpecError, RequestShape,
 };
 use seleniumbase_rs_codec::ja3::{Ja3Error, PeetprintError};
 use seleniumbase_rs_codec::ja4::Ja4Error;
-use seleniumbase_rs_codec::tls_spec::{SpecError as TlsSpecError, TlsSpec};
+use seleniumbase_rs_codec::tls_spec::{TlsSpecError, TlsSpec};
 use seleniumbase_rs_codec::BrowserKind;
 use seleniumbase_rs_scrape::egress::geo::{Locale, LocaleExt};
 
@@ -102,7 +102,7 @@ pub enum ImpersonateError {
     /// The measured tables have no entry for the browser and system, or are broken. This is the
     /// plan's `SpecError::NotMeasured`.
     #[error(transparent)]
-    Emulation(#[from] EmulationError),
+    Measurement(#[from] WireMeasurementError),
     /// A header spec or a header value is invalid.
     #[error("invalid headers: {0}")]
     Headers(#[from] HeaderSpecError),
@@ -171,7 +171,7 @@ pub struct ImpersonationProfile {
     /// The header lists.
     headers: HeaderSpec,
     /// The values of the identity placeholders.
-    identity: HeaderIdentity,
+    identity: ClientHeaders,
     /// What the measured hello has and `BoringSSL` cannot send.
     known_gaps: Vec<KnownGap>,
 }
@@ -181,11 +181,11 @@ impl ImpersonationProfile {
     ///
     /// # Errors
     ///
-    /// Returns [`ImpersonateError::Emulation`] when the embedded tables are broken or hold no
+    /// Returns [`ImpersonateError::Measurement`] when the embedded tables are broken or hold no
     /// entry for `kind`, and the errors of [`ImpersonationProfile::from_measured`].
     pub fn measured(kind: BrowserKind) -> Result<Self, ImpersonateError> {
-        let table = emulation::try_measured().map_err(Clone::clone)?;
-        let entry = emulation::newest(table, kind).ok_or(ImpersonateError::Incomplete {
+        let table = measurement::try_measured().map_err(Clone::clone)?;
+        let entry = measurement::newest(table, kind).ok_or(ImpersonateError::Incomplete {
             what: "measurement for this browser",
         })?;
         Self::from_measured(entry)
@@ -195,10 +195,10 @@ impl ImpersonationProfile {
     ///
     /// # Errors
     ///
-    /// Returns [`ImpersonateError::Emulation`] with `NotMeasured` when the pair has no capture,
+    /// Returns [`ImpersonateError::Measurement`] with `NotMeasured` when the pair has no capture,
     /// and the errors of [`ImpersonationProfile::from_measured`].
     pub fn for_system(kind: BrowserKind, os: OsType) -> Result<Self, ImpersonateError> {
-        Self::from_measured(emulation::get(kind, os)?)
+        Self::from_measured(measurement::get(kind, os)?)
     }
 
     /// A profile from one measured entry.
@@ -248,7 +248,7 @@ impl ImpersonationProfile {
     /// Returns [`ImpersonateError::Incomplete`] when nothing is measured, and the errors of
     /// [`ImpersonationProfile::from_fingerprint`].
     pub fn random(seed: u64) -> Result<Self, ImpersonateError> {
-        let table = emulation::try_measured().map_err(Clone::clone)?;
+        let table = measurement::try_measured().map_err(Clone::clone)?;
         let count = u64::try_from(table.len()).unwrap_or(u64::MAX).max(1);
         let index = usize::try_from(seed % count).unwrap_or_default();
         let entry = table.get(index).ok_or(ImpersonateError::Incomplete {
@@ -263,7 +263,7 @@ impl ImpersonationProfile {
     ///
     /// # Errors
     ///
-    /// Returns [`ImpersonateError::Emulation`] with `NotMeasured` for a system with no capture,
+    /// Returns [`ImpersonateError::Measurement`] with `NotMeasured` for a system with no capture,
     /// [`ImpersonateError::Fingerprint`] for a fingerprint that is not Chromium or has no user
     /// agent, and [`ImpersonateError::VersionMismatch`] when the user agent claims a Chrome major
     /// other than the measured one: the TLS of Chrome 155 under a Chrome 153 user agent is a
@@ -274,7 +274,7 @@ impl ImpersonationProfile {
                 "only Chromium identities have a measured TLS and HTTP/2",
             ));
         }
-        let entry = emulation::get(BrowserKind::Chrome, fingerprint.os_type())?;
+        let entry = measurement::get(BrowserKind::Chrome, fingerprint.os_type())?;
         let user_agent = fingerprint
             .user_agent()
             .as_str()
@@ -384,7 +384,7 @@ impl ImpersonationProfile {
 
     /// The values of the identity placeholders (a cookie is never part of it).
     #[must_use]
-    pub fn identity(&self) -> &HeaderIdentity {
+    pub fn identity(&self) -> &ClientHeaders {
         &self.identity
     }
 

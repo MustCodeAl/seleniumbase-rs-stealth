@@ -30,7 +30,7 @@ fn host_os() -> OsType {
 /// Whether `test` can run on this machine. When it cannot, prints why and returns `false`; the
 /// test then returns.
 pub fn measured_or_skip(test: &str) -> bool {
-    match emulation::get(BrowserKind::Chrome, host_os()) {
+    match measurement::get(BrowserKind::Chrome, host_os()) {
         Ok(_) => true,
         Err(error) => {
             eprintln!(

@@ -5,10 +5,10 @@ use super::{ImpersonateError, ImpersonationProfile};
 use crate::convert;
 use seleniumbase_rs::evasion::fingerprint::{ClientHints, OsType};
 use seleniumbase_rs_codec::akamai::Akamai;
-use seleniumbase_rs_codec::header_spec::{HeaderSpec, HeaderValue, RequestShape};
+use seleniumbase_rs_codec::header_spec::{HeaderSpec, HeaderSource, RequestShape};
 use seleniumbase_rs_codec::ja3::{Ja3, Peetprint};
 use seleniumbase_rs_codec::ja4::{Ja4Order, Ja4Raw};
-use seleniumbase_rs_codec::tls_spec::{SpecError as TlsSpecError, TlsSpec};
+use seleniumbase_rs_codec::tls_spec::{TlsSpecError, TlsSpec};
 use seleniumbase_rs_codec::BrowserKind;
 
 /// One change to the header lists, applied in the order it was asked for.
@@ -18,7 +18,7 @@ enum HeaderEdit {
     Set {
         shape: RequestShape,
         name: String,
-        value: HeaderValue,
+        value: HeaderSource,
     },
     /// Removes a header.
     Remove { shape: RequestShape, name: String },
@@ -275,7 +275,7 @@ impl CustomProfileBuilder {
         mut self,
         shape: RequestShape,
         name: impl Into<String>,
-        value: HeaderValue,
+        value: HeaderSource,
     ) -> Self {
         self.header_edits.push(HeaderEdit::Set {
             shape,
@@ -377,7 +377,7 @@ fn reorder(
     names: &[String],
 ) -> Result<HeaderSpec, ImpersonateError> {
     let list = spec.headers(shape).to_vec();
-    let mut ordered: Vec<(String, HeaderValue)> = Vec::with_capacity(list.len());
+    let mut ordered: Vec<(String, HeaderSource)> = Vec::with_capacity(list.len());
     for wanted in names {
         let entry = list
             .iter()

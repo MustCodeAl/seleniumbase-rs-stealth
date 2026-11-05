@@ -5,7 +5,7 @@
 
 use seleniumbase_rs::evasion::fingerprint::OsType;
 use seleniumbase_rs_codec::client_hello::{ext_id, is_grease, without_grease, ClientHello};
-use seleniumbase_rs_codec::emulation::{self, Emulation, KnownGap};
+use seleniumbase_rs_codec::measurement::{self, WireMeasurement, KnownGap};
 use seleniumbase_rs_codec::h2_spec::H2Spec;
 use seleniumbase_rs_codec::header_spec::RequestShape;
 use seleniumbase_rs_codec::ja3::peetprint::Slot;
@@ -20,8 +20,8 @@ use crate::exchange::{exchange, exchange_with, Via};
 /// The measured file, including the evidence its specs were derived from.
 const CHROME_FILE: &str = include_str!("../../../codec/src/measured/chrome-155-macos.json");
 
-fn chrome() -> &'static Emulation {
-    emulation::get(BrowserKind::Chrome, OsType::Macos).expect("Chrome on macOS is measured")
+fn chrome() -> &'static WireMeasurement {
+    measurement::get(BrowserKind::Chrome, OsType::Macos).expect("Chrome on macOS is measured")
 }
 
 fn profile() -> ImpersonationProfile {
@@ -41,7 +41,7 @@ fn comparable(hello: &ClientHello, permute: bool) -> TlsSpec {
 }
 
 /// The measured spec as the client can send it, with its extensions sorted to match [`comparable`].
-fn expected_on_the_wire(measured: &Emulation) -> TlsSpec {
+fn expected_on_the_wire(measured: &WireMeasurement) -> TlsSpec {
     let mut spec = measured
         .tls
         .without_known_gaps(&measured.provenance.known_gaps);
@@ -50,7 +50,7 @@ fn expected_on_the_wire(measured: &Emulation) -> TlsSpec {
 }
 
 /// Fails with a message that says which known gap closed, when one did.
-fn assert_no_gap_closed(hello: &ClientHello, measured: &Emulation) {
+fn assert_no_gap_closed(hello: &ClientHello, measured: &WireMeasurement) {
     for gap in &measured.provenance.known_gaps {
         match gap {
             KnownGap::TrustAnchorsExtension => assert!(

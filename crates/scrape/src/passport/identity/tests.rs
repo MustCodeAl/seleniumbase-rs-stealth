@@ -181,11 +181,11 @@ fn the_emulation_reads_and_writes_a_plain_browser_name() {
     let json = serde_json::to_value(emulation()).expect("serializes");
     assert_eq!(json["kind"], "chrome");
     assert_eq!(json["major"], MAJOR);
-    let back: EmulationRef = serde_json::from_value(json.clone()).expect("reads");
+    let back: WireMeasurementRef = serde_json::from_value(json.clone()).expect("reads");
     assert_eq!(back, emulation());
     let mut unknown = json;
     unknown["kind"] = serde_json::json!("netscape");
-    assert!(serde_json::from_value::<EmulationRef>(unknown).is_err());
+    assert!(serde_json::from_value::<WireMeasurementRef>(unknown).is_err());
 }
 
 #[test]
@@ -448,7 +448,7 @@ fn an_unknown_country_matches_but_two_known_ones_must_agree() {
 fn the_emulation_check_names_the_majors() {
     let made = identity();
     assert_eq!(made.check_emulation(&emulation()), Ok(()));
-    let newer = EmulationRef {
+    let newer = WireMeasurementRef {
         major: MAJOR + 1,
         ..emulation()
     };
@@ -459,7 +459,7 @@ fn the_emulation_check_names_the_majors() {
             measured: MAJOR + 1
         })
     );
-    let other_os = EmulationRef {
+    let other_os = WireMeasurementRef {
         os: OsType::Windows,
         ..emulation()
     };

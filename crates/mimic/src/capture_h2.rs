@@ -15,7 +15,7 @@
 //!
 //! The probes are a navigation, a `fetch`, an image, a script and a stylesheet ([`probes`]).
 //! [`assemble::derive`] turns the evidence into an
-//! [`Http2Spec`](seleniumbase_rs_codec::h2_spec::Http2Spec) and a
+//! [`H2Spec`](seleniumbase_rs_codec::h2_spec::H2Spec) and a
 //! [`HeaderSpec`](seleniumbase_rs_codec::header_spec::HeaderSpec). [`store::MeasuredDoc`] adds them to the
 //! measured JSON of the browser, next to the TLS and client-hint measurements, together with the
 //! evidence they were derived from, and the raw HTTP/2 bytes become fixtures under
@@ -48,7 +48,7 @@ pub use store::{write_h2_fixtures, MeasuredDoc};
 
 use crate::tls_server::TlsServerError;
 use seleniumbase_rs_codec::h2_frames::H2CaptureError;
-use seleniumbase_rs_codec::h2_spec::SpecError;
+use seleniumbase_rs_codec::h2_spec::H2SpecError;
 use seleniumbase_rs_codec::header_spec::HeaderSpecError;
 use seleniumbase_rs_codec::BrowserKind;
 use seleniumbase_rs_scrape::runtime::capture::args::ToolArgs;
@@ -81,7 +81,7 @@ pub enum CaptureH2Error {
     H2(#[from] H2CaptureError),
     /// The HTTP/2 spec could not be built from the capture.
     #[error("the HTTP/2 spec cannot be built: {0}")]
-    Spec(#[from] SpecError),
+    Spec(#[from] H2SpecError),
     /// The header spec could not be built from the capture.
     #[error("the header spec cannot be built: {0}")]
     Headers(#[from] HeaderSpecError),

@@ -12,8 +12,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use seleniumbase_rs::evasion::fingerprint::OsType;
-use seleniumbase_rs_codec::akamai::{Akamai, Pseudo};
-use seleniumbase_rs_codec::emulation::{self, source_names};
+use seleniumbase_rs_codec::akamai::{Akamai, PseudoHeader};
+use seleniumbase_rs_codec::measurement::{self, source_names};
 use seleniumbase_rs_codec::h2_spec::H2Spec;
 use seleniumbase_rs_codec::BrowserKind;
 
@@ -55,7 +55,7 @@ fn every_measured_file_is_embedded_and_every_embedded_file_exists() {
 
 #[test]
 fn the_file_name_matches_the_entry_it_holds() {
-    for entry in emulation::measured() {
+    for entry in measurement::measured() {
         let file = format!("{}.json", entry.file_stem());
 
         assert!(
@@ -68,8 +68,8 @@ fn the_file_name_matches_the_entry_it_holds() {
     }
 }
 
-fn chrome() -> &'static emulation::Emulation {
-    emulation::get(BrowserKind::Chrome, OsType::Macos).expect("Chrome on macOS is measured")
+fn chrome() -> &'static measurement::WireMeasurement {
+    measurement::get(BrowserKind::Chrome, OsType::Macos).expect("Chrome on macOS is measured")
 }
 
 fn fixture(name: &str) -> Vec<u8> {
@@ -85,10 +85,10 @@ fn the_http2_spec_is_measured_and_has_the_chrome_shape() {
     assert_eq!(
         spec.pseudo_order,
         [
-            Pseudo::Method,
-            Pseudo::Authority,
-            Pseudo::Scheme,
-            Pseudo::Path
+            PseudoHeader::Method,
+            PseudoHeader::Authority,
+            PseudoHeader::Scheme,
+            PseudoHeader::Path
         ],
         "Chrome sends :method, :authority, :scheme, :path"
     );

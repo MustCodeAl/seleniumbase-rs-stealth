@@ -6,7 +6,7 @@
 //! looked up by [`BrowserKind`] and [`OsType`].
 //!
 //! Only what was measured exists. [`get`] answers an unmeasured browser and system pair with
-//! [`EmulationError::NotMeasured`]; there is no fallback to a different system's values, because
+//! [`WireMeasurementError::NotMeasured`]; there is no fallback to a different system's values, because
 //! a made-up persona is worse than a refusal. Today that is Chrome on macOS only: Windows,
 //! Linux, Android, iOS and Safari stay refused until someone runs the capture tools there.
 //!
@@ -14,20 +14,20 @@
 //! fingerprints computed from them). Parsing ignores that key, so the tables stay small, and a
 //! tool that rewrites a file keeps it.
 //!
-//! Custom tables are first-class: [`Emulation::from_json`] reads any file in the same format,
+//! Custom tables are first-class: [`WireMeasurement::from_json`] reads any file in the same format,
 //! for a browser the crate does not ship.
 //!
 //! ```
 //! use seleniumbase_rs::evasion::fingerprint::OsType;
-//! use seleniumbase_rs_codec::emulation::{self, EmulationError};
+//! use seleniumbase_rs_codec::measurement::{self, WireMeasurementError};
 //! use seleniumbase_rs_codec::BrowserKind;
 //!
-//! let chrome = emulation::get(BrowserKind::Chrome, OsType::Macos)?;
+//! let chrome = measurement::get(BrowserKind::Chrome, OsType::Macos)?;
 //! assert!(chrome.user_agent.contains(&format!("Chrome/{}", chrome.major)));
 //!
-//! let windows = emulation::get(BrowserKind::Chrome, OsType::Windows);
-//! assert!(matches!(windows, Err(EmulationError::NotMeasured { .. })));
-//! # Ok::<(), EmulationError>(())
+//! let windows = measurement::get(BrowserKind::Chrome, OsType::Windows);
+//! assert!(matches!(windows, Err(WireMeasurementError::NotMeasured { .. })));
+//! # Ok::<(), WireMeasurementError>(())
 //! ```
 
 use std::collections::BTreeSet;
@@ -37,7 +37,7 @@ use serde::de::IgnoredAny;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use super::h2_spec::Http2Spec;
+use super::h2_spec::H2Spec;
 use super::header_spec::{HeaderSpec, HeaderSpecError};
 pub use super::tls_spec::KnownGap;
 use super::tls_spec::TlsSpec;
@@ -47,19 +47,19 @@ use seleniumbase_rs::evasion::fingerprint::{ClientHints, OsType};
 /// The measured files this crate ships: the file name and its text.
 ///
 /// Add a file to `src/measured` and to this list together. The test
-/// `tests/wire_emulation.rs` fails when a file there is missing from here.
+/// `tests/wire_measurement.rs` fails when a file there is missing from here.
 const SOURCES: [(&str, &str); 1] = [(
     "chrome-155-macos.json",
     include_str!("measured/chrome-155-macos.json"),
 )];
 
-/// The largest measured file [`Emulation::from_json`] reads, in bytes.
+/// The largest measured file [`WireMeasurement::from_json`] reads, in bytes.
 pub const MAX_MEASURED_JSON_BYTES: usize = 16 * 1024 * 1024;
 
 /// Why a measured table could not be read or looked up.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 #[non_exhaustive]
-pub enum EmulationError {
+pub enum WireMeasurementError {
     /// No capture exists for this browser on this operating system.
     #[error(
         "{kind:?} on {os:?} has not been measured; run the capture tools on that system to add it"
@@ -123,13 +123,6 @@ pub enum EmulationError {
     },
 }
 
-/// The design plan's name for [`EmulationError`], whose [`NotMeasured`](EmulationError::NotMeasured)
-/// variant is the plan's `SpecError::NotMeasured`.
-///
-/// `codec::tls_spec::SpecError` and `codec::h2_spec::SpecError` hold the TLS and HTTP/2 variants;
-/// the variant that names an unmeasured browser and system lives here.
-pub type SpecError = EmulationError;
-
 /// Where and how a measured entry was captured.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Provenance {
@@ -146,7 +139,7 @@ pub struct Provenance {
 
 /// One measured browser on one operating system: everything a client must send to look like it.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Emulation {
+pub struct WireMeasurement {
     /// The browser.
     pub kind: BrowserKind,
     /// The major version, such as `155`.
@@ -162,7 +155,7 @@ pub struct Emulation {
     /// The `ClientHello` of its WebSocket connections, which offer only HTTP/1.1.
     pub tls_websocket: Option<TlsSpec>,
     /// The start of its HTTP/2 connections, when the HTTP/2 capture has run.
-    pub http2: Option<Http2Spec>,
+    pub http2: Option<H2Spec>,
     /// The header names, order and values of its requests; empty until the HTTP/2 and
     /// header capture has run.
     pub headers: HeaderSpec,
@@ -207,7 +200,7 @@ struct FileIn {
     #[serde(default)]
     tls_websocket: Option<TlsSpec>,
     #[serde(default)]
-    http2: Option<Http2Spec>,
+    http2: Option<H2Spec>,
     #[serde(default)]
     headers: HeaderSpec,
     #[serde(default)]
@@ -218,7 +211,7 @@ struct FileIn {
     capture: Option<IgnoredAny>,
 }
 
-/// The JSON shape [`Emulation::to_json`] writes.
+/// The JSON shape [`WireMeasurement::to_json`] writes.
 #[derive(Serialize)]
 struct FileOut<'a> {
     kind: KindName,
@@ -229,14 +222,14 @@ struct FileOut<'a> {
     tls: &'a TlsSpec,
     tls_websocket: Option<&'a TlsSpec>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    http2: Option<&'a Http2Spec>,
+    http2: Option<&'a H2Spec>,
     headers: &'a HeaderSpec,
     #[serde(skip_serializing_if = "Option::is_none")]
     client_hints: Option<&'a ClientHints>,
     provenance: &'a Provenance,
 }
 
-impl Emulation {
+impl WireMeasurement {
     /// Reads one measured file. `name` only labels errors.
     ///
     /// The raw evidence under `capture` is skipped. The entry is checked to agree with itself:
@@ -245,17 +238,17 @@ impl Emulation {
     ///
     /// # Errors
     ///
-    /// Returns [`EmulationError::Parse`] when the text is not a measured file,
-    /// [`EmulationError::TooLarge`] above [`MAX_MEASURED_JSON_BYTES`],
-    /// [`EmulationError::Inconsistent`] when the entry contradicts itself and
-    /// [`EmulationError::Headers`] when the header spec is invalid.
-    pub fn from_json(name: &str, json: &str) -> Result<Self, EmulationError> {
+    /// Returns [`WireMeasurementError::Parse`] when the text is not a measured file,
+    /// [`WireMeasurementError::TooLarge`] above [`MAX_MEASURED_JSON_BYTES`],
+    /// [`WireMeasurementError::Inconsistent`] when the entry contradicts itself and
+    /// [`WireMeasurementError::Headers`] when the header spec is invalid.
+    pub fn from_json(name: &str, json: &str) -> Result<Self, WireMeasurementError> {
         if json.len() > MAX_MEASURED_JSON_BYTES {
-            return Err(EmulationError::TooLarge {
+            return Err(WireMeasurementError::TooLarge {
                 name: name.to_owned(),
             });
         }
-        let file: FileIn = serde_json::from_str(json).map_err(|error| EmulationError::Parse {
+        let file: FileIn = serde_json::from_str(json).map_err(|error| WireMeasurementError::Parse {
             name: name.to_owned(),
             reason: error.to_string(),
         })?;
@@ -280,8 +273,8 @@ impl Emulation {
     ///
     /// # Errors
     ///
-    /// Returns [`EmulationError::Parse`] when serialization fails, which a valid entry never does.
-    pub fn to_json(&self) -> Result<String, EmulationError> {
+    /// Returns [`WireMeasurementError::Parse`] when serialization fails, which a valid entry never does.
+    pub fn to_json(&self) -> Result<String, WireMeasurementError> {
         let (name, _) = kind_names(self.kind);
         let out = FileOut {
             kind: name,
@@ -296,7 +289,7 @@ impl Emulation {
             client_hints: self.client_hints.as_ref(),
             provenance: &self.provenance,
         };
-        serde_json::to_string_pretty(&out).map_err(|error| EmulationError::Parse {
+        serde_json::to_string_pretty(&out).map_err(|error| WireMeasurementError::Parse {
             name: self.file_stem(),
             reason: error.to_string(),
         })
@@ -312,8 +305,8 @@ impl Emulation {
     }
 
     /// Checks that the entry agrees with itself.
-    fn validate(&self, name: &str) -> Result<(), EmulationError> {
-        let inconsistent = |reason| EmulationError::Inconsistent {
+    fn validate(&self, name: &str) -> Result<(), WireMeasurementError> {
+        let inconsistent = |reason| WireMeasurementError::Inconsistent {
             name: name.to_owned(),
             reason,
         };
@@ -329,7 +322,7 @@ impl Emulation {
         }
         self.headers
             .validate()
-            .map_err(|source| EmulationError::Headers {
+            .map_err(|source| WireMeasurementError::Headers {
                 name: name.to_owned(),
                 source,
             })
@@ -350,14 +343,14 @@ fn os_slug(os: OsType) -> &'static str {
 }
 
 /// Reads every embedded file and checks that no two describe the same entry.
-fn parse_all(sources: &[(&str, &str)]) -> Result<Vec<Emulation>, EmulationError> {
-    let mut entries: Vec<(&str, Emulation)> = Vec::with_capacity(sources.len());
+fn parse_all(sources: &[(&str, &str)]) -> Result<Vec<WireMeasurement>, WireMeasurementError> {
+    let mut entries: Vec<(&str, WireMeasurement)> = Vec::with_capacity(sources.len());
     for (name, text) in sources {
-        let entry = Emulation::from_json(name, text)?;
+        let entry = WireMeasurement::from_json(name, text)?;
         if let Some((first, _)) = entries.iter().find(|(_, known)| {
             known.kind == entry.kind && known.major == entry.major && known.os == entry.os
         }) {
-            return Err(EmulationError::Duplicate {
+            return Err(WireMeasurementError::Duplicate {
                 first: (*first).to_owned(),
                 second: (*name).to_owned(),
             });
@@ -368,8 +361,8 @@ fn parse_all(sources: &[(&str, &str)]) -> Result<Vec<Emulation>, EmulationError>
 }
 
 /// The parsed tables, or why the embedded files are broken.
-fn table() -> &'static Result<Vec<Emulation>, EmulationError> {
-    static TABLE: OnceLock<Result<Vec<Emulation>, EmulationError>> = OnceLock::new();
+fn table() -> &'static Result<Vec<WireMeasurement>, WireMeasurementError> {
+    static TABLE: OnceLock<Result<Vec<WireMeasurement>, WireMeasurementError>> = OnceLock::new();
     TABLE.get_or_init(|| parse_all(&SOURCES))
 }
 
@@ -386,7 +379,7 @@ pub fn source_names() -> Vec<&'static str> {
 /// Panics if an embedded file is broken. The unit tests parse every file, so a broken file
 /// cannot reach a release; use [`try_measured`] to see the error instead.
 #[must_use]
-pub fn measured() -> &'static [Emulation] {
+pub fn measured() -> &'static [WireMeasurement] {
     try_measured().expect("the embedded measured files parse; the emulation unit tests prove it")
 }
 
@@ -394,14 +387,14 @@ pub fn measured() -> &'static [Emulation] {
 ///
 /// # Errors
 ///
-/// Returns the first [`EmulationError`] met while parsing the embedded files.
-pub fn try_measured() -> Result<&'static [Emulation], &'static EmulationError> {
+/// Returns the first [`WireMeasurementError`] met while parsing the embedded files.
+pub fn try_measured() -> Result<&'static [WireMeasurement], &'static WireMeasurementError> {
     table().as_ref().map(Vec::as_slice)
 }
 
 /// The entry with the highest major version among `candidates`; the first of equals wins.
-fn highest_major<'a>(candidates: impl Iterator<Item = &'a Emulation>) -> Option<&'a Emulation> {
-    candidates.fold(None, |best: Option<&Emulation>, entry| match best {
+fn highest_major<'a>(candidates: impl Iterator<Item = &'a WireMeasurement>) -> Option<&'a WireMeasurement> {
+    candidates.fold(None, |best: Option<&WireMeasurement>, entry| match best {
         Some(known) if known.major >= entry.major => Some(known),
         _ => Some(entry),
     })
@@ -409,13 +402,13 @@ fn highest_major<'a>(candidates: impl Iterator<Item = &'a Emulation>) -> Option<
 
 /// The newest entry (highest major version) of `kind` in `entries`; the first of equals wins.
 #[must_use]
-pub fn newest(entries: &[Emulation], kind: BrowserKind) -> Option<&Emulation> {
+pub fn newest(entries: &[WireMeasurement], kind: BrowserKind) -> Option<&WireMeasurement> {
     highest_major(entries.iter().filter(|entry| entry.kind == kind))
 }
 
 /// The newest entry of `kind` on `os` in `entries`.
 #[must_use]
-pub fn newest_on(entries: &[Emulation], kind: BrowserKind, os: OsType) -> Option<&Emulation> {
+pub fn newest_on(entries: &[WireMeasurement], kind: BrowserKind, os: OsType) -> Option<&WireMeasurement> {
     highest_major(
         entries
             .iter()
@@ -432,7 +425,7 @@ pub fn newest_on(entries: &[Emulation], kind: BrowserKind, os: OsType) -> Option
 ///
 /// Panics if `kind` has no entry, which that test rules out.
 #[must_use]
-pub fn for_kind(kind: BrowserKind) -> &'static Emulation {
+pub fn for_kind(kind: BrowserKind) -> &'static WireMeasurement {
     newest(measured(), kind)
         .expect("every BrowserKind has a measured entry; a unit test enforces it")
 }
@@ -441,27 +434,27 @@ pub fn for_kind(kind: BrowserKind) -> &'static Emulation {
 ///
 /// # Errors
 ///
-/// Returns [`EmulationError::NotMeasured`] when the pair has no capture.
-pub fn get(kind: BrowserKind, os: OsType) -> Result<&'static Emulation, EmulationError> {
-    newest_on(measured(), kind, os).ok_or(EmulationError::NotMeasured { kind, os })
+/// Returns [`WireMeasurementError::NotMeasured`] when the pair has no capture.
+pub fn get(kind: BrowserKind, os: OsType) -> Result<&'static WireMeasurement, WireMeasurementError> {
+    newest_on(measured(), kind, os).ok_or(WireMeasurementError::NotMeasured { kind, os })
 }
 
 /// The measured entry of a browser at one major version on an operating system.
 ///
 /// # Errors
 ///
-/// Returns [`EmulationError::NotMeasured`] when the pair has no capture at all and
-/// [`EmulationError::VersionNotMeasured`] when it has captures, but not at `major`.
+/// Returns [`WireMeasurementError::NotMeasured`] when the pair has no capture at all and
+/// [`WireMeasurementError::VersionNotMeasured`] when it has captures, but not at `major`.
 pub fn get_version(
     kind: BrowserKind,
     os: OsType,
     major: u32,
-) -> Result<&'static Emulation, EmulationError> {
+) -> Result<&'static WireMeasurement, WireMeasurementError> {
     get(kind, os)?;
     measured()
         .iter()
         .find(|entry| entry.kind == kind && entry.os == os && entry.major == major)
-        .ok_or(EmulationError::VersionNotMeasured { kind, major, os })
+        .ok_or(WireMeasurementError::VersionNotMeasured { kind, major, os })
 }
 
 /// The operating systems with a measured entry for `kind`, without repeats.

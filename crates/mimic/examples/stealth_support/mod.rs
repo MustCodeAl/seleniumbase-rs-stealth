@@ -42,7 +42,7 @@ pub fn unix_now() -> u64 {
 /// see.
 pub fn measured_chrome() -> Result<(OsType, u32), String> {
     let os = host_os();
-    match emulation::get(BrowserKind::Chrome, os) {
+    match measurement::get(BrowserKind::Chrome, os) {
         Ok(entry) => Ok((os, entry.major)),
         Err(error) => Err(format!(
             "{error}.\nThis example needs a measured system, and only Chrome 155 on macOS is \
