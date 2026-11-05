@@ -238,6 +238,29 @@ setter on an owned value that is not a builder (core's `BrowserConfig::with_prox
 receiver, one name per item (no aliases), `<Thing>Error` for errors, and no `Error` in the
 variants of a type that is not an error.
 
+**Module stutter.** `wire::WireFormat` was weighed against `wire::Format`, and kept:
+types are imported by name, and `Format` alone at a use site says nothing (this crate
+holds a TLS spec, an HTTP/2 spec and a header spec too), while "wire format" is the
+docs' term. The same holds for `codec::measurement::WireMeasurement` (not
+`Measurement`), `wire::http_session::HttpSession` (`Session` would clash with core's
+saved `sb_cdp::session_store::Session`) and `scrape::egress::route::ProxyRoute` (`Proxy`
+would clash with core's `sb_cdp::Proxy`). Stutter is accepted where the short name is
+ambiguous or clashes; nowhere else was it added.
+
+**Read in context, changed from the note.** The public `egress` fields hold a
+`ProxyKey`, so they are `proxy`, not `proxy_route` (the getters that return a route are
+`proxy_route()`). `wire_client` became a method, `WireFormat::client_builder()`, not a
+free function `wire_client`: it returns a builder. `CookieJar::store` became `receive`, not
+`apply_set_cookie`. The codec lookups are read through their module
+(`measurement::all`), not re-exported under `wire_measurement*` names.
+
+**Left for a redesign** (noted, not guessed): `CookieJar::from_cdp(cookies, now)` cannot be
+a `From` impl because it needs the time; `measurement::get_version` keeps its `get_`
+(a lookup by key, like `HashMap::get_key_value`, not a getter); `Escalation::Stay` reads
+oddly, but its variants carry the reasons the policy gives, so renaming it means
+reshaping the policy's result; the `measurement` lookups stay module functions over the
+embedded table rather than associated functions of `WireMeasurement`.
+
 ## Phase 2 (started)
 
 One core PR for the strategies in "What core gains" and one stealth PR for the renames,
