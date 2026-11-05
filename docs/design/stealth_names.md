@@ -119,24 +119,35 @@ The strategies and algorithms above, in core's patterns, as one core PR in phase
 
 | | Items | Of them copied |
 |---|---|---|
-| Reviewed | 1049 | 264 |
-| Keep | 884 (24 also need an export) | 175 |
-| Rename | 106 (8 also need an export) | 55 |
-| Add to core (another strategy or algorithm) | 24 | 19 |
+| Reviewed | 1686 | 264 |
+| Keep | 1519 | 175 |
+| Rename | 107 | 55 |
+| Add to core (another strategy or algorithm) | 25 | 19 |
 | Build on core | 19 | 8 |
 | Remove (same result, same way) | 16 | 7 |
 
 | Crate | Keep | Rename | Add to core | Build on core | Remove |
 |---|---|---|---|---|---|
 | packages, features, facade | 10 | 3 | 0 | 0 | 1 |
-| codec | 376 | 12 | 0 | 5 | 3 |
-| scrape | 238 | 49 | 24 | 8 | 4 |
-| mimic | 260 | 42 | 0 | 6 | 8 |
+| codec | 561 | 12 | 0 | 5 | 3 |
+| scrape | 547 | 50 | 25 | 8 | 4 |
+| mimic | 401 | 42 | 0 | 6 | 8 |
 
 "Copied" counts an item whose name or shape comes from stealthscraper-rs, with every member
-of such a type. "Export" means a public signature takes or returns the type but no path
-names it today (32 types). Each "remove" row says in one line why it computes the same result the same way
-as the item that replaces it.
+of such a type. Each "remove" row says in one line why it computes the same result the same
+way as the item that replaces it.
+
+**Correction (when phase 2 started).** Earlier rounds counted 1049 items, because they
+took every top-level module for private and listed only what `lib.rs` re-exports. In fact
+almost every module of the three crates is `pub` (only `sync` and the submodules of
+`mimic::http_session` are private), so 1672 items are public, plus the 14 package,
+feature and facade rows. The 33 types earlier rounds said "need an export" are already
+reachable through their module paths, so those export flags are gone. The 623 items added
+by the recount are mostly codec tables (`ids`, the `test-fixtures` builders in
+`client_hello::fixtures`), the capture tools (`scrape::runtime::capture`,
+`mimic::capture_h2`), `scrape::runtime::cdp`, `challenge::markers` and `jar::set_cookie`;
+they cover ground core does not and take the default verdict (keep), except
+`wait_for_clearance` (add to core) and `EgressLocale` (rename `ProxyLocale`).
 
 ## What changed since the fifth round
 
@@ -154,13 +165,12 @@ each computes the same result the same way (`with_locale`, for example, calls co
 
 - **The surface.** TokenSave's index of this branch (`friend/stealth-names`, on
   `origin/main` `7820793`), read with SQL over its `nodes` table, because
-  `tokensave_module_api` stops after about 60 of codec's 644 public symbols. Every
-  top-level module of codec, scrape and mimic is private, so an item is public API only if
-  `lib.rs` re-exports it, it is a public field, method, variant or associated constant of
-  such a type (every method of an exported trait), or it is a public type that appears in
-  one of those signatures (the "export" rows), with its members. The other `pub` items in
-  private modules are not reachable and not listed. Trait impls add no names and are not
-  listed.
+  `tokensave_module_api` stops after about 60 of codec's 644 public symbols. An item is
+  public when it is `pub` and every module on its path is `pub`, or `lib.rs` (or
+  `mimic::http_session`) re-exports it; members are the public fields, methods, variants
+  and associated constants of such types, and every method of a public trait. Items under
+  `#[cfg(test)]` and in test files are not listed; nor are trait impls, which add no
+  names.
 - **What was copied.** Judged from the stealthscraper-rs feature list in the project's
   notes; the stealthscraper-rs crate itself was not read, as the standing rule says.
 - **Strategies and algorithms.** Compared from the doc comments and code of both sides in their indexes: for
@@ -233,8 +243,7 @@ core PR is merged. Breaking changes, no shims.
 One row per item. "Copied" marks an item whose name or shape comes from stealthscraper-rs
 (with every member of such a type). Verdicts: keep, rename, add to core (another strategy or algorithm,
 with the core type and the option or variant), build on core (the core type it should take
-or extend), remove (the same result computed the same way, with the reason); "export" when a public signature
-takes or returns the type but no path names it today.
+or extend), remove (the same result computed the same way, with the reason).
 
 ## Packages, features and the facade
 
@@ -289,12 +298,12 @@ takes or returns the type but no path names it today.
 | `AkamaiError::PriorityFrame` | enum variant |  | keep |  | names the case |
 | `AkamaiError::TooManyPriorityFrames` | enum variant |  | keep |  | names the case |
 | `AkamaiError::PseudoOrder` | enum variant |  | keep |  | names the case |
-| `PriorityFrame` | struct |  | keep, export |  | keep the name and export it: a public signature takes or returns it, but callers cannot name it |
+| `PriorityFrame` | struct |  | keep |  | a protocol or published-format term, not another library's API |
 | `PriorityFrame.stream_id` | field |  | keep |  | plain data name |
 | `PriorityFrame.exclusive` | field |  | keep |  | plain data name |
 | `PriorityFrame.depends_on` | field |  | keep |  | plain data name |
 | `PriorityFrame.weight` | field |  | keep |  | plain data name |
-| `Pseudo` | enum |  | rename, export | `PseudoHeader` | `Pseudo` alone does not say what it is |
+| `Pseudo` | enum |  | rename | `PseudoHeader` | `Pseudo` alone does not say what it is |
 | `Pseudo::Method` | enum variant |  | keep |  | names the case |
 | `Pseudo::Authority` | enum variant |  | keep |  | names the case |
 | `Pseudo::Scheme` | enum variant |  | keep |  | names the case |
@@ -304,6 +313,12 @@ takes or returns the type but no path names it today.
 | `Pseudo::header_name` | method |  | keep |  | says what it does |
 | `Pseudo::from_letter` | method |  | keep |  | says what it does |
 | `Pseudo::from_header_name` | method |  | keep |  | says what it does |
+| `MAX_STREAM_ID` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `MIN_WEIGHT` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `MAX_WEIGHT` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `MAX_AKAMAI_LEN` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `MAX_SETTINGS` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `MAX_PRIORITY_FRAMES` | const |  | keep |  | says what it is; no core item of that name or concept |
 
 ### `codec::client_hello`
 
@@ -343,9 +358,33 @@ takes or returns the type but no path names it today.
 | `ClientHelloError::TooLarge` | enum variant |  | keep |  | names the case |
 | `ClientHelloError::TooManyRecords` | enum variant |  | keep |  | names the case |
 | `ClientHelloError::Extension` | enum variant |  | keep |  | names the case |
-| `Extension` | struct |  | rename, export | `TlsExtension` | an extension in core is a browser extension (`LaunchOptionsBuilder::extension`, `utils::extensions`) |
+| `Extension` | struct |  | rename | `TlsExtension` | an extension in core is a browser extension (`LaunchOptionsBuilder::extension`, `utils::extensions`) |
 | `Extension.id` | field |  | keep |  | plain data name |
 | `Extension.data` | field |  | keep |  | plain data name |
+| `MAX_CLIENT_HELLO` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `MAX_HELLO_RECORDS` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `ext_id::SERVER_NAME` | const |  | keep |  | says what it does |
+| `ext_id::STATUS_REQUEST` | const |  | keep |  | says what it does |
+| `ext_id::SUPPORTED_GROUPS` | const |  | keep |  | says what it does |
+| `ext_id::EC_POINT_FORMATS` | const |  | keep |  | says what it does |
+| `ext_id::SIGNATURE_ALGORITHMS` | const |  | keep |  | says what it does |
+| `ext_id::ALPN` | const |  | keep |  | says what it does |
+| `ext_id::SIGNED_CERT_TIMESTAMP` | const |  | keep |  | says what it does |
+| `ext_id::PADDING` | const |  | keep |  | says what it does |
+| `ext_id::EXTENDED_MASTER_SECRET` | const |  | keep |  | says what it does |
+| `ext_id::COMPRESS_CERTIFICATE` | const |  | keep |  | says what it does |
+| `ext_id::RECORD_SIZE_LIMIT` | const |  | keep |  | says what it does |
+| `ext_id::DELEGATED_CREDENTIAL` | const |  | keep |  | says what it does |
+| `ext_id::SESSION_TICKET` | const |  | keep |  | says what it does |
+| `ext_id::SUPPORTED_VERSIONS` | const |  | keep |  | says what it does |
+| `ext_id::PSK_KEY_EXCHANGE_MODES` | const |  | keep |  | says what it does |
+| `ext_id::KEY_SHARE` | const |  | keep |  | says what it does |
+| `ext_id::ALPS_OLD` | const |  | keep |  | says what it does |
+| `ext_id::ALPS` | const |  | keep |  | says what it does |
+| `ext_id::TRUST_ANCHORS` | const |  | keep |  | says what it does |
+| `ext_id::ENCRYPTED_CLIENT_HELLO` | const |  | keep |  | says what it does |
+| `ext_id::RENEGOTIATION_INFO` | const |  | keep |  | says what it does |
+| `without_grease` | function |  | keep |  | says what it is; no core item of that name or concept |
 
 ### `codec::emulation`
 
@@ -377,11 +416,20 @@ takes or returns the type but no path names it today.
 | `EmulationError::Inconsistent` | enum variant |  | keep |  | names the case |
 | `EmulationError::Headers` | enum variant |  | keep |  | names the case |
 | `EmulationError::Duplicate` | enum variant |  | keep |  | names the case |
-| `Provenance` | struct |  | keep, export |  | keep the name and export it: a public signature takes or returns it, but callers cannot name it |
+| `Provenance` | struct |  | keep |  | says what it is; no core item of that name or concept |
 | `Provenance.captured_on` | field |  | keep |  | plain data name |
 | `Provenance.tool` | field |  | keep |  | plain data name |
 | `Provenance.browser` | field |  | keep |  | plain data name |
 | `Provenance.known_gaps` | field |  | keep |  | plain data name |
+| `MAX_MEASURED_JSON_BYTES` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `SpecError` | type alias |  | keep |  | one `<Area>Error` per area, as core's `FingerprintError` |
+| `KindName::Chrome` | enum variant |  | keep |  | names the case |
+| `source_names` | function |  | keep |  | says what it is; no core item of that name or concept |
+| `try_measured` | function |  | keep |  | says what it is; no core item of that name or concept |
+| `newest` | function |  | keep |  | says what it is; no core item of that name or concept |
+| `newest_on` | function |  | keep |  | says what it is; no core item of that name or concept |
+| `get_version` | function |  | keep |  | says what it is; no core item of that name or concept |
+| `measured_systems` | function |  | keep |  | says what it is; no core item of that name or concept |
 
 ### `codec::h2_spec`
 
@@ -415,6 +463,21 @@ takes or returns the type but no path names it today.
 | `H2SpecError::Incomplete` | enum variant |  | keep |  | names the case |
 | `H2SpecError::Capture` | enum variant |  | keep |  | names the case |
 | `Http2Spec` | type alias |  | remove | `H2Spec` | same result, same way: a second name for `H2Spec` |
+| `setting_id::HEADER_TABLE_SIZE` | const |  | keep |  | says what it does |
+| `setting_id::ENABLE_PUSH` | const |  | keep |  | says what it does |
+| `setting_id::MAX_CONCURRENT_STREAMS` | const |  | keep |  | says what it does |
+| `setting_id::INITIAL_WINDOW_SIZE` | const |  | keep |  | says what it does |
+| `setting_id::MAX_FRAME_SIZE` | const |  | keep |  | says what it does |
+| `setting_id::MAX_HEADER_LIST_SIZE` | const |  | keep |  | says what it does |
+| `setting_id::ENABLE_CONNECT_PROTOCOL` | const |  | keep |  | says what it does |
+| `setting_id::NO_RFC7540_PRIORITIES` | const |  | keep |  | says what it does |
+| `EMITTABLE_SETTINGS` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `ALWAYS_SENT_SETTINGS` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `INITIAL_CONNECTION_WINDOW` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `MAX_WINDOW_UPDATE` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `MIN_MAX_FRAME_SIZE` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `MAX_MAX_FRAME_SIZE` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `MAX_SPEC_PRIORITY_FRAMES` | const |  | keep |  | says what it is; no core item of that name or concept |
 
 ### `codec::header_spec`
 
@@ -459,7 +522,7 @@ takes or returns the type but no path names it today.
 | `RequestShape` | enum |  | keep |  | says which request it shapes (a document load or a fetch) |
 | `RequestShape::Document` | enum variant |  | keep |  | names the case |
 | `RequestShape::Fetch` | enum variant |  | keep |  | names the case |
-| `HeaderValue` | enum |  | rename, export | `HeaderSource` | clashes with `http::HeaderValue`, which wreq hands to callers; the enum says where a value comes from (literal, user agent, client hints, language, cookie) |
+| `HeaderValue` | enum |  | rename | `HeaderSource` | clashes with `http::HeaderValue`, which wreq hands to callers; the enum says where a value comes from (literal, user agent, client hints, language, cookie) |
 | `HeaderValue::Literal` | enum variant |  | keep |  | names the case |
 | `HeaderValue::UserAgent` | enum variant |  | keep |  | names the case |
 | `HeaderValue::SecChUa` | enum variant |  | keep |  | names the case |
@@ -467,6 +530,12 @@ takes or returns the type but no path names it today.
 | `HeaderValue::SecChUaPlatform` | enum variant |  | keep |  | names the case |
 | `HeaderValue::AcceptLanguage` | enum variant |  | keep |  | names the case |
 | `HeaderValue::Cookie` | enum variant |  | keep |  | names the case |
+| `MAX_HEADERS` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `MAX_NAME_LEN` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `MAX_VALUE_LEN` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `MAX_PRIORITY_DESTINATIONS` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `TRANSPORT_HEADERS` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `CREDENTIAL_HEADERS` | const |  | keep |  | says what it is; no core item of that name or concept |
 
 ### `codec::ja3`
 
@@ -504,17 +573,17 @@ takes or returns the type but no path names it today.
 | `PeetprintError::FieldCount` | enum variant |  | keep |  | names the case |
 | `PeetprintError::Token` | enum variant |  | keep |  | names the case |
 | `PeetprintError::TooLong` | enum variant |  | keep |  | names the case |
-| `Ja3Field` | enum |  | keep, export |  | keep the name and export it: a public signature takes or returns it, but callers cannot name it |
+| `Ja3Field` | enum |  | keep |  | a protocol or published-format term, not another library's API |
 | `Ja3Field::Version` | enum variant |  | keep |  | names the case |
 | `Ja3Field::Ciphers` | enum variant |  | keep |  | names the case |
 | `Ja3Field::Extensions` | enum variant |  | keep |  | names the case |
 | `Ja3Field::Groups` | enum variant |  | keep |  | names the case |
 | `Ja3Field::PointFormats` | enum variant |  | keep |  | names the case |
-| `Slot` | enum |  | rename, export | `PeetprintSlot` | `Slot` alone is vague; it is one entry of a Peetprint list (GREASE or an id) |
+| `Slot` | enum |  | rename | `PeetprintSlot` | `Slot` alone is vague; it is one entry of a Peetprint list (GREASE or an id) |
 | `Slot::Grease` | enum variant |  | keep |  | names the case |
 | `Slot::Id` | enum variant |  | keep |  | names the case |
 | `Slot::from_id` | method |  | keep |  | says what it does |
-| `PeetField` | enum |  | rename, export | `PeetprintField` | spell the format's name as `Peetprint` and `PeetprintError` do |
+| `PeetField` | enum |  | rename | `PeetprintField` | spell the format's name as `Peetprint` and `PeetprintError` do |
 | `PeetField::Versions` | enum variant |  | keep |  | names the case |
 | `PeetField::Alpn` | enum variant |  | keep |  | names the case |
 | `PeetField::Groups` | enum variant |  | keep |  | names the case |
@@ -523,6 +592,12 @@ takes or returns the type but no path names it today.
 | `PeetField::CertCompression` | enum variant |  | keep |  | names the case |
 | `PeetField::Ciphers` | enum variant |  | keep |  | names the case |
 | `PeetField::Extensions` | enum variant |  | keep |  | names the case |
+| `MAX_JA3_LEN` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `hex_lower` | function |  | keep |  | says what it is; no core item of that name or concept |
+| `md5_hex` | function |  | keep |  | says what it is; no core item of that name or concept |
+| `peetprint::MAX_PEETPRINT_LEN` | const |  | keep |  | says what it does |
+| `slots` | function |  | keep |  | says what it is; no core item of that name or concept |
+| `ids` | function |  | keep |  | says what it is; no core item of that name or concept |
 
 ### `codec::ja4`
 
@@ -551,17 +626,17 @@ takes or returns the type but no path names it today.
 | `Ja4Raw.signature_algorithms` | field |  | keep |  | plain data name |
 | `Ja4Raw::parse` | method |  | keep |  | says what it does |
 | `Ja4Raw::hashed` | method |  | keep |  | says what it does |
-| `Ja4Diff` | struct |  | keep, export |  | keep the name and export it: a public signature takes or returns it, but callers cannot name it |
+| `Ja4Diff` | struct |  | keep |  | a protocol or published-format term, not another library's API |
 | `Ja4Diff.a_fields` | field |  | keep |  | plain data name |
 | `Ja4Diff.b` | field |  | keep |  | plain data name |
 | `Ja4Diff.c` | field |  | keep |  | plain data name |
 | `Ja4Diff::is_empty` | method |  | keep |  | says what it does |
-| `Ja4Section` | enum |  | keep, export |  | keep the name and export it: a public signature takes or returns it, but callers cannot name it |
+| `Ja4Section` | enum |  | keep |  | a protocol or published-format term, not another library's API |
 | `Ja4Section::A` | enum variant |  | keep |  | names the case |
 | `Ja4Section::Ciphers` | enum variant |  | keep |  | names the case |
 | `Ja4Section::Extensions` | enum variant |  | keep |  | names the case |
 | `Ja4Section::SignatureAlgorithms` | enum variant |  | keep |  | names the case |
-| `Ja4Facts` | struct |  | keep, export |  | keep the name and export it: a public signature takes or returns it, but callers cannot name it |
+| `Ja4Facts` | struct |  | keep |  | a protocol or published-format term, not another library's API |
 | `Ja4Facts.legacy_version` | field |  | keep |  | plain data name |
 | `Ja4Facts.supported_versions` | field |  | keep |  | plain data name |
 | `Ja4Facts.ciphers` | field |  | keep |  | plain data name |
@@ -572,16 +647,21 @@ takes or returns the type but no path names it today.
 | `Ja4Facts::a` | method |  | keep |  | says what it does |
 | `Ja4Facts::raw` | method |  | keep |  | says what it does |
 | `Ja4Facts::ja4` | method |  | keep |  | says what it does |
-| `Ja4Order` | enum |  | keep, export |  | keep the name and export it: a public signature takes or returns it, but callers cannot name it |
+| `Ja4Order` | enum |  | keep |  | a protocol or published-format term, not another library's API |
 | `Ja4Order::Sorted` | enum variant |  | keep |  | names the case |
 | `Ja4Order::Original` | enum variant |  | keep |  | names the case |
-| `Ja4AField` | enum |  | keep, export |  | keep the name and export it: a public signature takes or returns it, but callers cannot name it |
+| `Ja4AField` | enum |  | keep |  | a protocol or published-format term, not another library's API |
 | `Ja4AField::Protocol` | enum variant |  | keep |  | names the case |
 | `Ja4AField::Version` | enum variant |  | keep |  | names the case |
 | `Ja4AField::Sni` | enum variant |  | keep |  | names the case |
 | `Ja4AField::CipherCount` | enum variant |  | keep |  | names the case |
 | `Ja4AField::ExtensionCount` | enum variant |  | keep |  | names the case |
 | `Ja4AField::Alpn` | enum variant |  | keep |  | names the case |
+| `MAX_JA4_LEN` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `NO_ALPN` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `version_code` | function |  | keep |  | says what it is; no core item of that name or concept |
+| `version_from_code` | function |  | keep |  | says what it is; no core item of that name or concept |
+| `alpn_code` | function |  | keep |  | says what it is; no core item of that name or concept |
 
 ### `codec::tls_spec`
 
@@ -646,7 +726,7 @@ takes or returns the type but no path names it today.
 | `TlsSpec::with_signature_algorithms` | method |  | keep |  | says what it does |
 | `TlsSpec::with_ja4_raw` | method |  | keep |  | says what it does |
 | `TlsSpec::with_peetprint` | method |  | keep |  | says what it does |
-| `Alps` | struct |  | keep, export |  | keep the name and export it: a public signature takes or returns it, but callers cannot name it |
+| `Alps` | struct |  | keep |  | a protocol or published-format term, not another library's API |
 | `Alps.protocols` | field |  | keep |  | plain data name |
 | `Alps.new_codepoint` | field |  | keep |  | plain data name |
 
@@ -661,11 +741,11 @@ takes or returns the type but no path names it today.
 
 | Item | Kind | Copied | Verdict | Proposed | Why |
 |---|---|---|---|---|---|
-| `HeadersPriority` | struct |  | keep, export |  | keep the name and export it: a public signature takes or returns it, but callers cannot name it |
+| `HeadersPriority` | struct |  | keep |  | a protocol or published-format term, not another library's API |
 | `HeadersPriority.depends_on` | field |  | keep |  | plain data name |
 | `HeadersPriority.weight` | field |  | keep |  | plain data name |
 | `HeadersPriority.exclusive` | field |  | keep |  | plain data name |
-| `H2Preface` | struct |  | keep, export |  | keep the name and export it: a public signature takes or returns it, but callers cannot name it |
+| `H2Preface` | struct |  | keep |  | a protocol or published-format term, not another library's API |
 | `H2Preface.settings` | field |  | keep |  | plain data name |
 | `H2Preface.window_update` | field |  | keep |  | plain data name |
 | `H2Preface.priority_frames` | field |  | keep |  | plain data name |
@@ -677,7 +757,7 @@ takes or returns the type but no path names it today.
 | `H2Preface::akamai` | method |  | keep |  | says what it does |
 | `H2Preface::regular_headers` | method |  | keep |  | says what it does |
 | `H2Preface::header` | method |  | keep |  | says what it does |
-| `H2CaptureError` | enum |  | keep, export |  | keep the name and export it: a public signature takes or returns it, but callers cannot name it |
+| `H2CaptureError` | enum |  | keep |  | a protocol or published-format term, not another library's API |
 | `H2CaptureError::BadPreface` | enum variant |  | keep |  | names the case |
 | `H2CaptureError::FrameTooLarge` | enum variant |  | keep |  | names the case |
 | `H2CaptureError::FrameSize` | enum variant |  | keep |  | names the case |
@@ -694,17 +774,50 @@ takes or returns the type but no path names it today.
 | `H2CaptureError::PseudoOrder` | enum variant |  | keep |  | names the case |
 | `H2CaptureError::StreamIdRange` | enum variant |  | keep |  | names the case |
 | `H2CaptureError::Hpack` | enum variant |  | keep |  | names the case |
+| `CLIENT_PREFACE` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `FRAME_HEADER_LEN` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `DEFAULT_MAX_FRAME_PAYLOAD` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `MAX_FRAME_PAYLOAD` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `MAX_PREFACE_BYTES` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `MAX_HEADER_BLOCK_BYTES` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `MAX_PREFACE_FRAMES` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `frame_type::DATA` | const |  | keep |  | says what it does |
+| `frame_type::HEADERS` | const |  | keep |  | says what it does |
+| `frame_type::PRIORITY` | const |  | keep |  | says what it does |
+| `frame_type::RST_STREAM` | const |  | keep |  | says what it does |
+| `frame_type::SETTINGS` | const |  | keep |  | says what it does |
+| `frame_type::PUSH_PROMISE` | const |  | keep |  | says what it does |
+| `frame_type::PING` | const |  | keep |  | says what it does |
+| `frame_type::GOAWAY` | const |  | keep |  | says what it does |
+| `frame_type::WINDOW_UPDATE` | const |  | keep |  | says what it does |
+| `frame_type::CONTINUATION` | const |  | keep |  | says what it does |
+| `flag::ACK` | const |  | keep |  | says what it does |
+| `flag::END_STREAM` | const |  | keep |  | says what it does |
+| `flag::END_HEADERS` | const |  | keep |  | says what it does |
+| `flag::PADDED` | const |  | keep |  | says what it does |
+| `flag::PRIORITY` | const |  | keep |  | says what it does |
+| `Frame` | enum |  | keep |  | says what it is; no core item of that name or concept |
+| `Frame::Settings` | enum variant |  | keep |  | names the case |
+| `Frame::WindowUpdate` | enum variant |  | keep |  | names the case |
+| `Frame::Priority` | enum variant |  | keep |  | names the case |
+| `Frame::Headers` | enum variant |  | keep |  | names the case |
+| `Frame::Continuation` | enum variant |  | keep |  | names the case |
+| `Frame::Other` | enum variant |  | keep |  | names the case |
+| `Frame::frame_type` | method |  | keep |  | says what it does |
+| `encode_frame` | function |  | keep |  | says what it is; no core item of that name or concept |
+| `read_frame` | function |  | keep |  | says what it is; no core item of that name or concept |
+| `read_preface` | function |  | keep |  | says what it is; no core item of that name or concept |
 
 ### `codec::h2_frames::hpack`
 
 | Item | Kind | Copied | Verdict | Proposed | Why |
 |---|---|---|---|---|---|
-| `HeaderField` | struct |  | keep, export |  | keep the name and export it: a public signature takes or returns it, but callers cannot name it |
+| `HeaderField` | struct |  | keep |  | a protocol or published-format term, not another library's API |
 | `HeaderField.name` | field |  | keep |  | plain data name |
 | `HeaderField.value` | field |  | keep |  | plain data name |
 | `HeaderField::new` | method |  | keep |  | says what it does |
 | `HeaderField::is_pseudo` | method |  | keep |  | says what it does |
-| `HpackError` | enum |  | keep, export |  | keep the name and export it: a public signature takes or returns it, but callers cannot name it |
+| `HpackError` | enum |  | keep |  | a protocol or published-format term, not another library's API |
 | `HpackError::Truncated` | enum variant |  | keep |  | names the case |
 | `HpackError::IntegerOverflow` | enum variant |  | keep |  | names the case |
 | `HpackError::IndexZero` | enum variant |  | keep |  | names the case |
@@ -714,16 +827,107 @@ takes or returns the type but no path names it today.
 | `HpackError::SizeUpdateTooLarge` | enum variant |  | keep |  | names the case |
 | `HpackError::SizeUpdateAfterField` | enum variant |  | keep |  | names the case |
 | `HpackError::HeaderListTooLarge` | enum variant |  | keep |  | names the case |
+| `DEFAULT_TABLE_SIZE` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `MAX_TABLE_SIZE` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `MAX_HEADER_LIST_BYTES` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `MAX_HEADER_FIELDS` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `HpackDecoder` | struct |  | keep |  | says what it is; no core item of that name or concept |
+| `HpackDecoder::new` | method |  | keep |  | says what it does |
+| `HpackDecoder::dynamic_len` | method |  | keep |  | says what it does |
+| `HpackDecoder::dynamic_size` | method |  | keep |  | says what it does |
+| `HpackDecoder::decode` | method |  | keep |  | says what it does |
 
 ### `codec::h2_frames::huffman`
 
 | Item | Kind | Copied | Verdict | Proposed | Why |
 |---|---|---|---|---|---|
-| `HuffmanError` | enum |  | keep, export |  | keep the name and export it: a public signature takes or returns it, but callers cannot name it |
+| `HuffmanError` | enum |  | keep |  | a protocol or published-format term, not another library's API |
 | `HuffmanError::EndOfString` | enum variant |  | keep |  | names the case |
 | `HuffmanError::PaddingTooLong` | enum variant |  | keep |  | names the case |
 | `HuffmanError::PaddingNotOnes` | enum variant |  | keep |  | names the case |
 | `HuffmanError::InvalidCode` | enum variant |  | keep |  | names the case |
+| `decode` | function |  | keep |  | says what it is; no core item of that name or concept |
+
+### `codec::client_hello::fixtures`
+
+| Item | Kind | Copied | Verdict | Proposed | Why |
+|---|---|---|---|---|---|
+| `CHROME_CIPHERS` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `CHROME_SIGALGS` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `JA4_EXAMPLE_EXTENSIONS` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `JA3_EXAMPLE_EXTENSIONS` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `SNI_HOST` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `GREASE_CIPHER` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `GREASE_EXT_FIRST` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `GREASE_EXT_LAST` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `GREASE_GROUP` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `GREASE_VERSION` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `RECORD_VERSION` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `length8` | function |  | keep |  | says what it is; no core item of that name or concept |
+| `length16` | function |  | keep |  | says what it is; no core item of that name or concept |
+| `u16s` | function |  | keep |  | says what it is; no core item of that name or concept |
+| `strings8` | function |  | keep |  | says what it is; no core item of that name or concept |
+| `server_name_body` | function |  | keep |  | says what it is; no core item of that name or concept |
+| `key_share_body` | function |  | keep |  | says what it is; no core item of that name or concept |
+| `default_body` | function |  | keep |  | says what it is; no core item of that name or concept |
+| `wrap_records` | function |  | keep |  | says what it is; no core item of that name or concept |
+| `handshake_message` | function |  | keep |  | says what it is; no core item of that name or concept |
+| `record_of_body` | function |  | keep |  | says what it is; no core item of that name or concept |
+| `HelloBuilder` | struct |  | keep |  | says what it is; no core item of that name or concept |
+| `HelloBuilder.legacy_version` | field |  | keep |  | plain data name |
+| `HelloBuilder.ciphers` | field |  | keep |  | plain data name |
+| `HelloBuilder.extensions` | field |  | keep |  | plain data name |
+| `HelloBuilder.session_id` | field |  | keep |  | plain data name |
+| `HelloBuilder::new` | method |  | keep |  | says what it does |
+| `HelloBuilder::chrome_like` | method |  | keep |  | says what it does |
+| `HelloBuilder::ja3_example` | method |  | keep |  | says what it does |
+| `HelloBuilder::with_body` | method |  | keep |  | says what it does |
+| `HelloBuilder::with_grease` | method |  | keep |  | says what it does |
+| `HelloBuilder::message` | method |  | keep |  | says what it does |
+| `HelloBuilder::record` | method |  | keep |  | says what it does |
+| `HelloBuilder::fragmented` | method |  | keep |  | says what it does |
+
+### `codec::ids`
+
+| Item | Kind | Copied | Verdict | Proposed | Why |
+|---|---|---|---|---|---|
+| `Row` | type alias |  | keep |  | says what it is; no core item of that name or concept |
+| `Registry` | struct |  | keep |  | says what it is; no core item of that name or concept |
+| `Registry::new` | method |  | keep |  | says what it does |
+| `Registry::rows` | method |  | keep |  | says what it does |
+| `Registry::name` | method |  | keep |  | says what it does |
+| `Registry::id` | method |  | keep |  | says what it does |
+| `Registry::contains` | method |  | keep |  | says what it does |
+| `is_grease` | function |  | keep |  | says what it is; no core item of that name or concept |
+| `TLS12_LEGACY_VERSION` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `EC_POINT_UNCOMPRESSED` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `ALPN_H2` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `ALPN_HTTP_1_1` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `ALPN_PROTOCOLS` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `is_alpn` | function |  | keep |  | says what it is; no core item of that name or concept |
+| `CIPHER_SUITES` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `EXTENSIONS` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `GROUPS` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `SIGNATURE_ALGORITHMS` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `EC_POINT_FORMATS` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `TLS_VERSIONS` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `HTTP2_SETTINGS` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `H2_SETTINGS_ACCEPTED` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `BORINGSSL_CIPHERS` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `TLS13_CIPHERS` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `BORINGSSL_CLIENT_EXTENSIONS` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `BORINGSSL_ALWAYS_SENT_EXTENSIONS` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `BORINGSSL_LEGACY_ONLY_EXTENSIONS` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `BORINGSSL_TLS13_ONLY_EXTENSIONS` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `BORINGSSL_GROUPS` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `BORINGSSL_KEY_SHARE_GROUPS` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `BORINGSSL_SIGALGS` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `DHE_CIPHERS` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `CCM_CIPHERS` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `SCSV_CIPHERS` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `REFUSED_EXTENSIONS` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `UNSUPPORTED_GROUPS` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `ML_DSA_SIGALGS` | const |  | keep |  | says what it is; no core item of that name or concept |
 
 ## scrape (`seleniumbase_rs_stealth::scrape`)
 
@@ -757,6 +961,9 @@ takes or returns the type but no path names it today.
 | `Vendor::Imperva` | enum variant |  | keep |  | names the case |
 | `Vendor::Kasada` | enum variant |  | keep |  | names the case |
 | `Vendor::AwsWaf` | enum variant |  | keep |  | names the case |
+| `MAX_SCAN_BYTES` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `detect` | function |  | keep |  | says what it is; no core item of that name or concept |
+| `clearance_cookie` | function |  | keep |  | says what it is; no core item of that name or concept |
 
 ### `scrape::challenge::mitigation`
 
@@ -792,6 +999,12 @@ takes or returns the type but no path names it today.
 | `Mode` | enum |  | rename | `FetchKind` | core says mode for engine modes (UC mode, CDP Mode, `DriverMode`); this says whether a request goes through the browser or over HTTP. `Route` is taken by `egress::route` |
 | `Mode::Browser` | enum variant |  | keep |  | names the case |
 | `Mode::Http` | enum variant |  | keep |  | names the case |
+| `DEFAULT_MAX_CHALLENGE_ATTEMPTS` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `DEFAULT_ROTATE_EGRESS_AFTER` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `DEFAULT_ROTATE_PROFILE_AFTER` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `DEFAULT_BLOCK_COOLDOWN_SECS` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `DEFAULT_RATE_LIMIT_COOLDOWN_SECS` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `MAX_RETRY_AFTER_SECS` | const |  | keep |  | says what it is; no core item of that name or concept |
 
 ### `scrape::egress::geo`
 
@@ -807,11 +1020,11 @@ takes or returns the type but no path names it today.
 | `LocaleExt::by_tag` | method | yes | keep |  | extends core's `Locale` |
 | `LocaleExt::localize` | method | yes | keep |  | extends core's `Locale` and `Fingerprint` |
 | `StaticGeoResolver` | struct |  | keep |  | the built-in `GeoResolver` |
-| `GeoError` | enum |  | keep, export |  | keep the name and export it: a public signature takes or returns it, but callers cannot name it |
+| `GeoError` | enum |  | keep |  | one `<Area>Error` per area, as core's `FingerprintError` |
 | `GeoError::InvalidCountry` | enum variant |  | keep |  | names the case |
 | `GeoError::NoLocale` | enum variant |  | keep |  | names the case |
 | `GeoError::Unknown` | enum variant |  | keep |  | names the case |
-| `GeoInfo` | struct |  | keep, export |  | keep the name and export it: a public signature takes or returns it, but callers cannot name it |
+| `GeoInfo` | struct |  | keep |  | says what it is; no core item of that name or concept |
 | `GeoInfo.country` | field |  | keep |  | plain data name |
 | `GeoInfo.timezone` | field |  | keep |  | plain data name |
 | `GeoInfo.coordinates` | field |  | build on core | core `Geolocation` | core's type for a latitude and longitude, instead of `(f64, f64)` |
@@ -838,6 +1051,9 @@ takes or returns the type but no path names it today.
 | `EgressOutcome::ConnectError` | enum variant |  | add to core | variant of core `ProxyOutcome` | goes with its type |
 | `EgressOutcome::Challenged` | enum variant |  | add to core | variant of core `ProxyOutcome` | goes with its type |
 | `EgressOutcome::Blocked` | enum variant |  | add to core | variant of core `ProxyOutcome` | goes with its type |
+| `DEFAULT_QUARANTINE_AFTER` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `DEFAULT_QUARANTINE_SECS` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `MAX_STICKY_SITES` | const |  | keep |  | says what it is; no core item of that name or concept |
 
 ### `scrape::egress::redact`
 
@@ -850,6 +1066,7 @@ takes or returns the type but no path names it today.
 | `Secret` | struct | yes | keep |  | covers ground core does not: core's `Proxy` hides its password in its own `Debug`, with no secret type |
 | `Secret::new` | method | yes | keep |  | says what it does |
 | `Secret::expose` | method | yes | keep |  | says what it does |
+| `SENSITIVE_QUERY_KEYS` | const |  | keep |  | says what it is; no core item of that name or concept |
 
 ### `scrape::egress::route`
 
@@ -864,7 +1081,7 @@ takes or returns the type but no path names it today.
 | `EgressRef::parse` | method | yes | keep |  | says what it does |
 | `EgressRef::key` | method | yes | keep |  | says what it does |
 | `EgressRef::proxy` | method | yes | keep |  | says what it does |
-| `EgressError` | enum |  | rename, export | `ProxyRouteError` | follows `ProxyRoute` |
+| `EgressError` | enum |  | rename | `ProxyRouteError` | follows `ProxyRoute` |
 | `EgressError::Scheme` | enum variant |  | keep |  | names the case |
 | `EgressError::Address` | enum variant |  | keep |  | names the case |
 
@@ -900,7 +1117,7 @@ takes or returns the type but no path names it today.
 | `CookieJar::to_cdp` | method | yes | keep |  | says what it does |
 | `CookieJar::expiry_of` | method | yes | keep |  | says what it does |
 | `CookieJar::remove_expired` | method | yes | keep |  | says what it does |
-| `StoredCookie` | struct |  | keep, export |  | keep the name and export it: a public signature takes or returns it, but callers cannot name it |
+| `StoredCookie` | struct |  | keep |  | says what it is; no core item of that name or concept |
 | `StoredCookie.name` | field |  | keep |  | plain data name |
 | `StoredCookie.value` | field |  | keep |  | plain data name |
 | `StoredCookie.domain` | field |  | keep |  | plain data name |
@@ -915,15 +1132,15 @@ takes or returns the type but no path names it today.
 | `StoredCookie::is_expired` | method |  | keep |  | says what it does |
 | `StoredCookie::size_bytes` | method |  | keep |  | says what it does |
 | `StoredCookie::same_identity` | method |  | keep |  | says what it does |
-| `StoreOutcome` | enum |  | rename, export | `SetCookieOutcome` | follows `apply_set_cookie` |
+| `StoreOutcome` | enum |  | rename | `SetCookieOutcome` | follows `apply_set_cookie` |
 | `StoreOutcome::Stored` | enum variant |  | keep |  | names the case |
 | `StoreOutcome::Replaced` | enum variant |  | keep |  | names the case |
 | `StoreOutcome::Deleted` | enum variant |  | keep |  | names the case |
 | `StoreOutcome::Ignored` | enum variant |  | keep |  | names the case |
-| `SiteContext` | enum |  | keep, export |  | keep the name and export it: a public signature takes or returns it, but callers cannot name it |
+| `SiteContext` | enum |  | keep |  | says what it is; no core item of that name or concept |
 | `SiteContext::SameSite` | enum variant |  | keep |  | names the case |
 | `SiteContext::CrossSite` | enum variant |  | keep |  | names the case |
-| `IgnoreReason` | enum |  | keep, export |  | keep the name and export it: a public signature takes or returns it, but callers cannot name it |
+| `IgnoreReason` | enum |  | keep |  | says what it is; no core item of that name or concept |
 | `IgnoreReason::Malformed` | enum variant |  | keep |  | names the case |
 | `IgnoreReason::DomainMismatch` | enum variant |  | keep |  | names the case |
 | `IgnoreReason::PublicSuffix` | enum variant |  | keep |  | names the case |
@@ -934,6 +1151,20 @@ takes or returns the type but no path names it today.
 | `IgnoreReason::TooLarge` | enum variant |  | keep |  | names the case |
 | `IgnoreReason::SameSiteNoneInsecure` | enum variant |  | keep |  | names the case |
 | `IgnoreReason::UnsupportedUrl` | enum variant |  | keep |  | names the case |
+| `MAX_COOKIES_PER_SITE` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `MAX_COOKIES` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `MAX_BYTES_PER_SITE` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `MAX_PATH_BYTES` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `MAX_DOMAIN_BYTES` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `MAX_TIMESTAMP_SECS` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `JarError` | enum |  | keep |  | one `<Area>Error` per area, as core's `FingerprintError` |
+| `JarError::Invalid` | enum variant |  | keep |  | names the case |
+| `JarError::Duplicate` | enum variant |  | keep |  | names the case |
+| `JarError::TooMany` | enum variant |  | keep |  | names the case |
+| `JarError::SiteFull` | enum variant |  | keep |  | names the case |
+| `JarError::SiteBytes` | enum variant |  | keep |  | names the case |
+| `JarError::Lifetime` | enum variant |  | keep |  | names the case |
+| `JarError::Clock` | enum variant |  | keep |  | names the case |
 
 ### `scrape::ledger::events`
 
@@ -961,6 +1192,7 @@ takes or returns the type but no path names it today.
 | `ScraperEvent::IdentityExported` | enum variant | yes | keep |  | names the case |
 | `ScraperEvent::IdentityRestored` | enum variant | yes | keep |  | names the case |
 | `ScraperEvent::name` | method | yes | keep |  | says what it does |
+| `MAX_COLLECTED_EVENTS` | const |  | keep |  | says what it is; no core item of that name or concept |
 
 ### `scrape::ledger::state`
 
@@ -988,11 +1220,13 @@ takes or returns the type but no path names it today.
 | `StateStore::put` | method | yes | keep |  | says what it does |
 | `StateStore::remove` | method | yes | keep |  | says what it does |
 | `StateStore::sites` | method | yes | keep |  | says what it does |
-| `StateError` | enum |  | rename, export | `LedgerError` | follows `Ledger` |
+| `StateError` | enum |  | rename | `LedgerError` | follows `Ledger` |
 | `StateError::Io` | enum variant |  | keep |  | names the case |
 | `StateError::Corrupt` | enum variant |  | keep |  | names the case |
 | `StateError::Schema` | enum variant |  | keep |  | names the case |
 | `StateError::TooLarge` | enum variant |  | keep |  | names the case |
+| `STATE_SCHEMA` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `MAX_STATE_SITES` | const |  | keep |  | says what it is; no core item of that name or concept |
 
 ### `scrape::passport::identity`
 
@@ -1022,11 +1256,13 @@ takes or returns the type but no path names it today.
 | `StealthIdentity::clearance_for` | method | yes | keep |  | says what it does |
 | `StealthIdentity::check_egress` | method | yes | rename | `check_proxy` | core says proxy |
 | `StealthIdentity::check_emulation` | method | yes | rename | `check_wire_measurement` | follows `WireMeasurement` |
-| `Clearance` | struct |  | keep, export |  | covers ground core does not: a challenge clearance |
+| `Clearance` | struct |  | keep |  | covers ground core does not: a challenge clearance |
 | `Clearance.site` | field |  | keep |  | plain data name |
 | `Clearance.vendor` | field |  | keep |  | plain data name |
 | `Clearance.cookie` | field |  | keep |  | plain data name |
 | `Clearance.expires_at` | field |  | keep |  | plain data name |
+| `IDENTITY_SCHEMA` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `NO_EXPIRY` | const |  | keep |  | says what it is; no core item of that name or concept |
 
 ### `scrape::passport::policy`
 
@@ -1044,15 +1280,16 @@ takes or returns the type but no path names it today.
 | `Transition::Escalate` | enum variant |  | keep |  | names the case |
 | `Transition::Demote` | enum variant |  | keep |  | names the case |
 | `Transition::resulting_mode` | method |  | rename | `resulting_kind` | follows `FetchKind` |
-| `EscalateReason` | enum |  | keep, export |  | keep the name and export it: a public signature takes or returns it, but callers cannot name it |
+| `EscalateReason` | enum |  | keep |  | says what it is; no core item of that name or concept |
 | `EscalateReason::Challenge` | enum variant |  | keep |  | names the case |
 | `EscalateReason::ClearanceExpiring` | enum variant |  | keep |  | names the case |
 | `EscalateReason::NoClearance` | enum variant |  | keep |  | names the case |
 | `EscalateReason::SiteNeedsBrowser` | enum variant |  | keep |  | names the case |
 | `EscalateReason::Manual` | enum variant |  | keep |  | names the case |
-| `DemoteReason` | enum |  | keep, export |  | keep the name and export it: a public signature takes or returns it, but callers cannot name it |
+| `DemoteReason` | enum |  | keep |  | says what it is; no core item of that name or concept |
 | `DemoteReason::ChallengeSolved` | enum variant |  | keep |  | names the case |
 | `DemoteReason::Manual` | enum variant |  | keep |  | names the case |
+| `DEFAULT_CLEARANCE_MARGIN_SECS` | const |  | keep |  | says what it is; no core item of that name or concept |
 
 ### `scrape::runtime::browser_scraper`
 
@@ -1122,18 +1359,346 @@ takes or returns the type but no path names it today.
 | `JsonStateStore` | struct | yes | rename | `JsonLedger` | follows `Ledger` |
 | `JsonStateStore::open` | method | yes | keep |  | says what it does |
 | `JsonStateStore::path` | method | yes | keep |  | says what it does |
+| `MAX_STATE_FILE_BYTES` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `atomic_write` | function |  | keep |  | says what it is; no core item of that name or concept |
 
 ### `scrape::runtime::tracing_sink`
 
 | Item | Kind | Copied | Verdict | Proposed | Why |
 |---|---|---|---|---|---|
 | `TracingEventSink` | struct | yes | keep |  | builds on `tracing`, as core logs |
+| `TARGET` | const |  | keep |  | says what it is; no core item of that name or concept |
 
 ### `scrape::runtime::browser_scraper::builder`
 
 | Item | Kind | Copied | Verdict | Proposed | Why |
 |---|---|---|---|---|---|
 | `Clock` | type alias |  | keep |  | a test seam for time; core's `core::allure::Clock` belongs to the report |
+
+### `scrape::challenge::markers`
+
+| Item | Kind | Copied | Verdict | Proposed | Why |
+|---|---|---|---|---|---|
+| `CLOUDFLARE_TITLE` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `CLOUDFLARE_CHL_OPT` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `CLOUDFLARE_ORCHESTRATE_B` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `CLOUDFLARE_ORCHESTRATE_G` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `CLOUDFLARE_CHALLENGE_FORM` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `CLOUDFLARE_CHALLENGE_STAGE` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `CLOUDFLARE_BLOCK_TITLE` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `DATADOME_HOST` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `PERIMETERX_CAPTCHA` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `AKAMAI_BM_VERIFY` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `AKAMAI_BLOCK_HOST` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `IMPERVA_INCIDENT` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `IMPERVA_PARDON_TITLE` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `KASADA_SDK` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `AWS_WAF_INTEGRATION` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `AWS_WAF_CAPTCHA` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `Gate::Any` | enum variant |  | keep |  | names the case |
+| `Gate::Statuses` | enum variant |  | keep |  | names the case |
+
+### `scrape::jar::set_cookie`
+
+| Item | Kind | Copied | Verdict | Proposed | Why |
+|---|---|---|---|---|---|
+| `MAX_NAME_VALUE_BYTES` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `MAX_ATTRIBUTE_VALUE_BYTES` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `MAX_LIFETIME_SECS` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `EARLIEST_EXPIRY` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `SECURE_PREFIX` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `HOST_PREFIX` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `Attribute::Expires` | enum variant |  | keep |  | names the case |
+| `Attribute::MaxAge` | enum variant |  | keep |  | names the case |
+| `Attribute::Domain` | enum variant |  | keep |  | names the case |
+| `Attribute::Path` | enum variant |  | keep |  | names the case |
+| `Attribute::Secure` | enum variant |  | keep |  | names the case |
+| `Attribute::HttpOnly` | enum variant |  | keep |  | names the case |
+| `Attribute::SameSite` | enum variant |  | keep |  | names the case |
+| `CookiePrefix` | enum |  | keep |  | says what it is; no core item of that name or concept |
+| `CookiePrefix::Secure` | enum variant |  | keep |  | names the case |
+| `CookiePrefix::Host` | enum variant |  | keep |  | names the case |
+| `CookiePrefix::of` | method |  | keep |  | says what it does |
+| `SetCookie` | struct |  | keep |  | says what it is; no core item of that name or concept |
+| `SetCookie.name` | field |  | keep |  | plain data name |
+| `SetCookie.value` | field |  | keep |  | plain data name |
+| `SetCookie.expires` | field |  | keep |  | plain data name |
+| `SetCookie.max_age` | field |  | keep |  | plain data name |
+| `SetCookie.domain` | field |  | keep |  | plain data name |
+| `SetCookie.path` | field |  | keep |  | plain data name |
+| `SetCookie.secure` | field |  | keep |  | plain data name |
+| `SetCookie.http_only` | field |  | keep |  | plain data name |
+| `SetCookie.same_site` | field |  | keep |  | plain data name |
+| `SetCookie::parse` | method |  | keep |  | says what it does |
+| `SetCookie::expiry` | method |  | keep |  | says what it does |
+| `SetCookie::prefix` | method |  | keep |  | says what it does |
+| `has_forbidden_control` | function |  | keep |  | says what it is; no core item of that name or concept |
+| `SetCookieError` | enum |  | keep |  | one `<Area>Error` per area, as core's `FingerprintError` |
+| `SetCookieError::ControlCharacter` | enum variant |  | keep |  | names the case |
+| `SetCookieError::Empty` | enum variant |  | keep |  | names the case |
+| `SetCookieError::TooLarge` | enum variant |  | keep |  | names the case |
+| `SetCookieError::NamelessPrefix` | enum variant |  | keep |  | names the case |
+
+### `scrape::runtime::capture`
+
+| Item | Kind | Copied | Verdict | Proposed | Why |
+|---|---|---|---|---|---|
+| `CaptureError` | enum |  | keep |  | one `<Area>Error` per area, as core's `FingerprintError` |
+| `CaptureError::Io` | enum variant |  | keep |  | names the case |
+| `CaptureError::Timeout` | enum variant |  | keep |  | names the case |
+| `CaptureError::Closed` | enum variant |  | keep |  | names the case |
+| `CaptureError::TooLarge` | enum variant |  | keep |  | names the case |
+| `CaptureError::Hello` | enum variant |  | keep |  | names the case |
+| `CaptureError::H2` | enum variant |  | keep |  | names the case |
+| `CaptureError::Http` | enum variant |  | keep |  | names the case |
+| `CaptureError::Spec` | enum variant |  | keep |  | names the case |
+| `CaptureError::Unstable` | enum variant |  | keep |  | names the case |
+| `CaptureError::NoHello` | enum variant |  | keep |  | names the case |
+| `CaptureError::Hex` | enum variant |  | keep |  | names the case |
+| `CaptureError::Json` | enum variant |  | keep |  | names the case |
+| `CaptureError::NotAnObject` | enum variant |  | keep |  | names the case |
+| `CaptureError::Product` | enum variant |  | keep |  | names the case |
+| `CaptureError::UnknownOs` | enum variant |  | keep |  | names the case |
+| `CaptureError::Headless` | enum variant |  | keep |  | names the case |
+| `CaptureError::HintsDisagree` | enum variant |  | keep |  | names the case |
+| `CaptureError::HintsReport` | enum variant |  | keep |  | names the case |
+| `CaptureError::NoUserAgentData` | enum variant |  | keep |  | names the case |
+| `CaptureError::Browser` | enum variant |  | keep |  | names the case |
+| `CaptureError::Usage` | enum variant |  | keep |  | names the case |
+
+### `scrape::runtime::capture::args`
+
+| Item | Kind | Copied | Verdict | Proposed | Why |
+|---|---|---|---|---|---|
+| `DEFAULT_OUT_DIR` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `DEFAULT_FIXTURES_DIR` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `MAX_PROBES` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `MAX_TIMEOUT_SECS` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `USAGE` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `ToolArgs` | struct |  | keep |  | says what it is; no core item of that name or concept |
+| `ToolArgs.out_dir` | field |  | keep |  | plain data name |
+| `ToolArgs.fixtures_dir` | field |  | keep |  | plain data name |
+| `ToolArgs.chrome` | field |  | keep |  | plain data name |
+| `ToolArgs.snippet` | field |  | keep |  | plain data name |
+| `ToolArgs.help` | field |  | keep |  | plain data name |
+| `ToolArgs::parse` | method |  | keep |  | says what it does |
+
+### `scrape::runtime::capture::chrome`
+
+| Item | Kind | Copied | Verdict | Proposed | Why |
+|---|---|---|---|---|---|
+| `CAPTURE_DOMAIN` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `WEBSOCKET_HOST` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `DEFAULT_PAGE_PROBES` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `DEFAULT_TIMEOUT` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `DEFAULT_LANG` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `ChromeOptions` | struct |  | keep |  | says what it is; no core item of that name or concept |
+| `ChromeOptions.executable` | field |  | keep |  | plain data name |
+| `ChromeOptions.headless` | field |  | keep |  | plain data name |
+| `ChromeOptions.lang` | field |  | keep |  | plain data name |
+| `ChromeOptions.timeout` | field |  | keep |  | plain data name |
+| `ChromeOptions.no_sandbox` | field |  | keep |  | plain data name |
+| `ChromeOptions.page_probes` | field |  | keep |  | plain data name |
+| `host_resolver_rule` | function |  | keep |  | says what it is; no core item of that name or concept |
+| `probe_script` | function |  | keep |  | says what it is; no core item of that name or concept |
+| `measure_tls` | function |  | keep |  | says what it is; no core item of that name or concept |
+| `measure_hints` | function |  | keep |  | says what it is; no core item of that name or concept |
+
+### `scrape::runtime::capture::hints`
+
+| Item | Kind | Copied | Verdict | Proposed | Why |
+|---|---|---|---|---|---|
+| `ACCEPT_CH` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `HIGH_ENTROPY_KEYS` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `Brand` | struct |  | keep |  | says what it is; no core item of that name or concept |
+| `Brand.brand` | field |  | keep |  | plain data name |
+| `Brand.version` | field |  | keep |  | plain data name |
+| `HighEntropy` | struct |  | keep |  | says what it is; no core item of that name or concept |
+| `HighEntropy.architecture` | field |  | keep |  | plain data name |
+| `HighEntropy.bitness` | field |  | keep |  | plain data name |
+| `HighEntropy.form_factors` | field |  | keep |  | plain data name |
+| `HighEntropy.full_version_list` | field |  | keep |  | plain data name |
+| `HighEntropy.model` | field |  | keep |  | plain data name |
+| `HighEntropy.platform_version` | field |  | keep |  | plain data name |
+| `HighEntropy.ua_full_version` | field |  | keep |  | plain data name |
+| `HighEntropy.wow64` | field |  | keep |  | plain data name |
+| `UaData` | struct |  | keep |  | says what it is; no core item of that name or concept |
+| `UaData.brands` | field |  | keep |  | plain data name |
+| `UaData.mobile` | field |  | keep |  | plain data name |
+| `UaData.platform` | field |  | keep |  | plain data name |
+| `UaData.high` | field |  | keep |  | plain data name |
+| `HintsReport` | struct |  | keep |  | says what it is; no core item of that name or concept |
+| `HintsReport.user_agent` | field |  | keep |  | plain data name |
+| `HintsReport.languages` | field |  | keep |  | plain data name |
+| `HintsReport.language` | field |  | keep |  | plain data name |
+| `HintsReport.platform` | field |  | keep |  | plain data name |
+| `HintsReport.secure_context` | field |  | keep |  | plain data name |
+| `HintsReport.ua_data` | field |  | keep |  | plain data name |
+| `HintsMeasurement` | struct |  | keep |  | says what it is; no core item of that name or concept |
+| `HintsMeasurement.user_agent` | field |  | keep |  | plain data name |
+| `HintsMeasurement.accept_language` | field |  | keep |  | plain data name |
+| `HintsMeasurement.languages` | field |  | keep |  | plain data name |
+| `HintsMeasurement.client_hints` | field |  | keep |  | plain data name |
+| `HintsMeasurement.first_visit_headers` | field |  | keep |  | plain data name |
+| `HintsMeasurement.request_headers` | field |  | keep |  | plain data name |
+| `collect_js` | function |  | keep |  | says what it is; no core item of that name or concept |
+| `page_html` | function |  | keep |  | says what it is; no core item of that name or concept |
+| `console_snippet` | function |  | keep |  | says what it is; no core item of that name or concept |
+| `parse_brand_list` | function |  | keep |  | says what it is; no core item of that name or concept |
+| `parse_string_list` | function |  | keep |  | says what it is; no core item of that name or concept |
+| `client_hints_from` | function |  | keep |  | says what it is; no core item of that name or concept |
+| `cross_check` | function |  | keep |  | says what it is; no core item of that name or concept |
+| `measurement_from` | function |  | keep |  | says what it is; no core item of that name or concept |
+| `HintsServer` | struct |  | keep |  | says what it is; no core item of that name or concept |
+| `HintsServer::start` | method |  | keep |  | says what it does |
+| `HintsServer::addr` | method |  | keep |  | says what it does |
+| `HintsServer::url` | method |  | keep |  | says what it does |
+| `HintsServer::requests` | method |  | keep |  | says what it does |
+| `HintsServer::next_report` | method |  | keep |  | says what it does |
+
+### `scrape::runtime::capture::record`
+
+| Item | Kind | Copied | Verdict | Proposed | Why |
+|---|---|---|---|---|---|
+| `BrowserVersion` | struct |  | keep |  | says what it is; no core item of that name or concept |
+| `BrowserVersion.product` | field |  | keep |  | plain data name |
+| `BrowserVersion.full_version` | field |  | keep |  | plain data name |
+| `BrowserVersion.major` | field |  | keep |  | plain data name |
+| `BrowserVersion.user_agent` | field |  | keep |  | plain data name |
+| `BrowserVersion::from_get_version` | method |  | keep |  | says what it does |
+| `BrowserVersion::os` | method |  | keep |  | says what it does |
+| `BrowserVersion::is_headless` | method |  | keep |  | says what it does |
+| `BrowserVersion::label` | method |  | keep |  | says what it does |
+| `EntryId` | struct |  | keep |  | says what it is; no core item of that name or concept |
+| `EntryId.kind` | field |  | keep |  | plain data name |
+| `EntryId.major` | field |  | keep |  | plain data name |
+| `EntryId.os` | field |  | keep |  | plain data name |
+| `EntryId::file_name` | method |  | keep |  | says what it does |
+| `EntryId::stem` | method |  | keep |  | says what it does |
+| `HelloRecord` | struct |  | keep |  | says what it is; no core item of that name or concept |
+| `HelloRecord.sni` | field |  | keep |  | plain data name |
+| `HelloRecord.raw_hex` | field |  | keep |  | plain data name |
+| `HelloRecord.ja3` | field |  | keep |  | plain data name |
+| `HelloRecord.ja3_hash` | field |  | keep |  | plain data name |
+| `HelloRecord.ja4` | field |  | keep |  | plain data name |
+| `HelloRecord.ja4_r` | field |  | keep |  | plain data name |
+| `HelloRecord.ja4_ro` | field |  | keep |  | plain data name |
+| `HelloRecord.peetprint` | field |  | keep |  | plain data name |
+| `HelloRecord.peetprint_hash` | field |  | keep |  | plain data name |
+| `HelloRecord::of` | method |  | keep |  | says what it does |
+| `HelloRecord::raw` | method |  | keep |  | says what it does |
+| `HelloRecord::hello` | method |  | keep |  | says what it does |
+| `TlsMeasurement` | struct |  | keep |  | says what it is; no core item of that name or concept |
+| `TlsMeasurement.spec` | field |  | keep |  | plain data name |
+| `TlsMeasurement.websocket_spec` | field |  | keep |  | plain data name |
+| `TlsMeasurement.samples` | field |  | keep |  | plain data name |
+| `TlsMeasurement.websocket_sample` | field |  | keep |  | plain data name |
+| `TlsMeasurement.known_gaps` | field |  | keep |  | plain data name |
+| `TlsMeasurement::from_hellos` | method |  | keep |  | says what it does |
+| `MeasuredFile` | struct |  | keep |  | says what it is; no core item of that name or concept |
+| `MeasuredFile::open` | method |  | keep |  | says what it does |
+| `MeasuredFile::path` | method |  | keep |  | says what it does |
+| `MeasuredFile::get` | method |  | keep |  | says what it does |
+| `MeasuredFile::set_identity` | method |  | keep |  | says what it does |
+| `MeasuredFile::set_tls` | method |  | keep |  | says what it does |
+| `MeasuredFile::set_hints` | method |  | keep |  | says what it does |
+| `MeasuredFile::stamp` | method |  | keep |  | says what it does |
+| `MeasuredFile::to_pretty_json` | method |  | keep |  | says what it does |
+| `MeasuredFile::save` | method |  | keep |  | says what it does |
+| `merge_tool` | function |  | keep |  | says what it is; no core item of that name or concept |
+| `write_fixtures` | function |  | keep |  | says what it is; no core item of that name or concept |
+| `to_hex` | function |  | keep |  | says what it is; no core item of that name or concept |
+| `from_hex` | function |  | keep |  | says what it is; no core item of that name or concept |
+
+### `scrape::runtime::capture::stream`
+
+| Item | Kind | Copied | Verdict | Proposed | Why |
+|---|---|---|---|---|---|
+| `DEFAULT_READ_TIMEOUT` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `MAX_HTTP_HEAD` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `MAX_HTTP_BODY` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `MAX_HTTP_HEADERS` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `CapturedHello` | struct |  | keep |  | says what it is; no core item of that name or concept |
+| `CapturedHello.peer` | field |  | keep |  | plain data name |
+| `CapturedHello.raw` | field |  | keep |  | plain data name |
+| `CapturedHello.hello` | field |  | keep |  | plain data name |
+| `CapturedH2c` | struct |  | keep |  | says what it is; no core item of that name or concept |
+| `CapturedH2c.peer` | field |  | keep |  | plain data name |
+| `CapturedH2c.raw` | field |  | keep |  | plain data name |
+| `CapturedH2c.preface` | field |  | keep |  | plain data name |
+| `CapturedHttp1` | struct |  | keep |  | says what it is; no core item of that name or concept |
+| `CapturedHttp1.peer` | field |  | keep |  | plain data name |
+| `CapturedHttp1.request` | field |  | keep |  | plain data name |
+| `Http1Request` | struct |  | keep |  | says what it is; no core item of that name or concept |
+| `Http1Request.method` | field |  | keep |  | plain data name |
+| `Http1Request.target` | field |  | keep |  | plain data name |
+| `Http1Request.version` | field |  | keep |  | plain data name |
+| `Http1Request.headers` | field |  | keep |  | plain data name |
+| `Http1Request.body` | field |  | keep |  | plain data name |
+| `Http1Request::header` | method |  | keep |  | says what it does |
+| `Http1Request::path` | method |  | keep |  | says what it does |
+| `read_client_hello` | function |  | keep |  | says what it is; no core item of that name or concept |
+| `read_h2c_preface` | function |  | keep |  | says what it is; no core item of that name or concept |
+| `read_http1_request` | function |  | keep |  | says what it is; no core item of that name or concept |
+| `h2c_reply` | function |  | keep |  | says what it is; no core item of that name or concept |
+| `http1_response` | function |  | keep |  | says what it is; no core item of that name or concept |
+| `Capture` | struct |  | keep |  | says what it is; no core item of that name or concept |
+| `Capture::bind` | method |  | keep |  | says what it does |
+| `Capture::with_timeout` | method |  | keep |  | says what it does |
+| `Capture::addr` | method |  | keep |  | says what it does |
+| `Capture::port` | method |  | keep |  | says what it does |
+| `Capture::accept_client_hello` | method |  | keep |  | says what it does |
+| `Capture::collect_client_hellos` | method |  | keep |  | says what it does |
+| `Capture::collect_client_hellos_until` | method |  | keep |  | says what it does |
+| `Capture::accept_h2c` | method |  | keep |  | says what it does |
+| `Capture::accept_http1` | method |  | keep |  | says what it does |
+
+### `scrape::runtime::cdp`
+
+| Item | Kind | Copied | Verdict | Proposed | Why |
+|---|---|---|---|---|---|
+| `CLEARANCE_POLL_INTERVAL` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `NavResponse` | struct |  | keep |  | says what it is; no core item of that name or concept |
+| `NavResponse.url` | field |  | keep |  | plain data name |
+| `NavResponse.status` | field |  | keep |  | plain data name |
+| `NavResponse.headers` | field |  | keep |  | plain data name |
+| `PageSnapshot` | struct |  | keep |  | says what it is; no core item of that name or concept |
+| `PageSnapshot.detection` | field |  | keep |  | plain data name |
+| `PageSnapshot.body` | field |  | keep |  | plain data name |
+| `goto_with_response` | function |  | keep |  | says what it is; no core item of that name or concept |
+| `detect_page` | function |  | keep |  | says what it is; no core item of that name or concept |
+| `EgressLocale` | struct |  | rename | `ProxyLocale` | core says proxy |
+| `EgressLocale.locale` | field |  | keep |  | plain data name |
+| `EgressLocale.timezone` | field |  | keep |  | plain data name |
+| `EgressLocale::resolve` | method |  | keep |  | says what it does |
+| `EgressLocale::localize` | method |  | keep |  | says what it does |
+| `apply_locale` | function |  | keep |  | sets only the locale and time zone of a tab for the proxy's country; core's `Page::apply_fingerprint` applies a whole fingerprint |
+| `export_cookies` | function |  | keep |  | says what it is; no core item of that name or concept |
+| `import_cookies` | function |  | keep |  | says what it is; no core item of that name or concept |
+| `clearance_value` | function |  | keep |  | says what it is; no core item of that name or concept |
+| `wait_for_clearance` | function |  | add to core | core `SolveOptions::clearance_cookie(name)` and the interstitial wait of `Page::solve_captcha` | another way to tell a solve worked: the clearance cookie changes or the interstitial goes, where core reads the widget's response field or a marker |
+| `capture_session` | function |  | keep |  | already builds on core's `Session` |
+| `restore_session` | function |  | keep |  | already builds on core's `Session` |
+| `human_warm_up` | function |  | keep |  | builds on core's `Page::human`; core has no warm-up |
+| `solve_widget` | function |  | keep |  | already calls core's `Page::solve_captcha_with` |
+
+### `scrape::runtime::identity_file`
+
+| Item | Kind | Copied | Verdict | Proposed | Why |
+|---|---|---|---|---|---|
+| `MAX_IDENTITY_FILE_BYTES` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `IdentityFileError` | enum |  | keep |  | one `<Area>Error` per area, as core's `FingerprintError` |
+| `IdentityFileError::Io` | enum variant |  | keep |  | names the case |
+| `IdentityFileError::Corrupt` | enum variant |  | keep |  | names the case |
+| `IdentityFileError::TooLarge` | enum variant |  | keep |  | names the case |
+| `IdentityFileError::Owner` | enum variant |  | keep |  | names the case |
+| `IdentityFileError::Permissions` | enum variant |  | keep |  | names the case |
+| `IdentityFileError::Identity` | enum variant |  | keep |  | names the case |
+| `IdentityFileError::is_not_found` | method |  | keep |  | says what it does |
+| `save_blocking` | function |  | keep |  | says what it is; no core item of that name or concept |
+| `load_blocking` | function |  | keep |  | says what it is; no core item of that name or concept |
+| `save` | function |  | keep |  | says what it is; no core item of that name or concept |
+| `load` | function |  | keep |  | says what it is; no core item of that name or concept |
 
 ## mimic (`seleniumbase_rs_stealth::mimic`)
 
@@ -1365,6 +1930,23 @@ takes or returns the type but no path names it today.
 | `MitmStats.upstream_errors` | field |  | keep |  | plain data name |
 | `MitmStats.websockets` | field |  | keep |  | plain data name |
 | `MitmStats.primed` | field |  | keep |  | plain data name |
+| `PROXY_USER` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `PRIME_HOST` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `PROXY_EVERYTHING_ARG` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `DISABLE_QUIC_ARG` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `DEFAULT_MAX_CONNECTIONS` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `MAX_CONNECTIONS` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `DEFAULT_MAX_HEADER_BYTES` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `MIN_HEADER_BYTES` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `MAX_HEADER_BYTES` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `DEFAULT_MAX_HEADERS` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `MAX_HEADERS` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `DEFAULT_MAX_BODY_BYTES` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `DEFAULT_IDLE_TIMEOUT` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `DEFAULT_CONNECT_TIMEOUT` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `DEFAULT_READ_TIMEOUT` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `DEFAULT_WEBSOCKET_IDLE_TIMEOUT` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `DEFAULT_MAX_WEBSOCKET_BYTES` | const |  | keep |  | says what it is; no core item of that name or concept |
 
 ### `mimic::stealth_session`
 
@@ -1421,6 +2003,8 @@ takes or returns the type but no path names it today.
 | `StealthSessionBuilder::solve_timeout` | method | yes | remove | core `SolveOptions::verify_timeout` | same result, same way: how long to wait for a solve to show its result |
 | `StealthSessionBuilder::clock` | method | yes | keep |  | says what it does |
 | `StealthSessionBuilder::build` | method | yes | keep |  | says what it does |
+| `Leg::Http` | enum variant |  | keep |  | names the case |
+| `Leg::Browser` | enum variant |  | keep |  | names the case |
 
 ### `mimic::tls_server`
 
@@ -1458,12 +2042,23 @@ takes or returns the type but no path names it today.
 | `TlsServerError::ClockOutOfRange` | enum variant |  | keep |  | names the case |
 | `TlsServerError::CaExpired` | enum variant |  | keep |  | names the case |
 | `TlsServerError::SniMismatch` | enum variant |  | keep |  | names the case |
+| `ALPN_HTTP1` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `DEFAULT_HANDSHAKE_TIMEOUT` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `DEFAULT_LEAF_CAPACITY` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `MAX_LEAF_CAPACITY` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `DEFAULT_CA_VALIDITY` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `MAX_CA_VALIDITY` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `DEFAULT_LEAF_VALIDITY` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `DEFAULT_LEAF_RENEW_MARGIN` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `CLOCK_SKEW_ALLOWANCE` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `acceptor` | function |  | keep |  | says what it is; no core item of that name or concept |
+| `accept` | function |  | keep |  | says what it is; no core item of that name or concept |
 
 ### `mimic::convert`
 
 | Item | Kind | Copied | Verdict | Proposed | Why |
 |---|---|---|---|---|---|
-| `ConvertError` | enum |  | keep, export |  | keep the name and export it: a public signature takes or returns it, but callers cannot name it |
+| `ConvertError` | enum |  | keep |  | one `<Area>Error` per area, as core's `FingerprintError` |
 | `ConvertError::UnsupportedAlpn` | enum variant |  | keep |  | names the case |
 | `ConvertError::UnsupportedAlps` | enum variant |  | keep |  | names the case |
 | `ConvertError::CipherName` | enum variant |  | keep |  | names the case |
@@ -1481,10 +2076,151 @@ takes or returns the type but no path names it today.
 | `ConvertError::StreamId` | enum variant |  | keep |  | names the case |
 | `ConvertError::Weight` | enum variant |  | keep |  | names the case |
 | `ConvertError::Header` | enum variant |  | keep |  | names the case |
+| `check_emittable` | function |  | keep |  | says what it is; no core item of that name or concept |
+| `tls_options` | function |  | keep |  | says what it is; no core item of that name or concept |
+| `http2_options` | function |  | keep |  | says what it is; no core item of that name or concept |
+| `wreq_headers` | function |  | keep |  | says what it is; no core item of that name or concept |
 
 ### `mimic::http_session::options`
 
 | Item | Kind | Copied | Verdict | Proposed | Why |
 |---|---|---|---|---|---|
 | `Clock` | type alias |  | remove | scrape's `Clock` | same result, same way: the same alias defined twice in this repository |
+
+### `mimic::capture_h2`
+
+| Item | Kind | Copied | Verdict | Proposed | Why |
+|---|---|---|---|---|---|
+| `FLAG_H1` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `FLAG_H2` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `USAGE_PASSES` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `CaptureH2Error` | enum |  | keep |  | one `<Area>Error` per area, as core's `FingerprintError` |
+| `CaptureH2Error::Capture` | enum variant |  | keep |  | names the case |
+| `CaptureH2Error::Tls` | enum variant |  | keep |  | names the case |
+| `CaptureH2Error::H2` | enum variant |  | keep |  | names the case |
+| `CaptureH2Error::Spec` | enum variant |  | keep |  | names the case |
+| `CaptureH2Error::Headers` | enum variant |  | keep |  | names the case |
+| `CaptureH2Error::Json` | enum variant |  | keep |  | names the case |
+| `CaptureH2Error::UnknownHost` | enum variant |  | keep |  | names the case |
+| `CaptureH2Error::NoServerName` | enum variant |  | keep |  | names the case |
+| `CaptureH2Error::NotNegotiated` | enum variant |  | keep |  | names the case |
+| `CaptureH2Error::MissingProbe` | enum variant |  | keep |  | names the case |
+| `CaptureH2Error::WrongDestination` | enum variant |  | keep |  | names the case |
+| `CaptureH2Error::ProbesDisagree` | enum variant |  | keep |  | names the case |
+| `CaptureH2Error::Evidence` | enum variant |  | keep |  | names the case |
+| `CaptureH2Error::Credential` | enum variant |  | keep |  | names the case |
+| `CaptureH2Error::NoBase` | enum variant |  | keep |  | names the case |
+| `CaptureH2Error::VersionMismatch` | enum variant |  | keep |  | names the case |
+| `CaptureH2Error::Store` | enum variant |  | keep |  | names the case |
+| `CaptureH2Error::DifferentBrowsers` | enum variant |  | keep |  | names the case |
+| `Passes` | enum |  | keep |  | says what it is; no core item of that name or concept |
+| `Passes::Both` | enum variant |  | keep |  | names the case |
+| `Passes::H2Only` | enum variant |  | keep |  | names the case |
+| `Passes::H1Only` | enum variant |  | keep |  | names the case |
+| `parse_args` | function |  | keep |  | says what it is; no core item of that name or concept |
+| `Report` | struct |  | keep |  | says what it is; no core item of that name or concept |
+| `Report.version` | field |  | keep |  | plain data name |
+| `Report.id` | field |  | keep |  | plain data name |
+| `Report.h2` | field |  | keep |  | plain data name |
+| `Report.h1` | field |  | keep |  | plain data name |
+| `Report.derived` | field |  | keep |  | plain data name |
+| `Report.path` | field |  | keep |  | plain data name |
+| `Report.fixtures` | field |  | keep |  | plain data name |
+| `measure_and_write` | function |  | keep |  | says what it is; no core item of that name or concept |
+
+### `mimic::capture_h2::assemble`
+
+| Item | Kind | Copied | Verdict | Proposed | Why |
+|---|---|---|---|---|---|
+| `H2Evidence` | struct |  | keep |  | says what it is; no core item of that name or concept |
+| `H2Evidence.probe` | field |  | keep |  | plain data name |
+| `H2Evidence.sni` | field |  | keep |  | plain data name |
+| `H2Evidence.raw_hex` | field |  | keep |  | plain data name |
+| `H2Evidence.akamai` | field |  | keep |  | plain data name |
+| `H2Evidence.stream_id` | field |  | keep |  | plain data name |
+| `H2Evidence.headers_priority` | field |  | keep |  | plain data name |
+| `H2Evidence.headers` | field |  | keep |  | plain data name |
+| `H1Evidence` | struct |  | keep |  | says what it is; no core item of that name or concept |
+| `H1Evidence.probe` | field |  | keep |  | plain data name |
+| `H1Evidence.sni` | field |  | keep |  | plain data name |
+| `H1Evidence.method` | field |  | keep |  | plain data name |
+| `H1Evidence.version` | field |  | keep |  | plain data name |
+| `H1Evidence.headers` | field |  | keep |  | plain data name |
+| `Derived` | struct |  | keep |  | says what it is; no core item of that name or concept |
+| `Derived.http2` | field |  | keep |  | plain data name |
+| `Derived.headers` | field |  | keep |  | plain data name |
+| `Derived.differences` | field |  | keep |  | plain data name |
+| `H2Evidence::of` | method |  | keep |  | says what it does |
+| `H2Evidence::preface` | method |  | keep |  | says what it does |
+| `H2Evidence::header` | method |  | keep |  | says what it does |
+| `H1Evidence::header` | method |  | keep |  | says what it does |
+| `h2_evidence` | function |  | keep |  | says what it is; no core item of that name or concept |
+| `h1_evidence` | function |  | keep |  | says what it is; no core item of that name or concept |
+| `derive` | function |  | keep |  | says what it is; no core item of that name or concept |
+
+### `mimic::capture_h2::browser`
+
+| Item | Kind | Copied | Verdict | Proposed | Why |
+|---|---|---|---|---|---|
+| `run_pass` | function |  | keep |  | says what it is; no core item of that name or concept |
+
+### `mimic::capture_h2::probes`
+
+| Item | Kind | Copied | Verdict | Proposed | Why |
+|---|---|---|---|---|---|
+| `Probe` | struct |  | keep |  | says what it is; no core item of that name or concept |
+| `Probe.name` | field |  | keep |  | plain data name |
+| `Probe.dest` | field |  | keep |  | plain data name |
+| `DOCUMENT` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `FETCH` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `IMAGE` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `SCRIPT` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `STYLE` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `PROBES` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `DOCUMENT_BODY` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `Probe::host` | method |  | keep |  | says what it does |
+| `Probe::for_host` | method |  | keep |  | says what it does |
+| `Probe::url` | method |  | keep |  | says what it does |
+| `page_script` | function |  | keep |  | says what it is; no core item of that name or concept |
+
+### `mimic::capture_h2::site`
+
+| Item | Kind | Copied | Verdict | Proposed | Why |
+|---|---|---|---|---|---|
+| `ALPN_H2` | const |  | keep |  | says what it is; no core item of that name or concept |
+| `Protocol` | enum |  | keep |  | says what it is; no core item of that name or concept |
+| `Protocol::H2` | enum variant |  | keep |  | names the case |
+| `Protocol::Http1` | enum variant |  | keep |  | names the case |
+| `Protocol::alpn` | method |  | keep |  | says what it does |
+| `Seen` | enum |  | keep |  | says what it is; no core item of that name or concept |
+| `Seen::H2` | enum variant |  | keep |  | names the case |
+| `Seen::Http1` | enum variant |  | keep |  | names the case |
+| `Observed` | struct |  | keep |  | says what it is; no core item of that name or concept |
+| `Observed.probe` | field |  | keep |  | plain data name |
+| `Observed.seen` | field |  | keep |  | plain data name |
+| `Site` | struct |  | keep |  | says what it is; no core item of that name or concept |
+| `Site::bind` | method |  | keep |  | says what it does |
+| `Site::port` | method |  | keep |  | says what it does |
+| `Site::chrome_arg` | method |  | keep |  | says what it does |
+| `Site::ca` | method |  | keep |  | says what it does |
+| `Site::collect_until` | method |  | keep |  | says what it does |
+| `peek_server_name` | function |  | keep |  | says what it is; no core item of that name or concept |
+| `h2_reply` | function |  | keep |  | says what it is; no core item of that name or concept |
+
+### `mimic::capture_h2::store`
+
+| Item | Kind | Copied | Verdict | Proposed | Why |
+|---|---|---|---|---|---|
+| `MeasuredDoc` | struct |  | keep |  | says what it is; no core item of that name or concept |
+| `MeasuredDoc::open` | method |  | keep |  | says what it does |
+| `MeasuredDoc::path` | method |  | keep |  | says what it does |
+| `MeasuredDoc::h2_evidence` | method |  | keep |  | says what it does |
+| `MeasuredDoc::h1_evidence` | method |  | keep |  | says what it does |
+| `MeasuredDoc::set_h2_evidence` | method |  | keep |  | says what it does |
+| `MeasuredDoc::set_h1_evidence` | method |  | keep |  | says what it does |
+| `MeasuredDoc::set_derived` | method |  | keep |  | says what it does |
+| `MeasuredDoc::stamp` | method |  | keep |  | says what it does |
+| `MeasuredDoc::to_pretty_json` | method |  | keep |  | says what it does |
+| `MeasuredDoc::save` | method |  | keep |  | says what it does |
+| `write_h2_fixtures` | function |  | keep |  | says what it is; no core item of that name or concept |
 
