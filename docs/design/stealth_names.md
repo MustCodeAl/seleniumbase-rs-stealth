@@ -1,8 +1,7 @@
-# Stealth names: what the stealth API should cover, build on and be called
+# Stealth names: what the stealth API should cover, build on, add to core and be called
 
-Status: proposal (phase 1, fourth round). No code changes yet; the work starts once the
-owner approves this list. Nothing in it moves into core: every change is in this
-repository.
+Status: proposal (phase 1, fifth round). No code changes yet; the work starts once the
+owner approves this list.
 
 ## What the stealth crate is for
 
@@ -24,83 +23,103 @@ In the user's words:
 > covering ground the core project doesnt and adding onto them and making sure these apis
 > fit with the rest of the project names
 
-So every stealth item answers four questions:
+> if the some of the stealthscraping features have different strategy of doing same
+> certain things then its fine to integrate them into the core as additional ways of doing
+> things, not just getting rid of it cause core does
+
+So every stealth item answers five questions:
 
 1. Does it cover ground core does not? Then it stays here.
-2. Does it duplicate a core concept? Then it builds on the core type (takes or extends
-   core's `Fingerprint`, `Session`, `Proxy`, `ProxyList`, `SolveOptions`, `Locale`, ...)
-   and adds only the stealth part on top.
-3. Does it only duplicate core and add nothing? Then it goes, in favour of the core item.
-4. Does its name fit the project's names and patterns? If not, it is renamed.
+2. Does it do a core job with a **different strategy**? Then that strategy is added to core
+   as another way of doing the job: an enum variant or a builder option on the core type,
+   not a parallel type.
+3. Does it hold the same data as a core concept? Then it builds on the core type (takes or
+   extends core's `Fingerprint`, `Session`, `Proxy`, `Geolocation`, ...) and adds only the
+   stealth part.
+4. Is it a copy of a core item with the same strategy? Then it goes, in favour of the core
+   item.
+5. Does its name fit the project's names and patterns? If not, it is renamed.
 
-The verdicts are therefore **keep**, **rename**, **build on core** (naming the core type)
-and **remove**. The low-level spoofing that stealthscraper-rs brought (TLS/JA4 and HTTP/2
-emulation, the MITM proxy, the impersonating HTTP client) is new ground and stays; what
-changes is the API that was copied with it.
+The verdicts are **keep**, **rename**, **add to core** (naming the core type and the
+option or variant), **build on core** (naming the core type) and **remove**. The low-level
+spoofing that stealthscraper-rs brought (TLS/JA4 and HTTP/2 emulation, the MITM proxy, the
+impersonating HTTP client) is new ground and stays here.
 
 ## Duplicated concepts
 
-| Stealth item | Core concept it duplicates | Verdict |
-|---|---|---|
-| `StealthIdentity` (its own cookie list beside core's `Fingerprint`) | `sb_cdp::session_store::Session`, `Fingerprint` | build on core: `Identity`, holding a core `Session` and `Fingerprint`, plus the wire measurement, proxy route and clearances |
-| `ImpersonationProfile` (User-Agent, Accept-Language, client hints, `random()`, `with_locale`) and the matching `CustomProfileBuilder` setters | `Fingerprint` (and its seeded randomization) | build on core: `WireFormat` reads those from the `Fingerprint` and keeps the TLS, HTTP/2 and header-order part; the copies go |
-| codec `HeaderIdentity` | `Fingerprint` | build on core: `ClientHeaders::from_fingerprint`, keeping the cookie and the overrides |
-| codec `BrowserKind` | `browser::config::Browser` | remove |
-| `ProxyPool` (its own list of proxies) | `config::proxy_list::ProxyList` (`--proxy-list`, `SB_PROXY_LIST`) | build on core: `ProxyPool::from_list(ProxyList, RotationStrategy)`; the strategies, quarantine and countries stay |
-| `EgressRef` and the "egress" word | `Proxy`, `ContextRoute` | build on core: `ProxyRoute` on core's `Proxy` and `ContextRoute`, plus the exit country; "egress" becomes "proxy" in member names |
-| `EgressSwitch`, `ContextProxySwitch` | `ContextOptions::proxy`, `Browser::new_context_with` | remove |
-| `MitigationPolicy.max_challenge_attempts`, `solve_timeout` | `sb_cdp::captcha::SolveOptions` (`attempts`, timeouts) | build on core: the policy holds a core `SolveOptions`; the copied field goes |
-| `BrowserScraper::solve_challenge` | `Page::solve_captcha` | build on core: detection and mitigation around core's solver |
-| `rotate_profile` | `Page::apply_fingerprint` | build on core: `rotate_fingerprint` through `apply_fingerprint` |
-| `fingerprint(...)` and `seed(...)` on `BrowserScraperBuilder` and `StealthSessionBuilder`; `BrowserScraper::seed` | `LaunchOptionsBuilder::fingerprint`, `Fingerprint::seed` | remove: the builders already take core's `LaunchOptionsBuilder` |
-| `BrowserLauncher`, `ChromeLauncher`, the builders' `launcher` | `Browser::launch`, `Browser::launch_mocked` | remove |
-| `GeoInfo.coordinates` (`(f64, f64)`) | `evasion::settings::Geolocation` | build on core |
-| mimic `Clock` | scrape's `Clock` (the same alias) | remove |
+| Stealth item | Core concept | Same strategy? | Verdict |
+|---|---|---|---|
+| `ProxyPool`, `RotationStrategy` | `ProxyList` (`--proxy-list`, `SB_PROXY_LIST`; round-robin or random) | no: least failures, sticky per site, quarantine after failures | **add to core**: `RotationStrategy` (`RoundRobin`, `Random`, `LeastFailures`, `StickyPerSite`) set with `ProxyList::rotation`, plus `quarantine`, `report(name, ProxyOutcome)`, `pick(site)`, `pick_other`. Country picks stay here as an extension trait on `ProxyList` |
+| `MitigationPolicy` | `SolveOptions` (`attempts`, `backoff`: press the widget again) | no: rounds of a page, rotating the proxy or fingerprint, cooling down | **add to core**: `SolveOptions::rounds`, `rotate_proxy_after`, `rotate_fingerprint_after`, `cooldown`. The step from HTTP to the browser stays here |
+| `BrowserScraper::solve_challenge` | `Page::solve_captcha` (press a widget, check its response or a marker) | no: also waits out a JS interstitial and checks for the clearance | **add to core**: `solve_captcha` waits out an interstitial with no widget; `SolveOptions::clearance_cookie(name)` as another success check. Detection and mitigation around it stay here |
+| `solve_timeout` (both builders) | `SolveOptions::verify_timeout` | yes: how long to wait for a solve's result | remove |
+| `EgressSwitch`, `ContextProxySwitch` | `ContextOptions::proxy`, `Browser::new_context_with` | `ContextProxySwitch` yes (core's path); the MITM upstream swap no | `ContextProxySwitch` removed; `EgressSwitch` renamed `ProxySwitch`, the seam for core's path and the MITM swap, which needs the MITM proxy and stays here |
+| `BrowserLauncher`, `ChromeLauncher` | `Browser::launch`, `BrowserPool::with_launcher` | `ChromeLauncher` yes (it calls `Browser::launch`) | `ChromeLauncher` removed; `BrowserLauncher` builds on core: a launch closure, as `BrowserPool::with_launcher` takes |
+| `rotate_profile` | `Page::apply_fingerprint` (in place) | no: relaunches with a new fingerprint in the proxy's locale | rename `rotate_fingerprint`; stays here |
+| builders' `seed` | `Fingerprint::seed` | no: seeds a chain, each rotation deriving the next seed | keep |
+| builders' `fingerprint` | `LaunchOptionsBuilder::fingerprint` | same data (the first fingerprint) | build on core: read it from the `LaunchOptionsBuilder` given to `launch_options` |
+| `StealthIdentity` | `Session`, `Fingerprint` | same data plus stealth parts | build on core: `Identity` holding a core `Session` and `Fingerprint`, plus the wire measurement, proxy route and clearances |
+| `ImpersonationProfile` (User-Agent, Accept-Language, client hints) and the matching `CustomProfileBuilder` setters | `Fingerprint` | same data | build on core: `WireFormat` reads them from the `Fingerprint`; `user_agent`, `accept_language`, `with_locale` removed (they return or set the fingerprint's values). `random` stays: it builds on `Fingerprint::randomized_with_major` and also picks the measured wire entry |
+| codec `HeaderIdentity` | `Fingerprint` | same data | build on core: `ClientHeaders::from_fingerprint` |
+| `EgressRef`, "egress" | `Proxy`, `ContextRoute` | same data plus the exit country | build on core: `ProxyRoute`; "egress" becomes "proxy" in member names |
+| `GeoInfo.coordinates` | `Geolocation` | same data | build on core |
+| codec `BrowserKind` | `browser::config::Browser` | yes: a list of browsers | remove |
+| mimic `Clock` | scrape's `Clock` | yes: the same alias | remove |
 
-Names that clash with core items while covering new ground are renamed, not merged:
-`Emulation` → `WireMeasurement` (core `sb_cdp::state::Emulation`), `Evidence` →
-`ChallengeEvidence` (core `sb_cdp::captcha::Evidence`), `StateStore`/`DomainState` →
-`Ledger`/`SiteRecord` (core `sb_cdp::state`), `Transition` → `Escalation` (core
-`api::presentation::Transition`), `HttpOptions` → `HttpSessionOptions` (core
-`mcp::http::HttpOptions`).
-
-Already built on core, the shape the rest should follow: `LocaleExt` (extends core's
-`Locale`), `CookieJar` (`from_cdp`/`to_cdp` with core's `Cookie`), `MitigationPolicy.backoff`
-(core's `RetryPolicy`), `ChallengeEvidence.widget` (core's `Captcha`), `BrowserScraper` and
-`StealthSession` (hold core's `Browser` and `Page`, take a `LaunchOptionsBuilder`),
-`save_session`/`load_session` (core's `SessionStore`), `HttpSession::from_page` (core's
-`Page`), `MitmProxy::configure_launch` (core's `LaunchOptionsBuilder`). Nothing here
+Names that clash with core items while covering new ground are renamed: `Emulation` →
+`WireMeasurement`, `Evidence` → `ChallengeEvidence`, `StateStore`/`DomainState` →
+`Ledger`/`SiteRecord`, `Transition` → `Escalation`, `HttpOptions` → `HttpSessionOptions`.
+Already built on core: `LocaleExt` (core `Locale`), `CookieJar` (core `Cookie`),
+`ChallengeEvidence.widget` (core `Captcha`), `BrowserScraper` and `StealthSession` (core
+`Browser`, `Page`, `LaunchOptionsBuilder`), `save_session`/`load_session` (core
+`SessionStore`), `HttpSession::from_page`, `MitmProxy::configure_launch`. Nothing here
 duplicates `StealthPolicy` or `BrowserPool`.
+
+## What core gains
+
+The strategies above, in core's patterns, as one core PR in phase 2:
+
+- `config::proxy_list`: `RotationStrategy` (`RoundRobin`, `Random`, `LeastFailures`,
+  `StickyPerSite`), `ProxyOutcome`, and on `ProxyList` the options `rotation`,
+  `quarantine(after_failures, for_secs)` and the calls `pick(site)`, `pick_other(name,
+  site)`, `report(name, outcome)`. `next_round_robin` and `random` become two strategies of
+  the same pick.
+- `sb_cdp::captcha`: on `SolveOptions` the options `rounds(n)`, `rotate_proxy_after(n)`,
+  `rotate_fingerprint_after(n)`, `cooldown(duration)` and `clearance_cookie(name)`; and
+  `Page::solve_captcha` waits out a JS interstitial that has no widget.
 
 ## Counts
 
 | | Items | Of them copied |
 |---|---|---|
 | Reviewed | 1049 | 264 |
-| Keep | 891 (24 also need an export) | 183 |
-| Rename | 106 (9 also need an export) | 55 |
-| Build on core | 24 | 11 |
-| Remove | 28 | 15 |
+| Keep | 880 (24 also need an export) | 175 |
+| Rename | 106 (8 also need an export) | 55 |
+| Add to core (another strategy) | 23 | 18 |
+| Build on core | 24 | 9 |
+| Remove (same-strategy copy) | 16 | 7 |
 
-| Crate | Keep | Rename | Build on core | Remove |
-|---|---|---|---|---|
-| packages, features, facade | 10 | 3 | 0 | 1 |
-| codec | 372 | 12 | 9 | 3 |
-| scrape | 251 | 49 | 10 | 13 |
-| mimic | 258 | 42 | 5 | 11 |
+| Crate | Keep | Rename | Add to core | Build on core | Remove |
+|---|---|---|---|---|---|
+| packages, features, facade | 10 | 3 | 0 | 0 | 1 |
+| codec | 372 | 12 | 0 | 9 | 3 |
+| scrape | 238 | 49 | 23 | 9 | 4 |
+| mimic | 260 | 42 | 0 | 6 | 8 |
 
 "Copied" counts an item whose name or shape comes from stealthscraper-rs, with every member
-of such a type. Most copied items stay (keep or rename) because the feature is new ground;
-the 26 that build on core or go are where the copy repeated a core concept. "Export" means
-a public signature takes or returns the type but no path names it today (33 types).
+of such a type. "Export" means a public signature takes or returns the type but no path
+names it today (32 types). Each "remove" row says in one line why it is the same strategy
+as the item that replaces it.
 
-## What changed since the third round
+## What changed since the fourth round
 
-The third round proposed merging stealth items into core. The user's rule is the
-opposite: the stealth API stays in this repository, covers what core does not, and builds
-on core's types. So the "merge" and "private" verdicts are gone, and no item moves into
-core: the 196 merge rows became keep, rename, build on core or remove, and the plumbing that
-covers new ground (the cookie jar, the MITM proxy, the event sinks, the ledger) stays.
+The fourth round removed 28 items and built 24 on core. Re-checked for a different
+strategy: the proxy rotation strategies, the challenge mitigation (rounds, rotation,
+cooldown) and the clearance wait of `solve_challenge` are other ways of doing core jobs,
+so they become 23 "add to core" rows. The builders' `seed` (a rotation chain) and
+`ImpersonationProfile::random` (it also picks the wire entry) are not copies and stay.
+`BrowserLauncher` builds on core's launcher closure instead of going. Sixteen rows remain
+removals, each a same-strategy copy.
 
 ## How this list was made
 
@@ -114,18 +133,14 @@ covers new ground (the cookie jar, the MITM proxy, the event sinks, the ledger) 
   private modules are not reachable and not listed. Trait impls add no names and are not
   listed.
 - **What was copied.** Judged from the stealthscraper-rs feature list in the project's
-  notes (their `CloudScraper` builder and its options, `StealthSession` and
-  `StealthIdentity`, `ProxyPool` with `RotationStrategy`, `ScraperEvent` and `EventSink`,
-  `StateStore` and `DomainState`, `MitigationPolicy` and `Action`, `impersonation_client`,
-  `BrowserProfile::random`, `BrowserKind`, `rotate_profile`, the `TlsSpoofingProxy`, and
-  names from their plan such as `EgressRef`, `JsonStateStore`, `SessionPolicy`). The
-  stealthscraper-rs crate itself was not read, as the standing rule says.
+  notes; the stealthscraper-rs crate itself was not read, as the standing rule says.
+- **Strategies.** Compared from the doc comments of both sides in their indexes: for
+  example core's `SolveOptions::attempts` ("how many times to press the widget") against
+  `MitigationPolicy.max_challenge_attempts` (rounds of a page), core's
+  `ProxyList::next_round_robin` and `random` against `RotationStrategy`,
+  `ChromeLauncher` ("starts Chrome with `Browser::launch`") against core's launch.
 - **Core.** The names of all 133 stealth types were compared with core's 986 public types
-  (core at `41a2e3da`, main plus the mise removal, which changes no public type), and the
-  core items named above were read in core's index: `Session` and `SessionStore`,
-  `ContextRoute`, `SolveOptions` and `Page::solve_captcha`, `Page::apply_fingerprint`,
-  `ProxyList` with `SB_PROXY_LIST`, `StealthPolicy`, `LaunchOptionsBuilder`, `RateLimiter`,
-  `RetryPolicy`, `Locale`.
+  (core at `41a2e3da`), and the core items named above were read in core's index.
 
 ## The new words in one place
 
@@ -135,7 +150,9 @@ covers new ground (the cookie jar, the MITM proxy, the event sinks, the ledger) 
 | impersonation profile, custom profile builder | `WireFormat`, `WireFormatBuilder` (on core `Fingerprint`) |
 | emulation (codec's measured data) | wire measurement (`WireMeasurement`) |
 | header identity | client headers (`ClientHeaders`, from core `Fingerprint`) |
-| egress, `EgressRef`, `EgressKey` | proxy route (`ProxyRoute`, `ProxyKey`), `rotate_proxy`, `swap_proxy` |
+| egress, `EgressRef`, `EgressKey`, `EgressSwitch` | proxy route (`ProxyRoute`, `ProxyKey`), `ProxySwitch`, `rotate_proxy`, `swap_proxy` |
+| proxy pool strategies | core `RotationStrategy` on `ProxyList` |
+| mitigation policy fields | core `SolveOptions` options (`rounds`, `rotate_proxy_after`, `rotate_fingerprint_after`, `cooldown`) |
 | mode, transition, session policy | fetch kind (`FetchKind`), escalation (`Escalation`), escalation policy (`EscalationPolicy`) |
 | state store, domain state | ledger (`Ledger`), site record (`SiteRecord`) |
 | profile rotation | fingerprint rotation (`rotate_fingerprint`) |
@@ -149,29 +166,39 @@ covers new ground (the cookie jar, the MITM proxy, the event sinks, the ledger) 
 
 1. **`Identity`.** The saved identity becomes `Identity`, built on core's `Session` and
    `Fingerprint`. Core's `sb_cdp::identity` module holds `StealthPlan` (there is no core
-   `Identity` type). Is the name `Identity` right for the stealth type?
-2. **`fingerprint(...)`.** The stealth builders' `fingerprint` and `seed` repeat core's
-   `LaunchOptionsBuilder::fingerprint` and `Fingerprint::seed`; this list removes them, so a
-   caller sets the fingerprint on the launch builder passed to `launch_options`. Agreed?
-3. **The `mimic` crate.** Rename the package `seleniumbase-rs-wire` (feature and facade
+   `Identity` type). Is the name right?
+2. **`fingerprint(...)`.** The stealth builders read the first fingerprint from the
+   `LaunchOptionsBuilder` given to `launch_options` (core's `fingerprint` option) instead
+   of their own setter. Agreed?
+3. **Where the challenge strategies go.** The proposal puts rounds, proxy and fingerprint
+   rotation, cooldown and the clearance check on core's `SolveOptions`, and the interstitial
+   wait in `Page::solve_captcha`. Rotating needs the page to reach a proxy list and a
+   fingerprint source; is `SolveOptions` the right home, or a separate core option on the
+   launch (`LaunchOptionsBuilder::challenges(...)`)?
+4. **Proxy countries.** Core's `ProxyList` gains the rotation strategies. Should
+   `ProxyEntry` also carry an exit country (a country code type in core), or do country
+   picks stay a stealth extension trait on `ProxyList`, as proposed?
+5. **The `mimic` crate.** Rename the package `seleniumbase-rs-wire` (feature and facade
    path `wire`)?
-4. **Two wire words.** `WireMeasurement` (codec: measured data with provenance) and
+6. **Two wire words.** `WireMeasurement` (codec: measured data with provenance) and
    `WireFormat` (mimic: what a client sends, built from a measurement and a core
    `Fingerprint`), or one word for both?
-5. **Events.** Keep the typed `EventSink` with its `tracing` sink, or send stealth events
+7. **Events.** Keep the typed `EventSink` with its `tracing` sink, or send stealth events
    through `tracing` only?
 
 ## Phase 2 (after approval)
 
-In this repository only: renames with `tokensave rename` (a dry run first), the
-build-on-core changes, the removals, every caller and test, the stealth API reference
-pages, and the contract files. Breaking changes, no shims. Core does not change.
+One core PR for the strategies in "What core gains", then one stealth PR: renames with
+`tokensave rename` (a dry run first), the build-on-core changes, the removals, the switch
+to core's new strategies, every caller and test, the stealth API reference pages and the
+contract files. Breaking changes, no shims.
 
 ## Every public item
 
 One row per item. "Copied" marks an item whose name or shape comes from stealthscraper-rs
-(with every member of such a type). Verdicts: keep, rename, build on core (the core type it
-should take or extend), remove (only duplicates core); "export" when a public signature
+(with every member of such a type). Verdicts: keep, rename, add to core (another strategy,
+with the core type and the option or variant), build on core (the core type it should take
+or extend), remove (a same-strategy copy, with the reason); "export" when a public signature
 takes or returns the type but no path names it today.
 
 ## Packages, features and the facade
@@ -183,7 +210,7 @@ takes or returns the type but no path names it today.
 | `seleniumbase-rs-stealth` (package) | package |  | keep |  | says what it adds to seleniumbase-rs |
 | `seleniumbase-rs-codec` (package) | package |  | keep |  | it encodes and decodes wire fingerprints |
 | `seleniumbase-rs-scrape` (package) | package |  | keep |  | the scraping runtime; the docs say scrape |
-| `seleniumbase-rs-mimic` (package) | package |  | rename | `seleniumbase-rs-wire` | "mimic" does not say what it holds: the HTTP client that sends a browser's wire format, the MITM proxy and the session that switches between them; the docs call this wire formats. Decision 3 |
+| `seleniumbase-rs-mimic` (package) | package |  | rename | `seleniumbase-rs-wire` | "mimic" does not say what it holds: the HTTP client that sends a browser's wire format, the MITM proxy and the session that switches between them; the docs call this wire formats. Decision 5 |
 
 ### (features)
 
@@ -192,7 +219,7 @@ takes or returns the type but no path names it today.
 | `default = ["scrape"]` | feature |  | keep |  |  |
 | `codec` | feature |  | keep |  | named after its crate |
 | `scrape` | feature |  | keep |  | named after its crate |
-| `mimic` | feature |  | rename | `wire` | follows the package. Decision 3 |
+| `mimic` | feature |  | rename | `wire` | follows the package. Decision 5 |
 | `test-fixtures` (codec) | feature |  | keep |  | says what it turns on |
 
 ### src/lib.rs
@@ -200,10 +227,10 @@ takes or returns the type but no path names it today.
 | Item | Kind | Copied | Verdict | Proposed | Why |
 |---|---|---|---|---|---|
 | `pub use seleniumbase_rs::*` | re-export |  | keep |  | the facade is core plus the stealth crates |
-| `pub use seleniumbase_rs::evasion::*` | re-export |  | remove |  | gives every `evasion` item a second path at the root; core keeps them under `evasion::`, one path per item |
+| `pub use seleniumbase_rs::evasion::*` | re-export |  | remove |  | same strategy: gives every `evasion` item a second path at the root; core keeps them under `evasion::`, one path per item |
 | `codec` (`seleniumbase_rs_codec`) | re-export |  | keep |  |  |
 | `scrape` (`seleniumbase_rs_scrape`) | re-export |  | keep |  |  |
-| `mimic` (`seleniumbase_rs_mimic`) | re-export |  | rename | `wire` | follows the package. Decision 3 |
+| `mimic` (`seleniumbase_rs_mimic`) | re-export |  | rename | `wire` | follows the package. Decision 5 |
 
 ## codec (`seleniumbase_rs_stealth::codec`)
 
@@ -352,7 +379,7 @@ takes or returns the type but no path names it today.
 | `H2SpecError::InitialStreamId` | enum variant |  | keep |  | names the case |
 | `H2SpecError::Incomplete` | enum variant |  | keep |  | names the case |
 | `H2SpecError::Capture` | enum variant |  | keep |  | names the case |
-| `Http2Spec` | type alias |  | remove |  | a second name for `H2Spec` |
+| `Http2Spec` | type alias |  | remove | `H2Spec` | same strategy: a second name for `H2Spec` |
 
 ### `codec::header_spec`
 
@@ -592,7 +619,7 @@ takes or returns the type but no path names it today.
 
 | Item | Kind | Copied | Verdict | Proposed | Why |
 |---|---|---|---|---|---|
-| `BrowserKind` | enum | yes | remove | core `browser::config::Browser` | **copied** (`BrowserKind` picks the measured browser); it repeats core's `Browser` enum and adds nothing (one variant, `Chrome`) |
+| `BrowserKind` | enum | yes | remove | core `browser::config::Browser` | **copied** (`BrowserKind`); same strategy: a list of browsers, as core's `Browser` enum (one variant here, `Chrome`) |
 | `BrowserKind::Chrome` | enum variant | yes | remove |  | goes with its type |
 
 ### `codec::h2_frames`
@@ -720,13 +747,13 @@ takes or returns the type but no path names it today.
 | `GiveUpReason::AttemptsExhausted` | enum variant |  | keep |  | names the case |
 | `GiveUpReason::Blocked` | enum variant |  | keep |  | names the case |
 | `GiveUpReason::NoEgressLeft` | enum variant |  | keep |  | names the case |
-| `MitigationPolicy` | struct | yes | build on core | hold a core `SolveOptions` (beside `backoff`, already core's `RetryPolicy`) | **copied**; covers ground core does not (rotate, escalate, cool down), but its attempt count repeats core `SolveOptions::attempts`. The name fits the `<Thing>Policy` pattern of `StealthPolicy` |
-| `MitigationPolicy.max_challenge_attempts` | field | yes | remove | core `SolveOptions::attempts` | the same setting, through the policy's `SolveOptions` |
-| `MitigationPolicy.backoff` | field | yes | keep |  | already builds on core's `RetryPolicy` |
-| `MitigationPolicy.rotate_egress_after` | field | yes | rename | `rotate_proxy_after` | core says proxy |
-| `MitigationPolicy.rotate_profile_after` | field | yes | rename | `rotate_fingerprint_after` | follows `RotateFingerprint` |
-| `MitigationPolicy.block_cooldown_secs` | field | yes | keep |  | plain data name |
-| `MitigationPolicy::decide` | method | yes | keep |  | covers ground core does not |
+| `MitigationPolicy` | struct | yes | add to core | core `SolveOptions`: `rounds(n)`, `rotate_proxy_after(n)`, `rotate_fingerprint_after(n)`, `cooldown(duration)`; the step to the browser stays here | **copied**; core retries by pressing the widget again (`attempts`, `backoff`), this retries across rounds by rotating the proxy or the fingerprint and cooling down: another retry strategy. Decision 3 |
+| `MitigationPolicy.max_challenge_attempts` | field | yes | add to core | `SolveOptions::rounds(n)` | not core's `attempts` (presses of one widget): it counts rounds of a page through challenges |
+| `MitigationPolicy.backoff` | field | yes | build on core | core `SolveOptions::backoff` | already core's `RetryPolicy`; once the strategy is in `SolveOptions`, it is that option |
+| `MitigationPolicy.rotate_egress_after` | field | yes | add to core | `SolveOptions::rotate_proxy_after(n)` | another retry step |
+| `MitigationPolicy.rotate_profile_after` | field | yes | add to core | `SolveOptions::rotate_fingerprint_after(n)` | another retry step |
+| `MitigationPolicy.block_cooldown_secs` | field | yes | add to core | `SolveOptions::cooldown(duration)` | another retry step; a `Duration`, as core's options take |
+| `MitigationPolicy::decide` | method | yes | add to core | inside core's `Page::solve_captcha` | the strategy's logic |
 | `Mode` | enum |  | rename | `FetchKind` | core says mode for engine modes (UC mode, CDP Mode, `DriverMode`); this says whether a request goes through the browser or over HTTP. `Route` is taken by `egress::route` |
 | `Mode::Browser` | enum variant |  | keep |  | names the case |
 | `Mode::Http` | enum variant |  | keep |  | names the case |
@@ -758,24 +785,24 @@ takes or returns the type but no path names it today.
 
 | Item | Kind | Copied | Verdict | Proposed | Why |
 |---|---|---|---|---|---|
-| `ProxyPool` | struct | yes | build on core | built from core `ProxyList` (`ProxyPool::from_list`) | **copied** (`ProxyPool`); covers ground core does not (strategies, quarantine, per-site stickiness, countries), but its proxies should come from core's `ProxyList` (`--proxy-list`, `SB_PROXY_LIST`) instead of a parallel list. The name fits core's `BrowserPool` |
-| `ProxyPool::new` | method | yes | build on core | `from_list(ProxyList, RotationStrategy)` | takes core's list |
-| `ProxyPool::with_geo_proxies` | method | yes | rename | `from_geo_proxies` | a constructor; core says `from_*` (`ProxyList::from_file`) |
-| `ProxyPool::quarantine` | method | yes | keep |  | says what it does |
-| `ProxyPool::pick` | method | yes | keep |  | says what it does |
-| `ProxyPool::pick_in` | method | yes | keep |  | says what it does |
-| `ProxyPool::pick_other` | method | yes | keep |  | says what it does |
-| `ProxyPool::report` | method | yes | keep |  | says what it does |
-| `RotationStrategy` | enum | yes | keep |  | **copied** name, but covers ground core does not: core's `ProxyList` picks round-robin or at random only |
-| `RotationStrategy::RoundRobin` | enum variant | yes | keep |  | names the case |
-| `RotationStrategy::Random` | enum variant | yes | keep |  | names the case |
-| `RotationStrategy::LeastFailures` | enum variant | yes | keep |  | names the case |
-| `RotationStrategy::StickyPerSite` | enum variant | yes | keep |  | names the case |
-| `EgressOutcome` | enum |  | rename, export | `ProxyOutcome` | follows `ProxyRoute` |
-| `EgressOutcome::Success` | enum variant |  | keep |  | names the case |
-| `EgressOutcome::ConnectError` | enum variant |  | keep |  | names the case |
-| `EgressOutcome::Challenged` | enum variant |  | keep |  | names the case |
-| `EgressOutcome::Blocked` | enum variant |  | keep |  | names the case |
+| `ProxyPool` | struct | yes | add to core | core `ProxyList`: `rotation(RotationStrategy)`, `quarantine(after_failures, for_secs)`, `report(name, ProxyOutcome)`, `pick(site)`, `pick_other(name, site)`; country picks stay here as an extension trait on `ProxyList` | **copied** (`ProxyPool`); core's `ProxyList` picks round-robin or at random, the pool adds other ways (least failures, sticky per site, quarantine after failures). Decision 4 |
+| `ProxyPool::new` | method | yes | add to core | core `ProxyList` with `rotation(RotationStrategy)` | the list is core's; the strategy is an option on it |
+| `ProxyPool::with_geo_proxies` | method | yes | rename | `from_geo_proxies` | a constructor with countries; core says `from_*` (`ProxyList::from_file`). Part of the country extension |
+| `ProxyPool::quarantine` | method | yes | add to core | `ProxyList::quarantine(after_failures, for_secs)` | another way to rotate: rest a proxy after failures |
+| `ProxyPool::pick` | method | yes | add to core | `ProxyList::pick(site)` | picks by the list's `RotationStrategy` |
+| `ProxyPool::pick_in` | method | yes | keep |  | picks by exit country, which core does not know; an extension trait on core's `ProxyList` |
+| `ProxyPool::pick_other` | method | yes | add to core | `ProxyList::pick_other(name, site)` | the next proxy when one fails |
+| `ProxyPool::report` | method | yes | add to core | `ProxyList::report(name, ProxyOutcome)` | feeds `LeastFailures` and the quarantine |
+| `RotationStrategy` | enum | yes | add to core | core `config::proxy_list::RotationStrategy`, set with `ProxyList::rotation` | **copied** name; core's `RoundRobin` and `Random` become two variants beside `LeastFailures` and `StickyPerSite`. Named like core's `PageLoadStrategy` |
+| `RotationStrategy::RoundRobin` | enum variant | yes | add to core | variant of core `RotationStrategy` | core's `ProxyList::next_round_robin` today |
+| `RotationStrategy::Random` | enum variant | yes | add to core | variant of core `RotationStrategy` | core's `ProxyList::random` today |
+| `RotationStrategy::LeastFailures` | enum variant | yes | add to core | variant of core `RotationStrategy` | another strategy core lacks |
+| `RotationStrategy::StickyPerSite` | enum variant | yes | add to core | variant of core `RotationStrategy` | another strategy core lacks |
+| `EgressOutcome` | enum |  | add to core | core `ProxyOutcome`, the argument of `ProxyList::report` | goes with the rotation strategies |
+| `EgressOutcome::Success` | enum variant |  | add to core | variant of core `ProxyOutcome` | goes with its type |
+| `EgressOutcome::ConnectError` | enum variant |  | add to core | variant of core `ProxyOutcome` | goes with its type |
+| `EgressOutcome::Challenged` | enum variant |  | add to core | variant of core `ProxyOutcome` | goes with its type |
+| `EgressOutcome::Blocked` | enum variant |  | add to core | variant of core `ProxyOutcome` | goes with its type |
 
 ### `scrape::egress::redact`
 
@@ -883,7 +910,7 @@ takes or returns the type but no path names it today.
 | `CollectingEventSink::take` | method |  | keep |  | says what it does |
 | `CollectingEventSink::len` | method |  | keep |  | says what it does |
 | `CollectingEventSink::is_empty` | method |  | keep |  | says what it does |
-| `EventSink` | trait | yes | keep |  | **copied** name, but covers ground core does not: a typed stream of stealth events. Decision 5 |
+| `EventSink` | trait | yes | keep |  | **copied** name, but covers ground core does not: a typed stream of stealth events. Decision 7 |
 | `EventSink::emit` | method | yes | keep |  | says what it does |
 | `NoopEventSink` | struct | yes | keep |  | follows `EventSink` |
 | `ScraperEvent` | enum | yes | rename | `ScrapeEvent` | the crate and its docs say scrape, not scraper |
@@ -1005,21 +1032,21 @@ takes or returns the type but no path names it today.
 | `BrowserFetch.attempts` | field |  | keep |  | plain data name |
 | `BrowserFetch.solved` | field |  | keep |  | plain data name |
 | `BrowserFetch.egress` | field |  | rename | `proxy_route` | follows `ProxyRoute` |
-| `BrowserLauncher` | trait |  | remove | core `Browser::launch`, `Browser::launch_mocked` | a launch seam; core launches, and `launch_mocked` is core's test seam |
-| `BrowserLauncher::launch` | method |  | remove |  | goes with its type |
+| `BrowserLauncher` | trait |  | build on core | a launch closure, as core's `BrowserPool::with_launcher` takes | the scraper relaunches on rotation, which is its own; the seam itself is core's pattern (a function that starts a browser), so take a closure the same way |
+| `BrowserLauncher::launch` | method |  | build on core | the closure's call | goes with its type |
 | `BrowserScraper` | struct | yes | keep |  | **copied** shape (their `CloudScraper`), but covers ground core does not (the challenge loop, proxy rotation, the ledger) and it already builds on core's `Browser` and `Page`; its members drop what repeats core |
 | `BrowserScraper::builder` | method | yes | keep |  | says what it does |
 | `BrowserScraper::page` | method | yes | keep |  | says what it does |
 | `BrowserScraper::browser` | method | yes | keep |  | says what it does |
 | `BrowserScraper::fingerprint` | method | yes | keep |  | returns the core `Fingerprint` in use |
-| `BrowserScraper::seed` | method | yes | remove | core `Fingerprint::seed` | the fingerprint it returns already says it |
+| `BrowserScraper::seed` | method | yes | keep |  | the chain's current seed, which differs from the fingerprint's own `Fingerprint::seed` |
 | `BrowserScraper::egress` | method | yes | rename | `proxy_route` | follows `ProxyRoute` |
 | `BrowserScraper::sessions` | method | yes | rename | `session_store` | returns core's `SessionStore`; the builder method is already `session_store` |
 | `BrowserScraper::close` | method | yes | keep |  | says what it does |
 | `BrowserScraper::fetch` | method | yes | keep |  | says what it does |
-| `BrowserScraper::solve_challenge` | method | yes | build on core | core `Page::solve_captcha` with the policy's `SolveOptions` | **copied**; core already solves the widget, this adds detection and mitigation around it |
+| `BrowserScraper::solve_challenge` | method | yes | add to core | core `Page::solve_captcha`: wait out a JS interstitial that has no widget, and `SolveOptions::clearance_cookie(name)` as another success check | **copied** name; core presses a widget and checks its response field or a success marker, this also waits out an interstitial and checks for the clearance. Detection and mitigation around it stay here. Decision 3 |
 | `BrowserScraper::rotate_egress` | method | yes | rename | `rotate_proxy` | core says proxy |
-| `BrowserScraper::rotate_profile` | method | yes | build on core | `rotate_fingerprint`, through core `Page::apply_fingerprint` | **copied** (`rotate_profile`); core already applies a fingerprint to a page, and a profile in core is a browser profile |
+| `BrowserScraper::rotate_profile` | method | yes | rename | `rotate_fingerprint` | **copied** name; a different way from core's in-place `Page::apply_fingerprint`: it relaunches the browser with a new fingerprint of the same system, in the proxy's locale. A profile in core is a browser profile |
 | `BrowserScraper::export_identity` | method | yes | keep |  | says what it does |
 | `BrowserScraper::import_identity` | method | yes | keep |  | says what it does |
 | `BrowserScraper::save_session` | method | yes | keep |  | builds on core's `SessionStore` |
@@ -1034,24 +1061,24 @@ takes or returns the type but no path names it today.
 | `BrowserScraperBuilder::with_event_sink` | method | yes | rename | `event_sink` | core builders use plain setter names (`LaunchOptionsBuilder`, `PoolOptionsBuilder`); this builder mixes `with_*` and plain names; `HttpOptions::event_sink` already says it so |
 | `BrowserScraperBuilder::geo_resolver` | method | yes | keep |  | says what it does |
 | `BrowserScraperBuilder::per_site_rate` | method | yes | rename | `rate_limit` | core `RateLimiter::new(max_calls, window)`; `HttpOptions::pacing` is the same setting under a third name |
-| `BrowserScraperBuilder::seed` | method | yes | remove | core `Fingerprint::seed` | pass a seeded core `Fingerprint` |
-| `BrowserScraperBuilder::fingerprint` | method | yes | remove | core `LaunchOptionsBuilder::fingerprint` | a second copy of core's option; set it on the launch builder passed to `launch_options` |
-| `BrowserScraperBuilder::egress_switch` | method | yes | remove | core `ContextOptions::proxy` | goes with `EgressSwitch` |
-| `BrowserScraperBuilder::launcher` | method | yes | remove | core `Browser::launch_mocked` | goes with `BrowserLauncher` |
+| `BrowserScraperBuilder::seed` | method | yes | keep |  | not core's `Fingerprint::seed`: it seeds a chain, each rotation deriving the next seed, so a whole run repeats |
+| `BrowserScraperBuilder::fingerprint` | method | yes | build on core | read the first fingerprint from the `LaunchOptionsBuilder` given to `launch_options` (core's `fingerprint` option) | the first link of the rotation chain is the launch fingerprint core already takes; one place to set it. Decision 2 |
+| `BrowserScraperBuilder::egress_switch` | method | yes | rename | `proxy_switch` | follows `ProxySwitch` |
+| `BrowserScraperBuilder::launcher` | method | yes | build on core | a launch closure, as `BrowserPool::with_launcher` | follows `BrowserLauncher` |
 | `BrowserScraperBuilder::session_store` | method | yes | keep |  | says what it does |
-| `BrowserScraperBuilder::solve_timeout` | method | yes | build on core | core `SolveOptions` timeouts | through the policy's `SolveOptions` |
+| `BrowserScraperBuilder::solve_timeout` | method | yes | remove | core `SolveOptions::verify_timeout` | same strategy: how long to wait for a solve to show its result |
 | `BrowserScraperBuilder::clock` | method | yes | keep |  | says what it does |
 | `BrowserScraperBuilder::build` | method | yes | keep |  | says what it does |
-| `ChromeLauncher` | struct |  | remove | core `Browser::launch` | the built-in `BrowserLauncher`; goes with it |
+| `ChromeLauncher` | struct |  | remove | core `Browser::launch` | same strategy: it calls `Browser::launch` with the launch options, the default every launch already uses |
 
 ### `scrape::runtime::egress_switch`
 
 | Item | Kind | Copied | Verdict | Proposed | Why |
 |---|---|---|---|---|---|
-| `ContextProxySwitch` | struct |  | remove | core `Browser::new_context_with(ContextOptions::proxy)` | it only calls core's context proxy |
+| `ContextProxySwitch` | struct |  | remove | core `Browser::new_context_with(ContextOptions::proxy)` | same strategy: it opens a context with `ContextOptions::proxy`, exactly core's path |
 | `ContextProxySwitch::new` | method |  | remove |  | goes with its type |
-| `EgressSwitch` | trait |  | remove | core `ContextOptions::proxy` | a seam over core's context proxy; adds nothing |
-| `EgressSwitch::switch` | method |  | remove |  | goes with its type |
+| `EgressSwitch` | trait |  | rename | `ProxySwitch` | a seam for two ways to change proxy: a new context (core's `ContextOptions::proxy`) and the MITM proxy's upstream swap (`MitmProxy::swap_proxy`), which core cannot do without the MITM proxy |
+| `EgressSwitch::switch` | method |  | keep |  | says what it does |
 
 ### `scrape::runtime::json_store`
 
@@ -1120,17 +1147,17 @@ takes or returns the type but no path names it today.
 | `ImpersonationProfile::measured` | method | yes | keep |  | says what it does |
 | `ImpersonationProfile::for_system` | method | yes | keep |  | says what it does |
 | `ImpersonationProfile::from_measured` | method | yes | keep |  | says what it does |
-| `ImpersonationProfile::random` | method | yes | remove | core `Fingerprint` (seeded) and `from_fingerprint` | **copied** (`BrowserProfile::random`); core already draws a seeded fingerprint |
+| `ImpersonationProfile::random` | method | yes | keep |  | already builds on core's `Fingerprint::randomized_with_major`; the seed also picks the measured wire entry, which core does not have |
 | `ImpersonationProfile::from_fingerprint` | method | yes | keep |  | builds on core's `Fingerprint` |
-| `ImpersonationProfile::with_locale` | method | yes | remove | core `Fingerprint` | the fingerprint's locale |
+| `ImpersonationProfile::with_locale` | method | yes | remove | core `Fingerprint`'s locale | same strategy: it sets the Accept-Language a core `Fingerprint`'s locale already sets |
 | `ImpersonationProfile::custom` | method | yes | rename | `builder` | builders start from `builder()` (core `LaunchOptions::builder`) |
 | `ImpersonationProfile::validate` | method | yes | keep |  | says what it does |
 | `ImpersonationProfile::source` | method | yes | keep |  | says what it does |
 | `ImpersonationProfile::kind` | method | yes | keep |  | says what it does |
 | `ImpersonationProfile::os` | method | yes | keep |  | says what it does |
 | `ImpersonationProfile::major` | method | yes | keep |  | says what it does |
-| `ImpersonationProfile::user_agent` | method | yes | remove | core `Fingerprint` | the fingerprint's User-Agent |
-| `ImpersonationProfile::accept_language` | method | yes | remove | core `Fingerprint` | the fingerprint's languages |
+| `ImpersonationProfile::user_agent` | method | yes | remove | core `Fingerprint` | same strategy: it returns the fingerprint's User-Agent |
+| `ImpersonationProfile::accept_language` | method | yes | remove | core `Fingerprint` | same strategy: it returns the fingerprint's languages |
 | `ImpersonationProfile::tls_spec` | method | yes | keep |  | says what it does |
 | `ImpersonationProfile::http2_spec` | method | yes | rename | `h2_spec` | the type is `H2Spec` |
 | `ImpersonationProfile::header_spec` | method | yes | keep |  | says what it does |
@@ -1233,7 +1260,7 @@ takes or returns the type but no path names it today.
 | `HttpSession::from_page` | method |  | keep |  | says what it does |
 | `HttpSession::sync_cookies_back` | method |  | keep |  | says what it does |
 | `Method` | re-export |  | keep |  | re-export of `wreq::Method`, so callers import no wreq (the pattern of core's `drivers` and `json` re-exports) |
-| `ReplyProtocol` | enum |  | remove | use `WireProtocol` | the same two values (HTTP/1.1, HTTP/2) as `WireProtocol` |
+| `ReplyProtocol` | enum |  | remove | `WireProtocol` | same strategy: the same two values (HTTP/1.1, HTTP/2) as `WireProtocol` in this crate |
 | `ReplyProtocol::Http2` | enum variant |  | remove |  | goes with its type |
 | `ReplyProtocol::Http1` | enum variant |  | remove |  | goes with its type |
 | `HttpRules` | struct |  | rename | `HttpRules` (source name) | make it the real name: the source calls it `Rules` and `lib.rs` renames it; one spelling per item |
@@ -1341,7 +1368,7 @@ takes or returns the type but no path names it today.
 | `StealthSession::demote` | method | yes | keep |  | says what it does |
 | `StealthSessionBuilder` | struct | yes | keep |  | builds on core's `LaunchOptionsBuilder` (`launch_options`); its members drop what repeats core |
 | `StealthSessionBuilder::launch_options` | method | yes | keep |  | says what it does |
-| `StealthSessionBuilder::launcher` | method | yes | remove | core `Browser::launch_mocked` | goes with `BrowserLauncher` |
+| `StealthSessionBuilder::launcher` | method | yes | build on core | a launch closure, as `BrowserPool::with_launcher` | follows `BrowserLauncher` |
 | `StealthSessionBuilder::with_geo_proxies` | method | yes | rename | `geo_proxies` | core builders use plain setter names (`LaunchOptionsBuilder`, `PoolOptionsBuilder`); this builder mixes `with_*` and plain names |
 | `StealthSessionBuilder::proxy_strategy` | method | yes | keep |  | says what it does |
 | `StealthSessionBuilder::with_max_challenge_attempts` | method | yes | rename | `max_challenge_attempts` | core builders use plain setter names (`LaunchOptionsBuilder`, `PoolOptionsBuilder`); this builder mixes `with_*` and plain names |
@@ -1351,12 +1378,12 @@ takes or returns the type but no path names it today.
 | `StealthSessionBuilder::with_event_sink` | method | yes | rename | `event_sink` | core builders use plain setter names (`LaunchOptionsBuilder`, `PoolOptionsBuilder`); this builder mixes `with_*` and plain names |
 | `StealthSessionBuilder::geo_resolver` | method | yes | keep |  | says what it does |
 | `StealthSessionBuilder::per_site_rate` | method | yes | rename | `rate_limit` | core `RateLimiter`; one name with `HttpOptions::pacing` |
-| `StealthSessionBuilder::seed` | method | yes | remove | core `Fingerprint::seed` | pass a seeded core `Fingerprint` |
-| `StealthSessionBuilder::fingerprint` | method | yes | remove | core `LaunchOptionsBuilder::fingerprint` | a second copy of core's option |
+| `StealthSessionBuilder::seed` | method | yes | keep |  | the same rotation chain as `BrowserScraperBuilder::seed` |
+| `StealthSessionBuilder::fingerprint` | method | yes | build on core | read it from the `LaunchOptionsBuilder` given to `launch_options` | same as `BrowserScraperBuilder::fingerprint`. Decision 2 |
 | `StealthSessionBuilder::restore` | method | yes | rename | `identity` | it takes a saved `Identity`; the session's own method is `import_identity` |
 | `StealthSessionBuilder::http_options` | method | yes | rename | `http_session_options` | follows `HttpSessionOptions` |
 | `StealthSessionBuilder::mitm_options` | method | yes | keep |  | says what it does |
-| `StealthSessionBuilder::solve_timeout` | method | yes | build on core | core `SolveOptions` timeouts | through the policy's `SolveOptions` |
+| `StealthSessionBuilder::solve_timeout` | method | yes | remove | core `SolveOptions::verify_timeout` | same strategy: how long to wait for a solve to show its result |
 | `StealthSessionBuilder::clock` | method | yes | keep |  | says what it does |
 | `StealthSessionBuilder::build` | method | yes | keep |  | says what it does |
 
@@ -1424,5 +1451,5 @@ takes or returns the type but no path names it today.
 
 | Item | Kind | Copied | Verdict | Proposed | Why |
 |---|---|---|---|---|---|
-| `Clock` | type alias |  | remove | scrape's `Clock` | the same alias defined twice in this repository |
+| `Clock` | type alias |  | remove | scrape's `Clock` | same strategy: the same alias defined twice in this repository |
 
