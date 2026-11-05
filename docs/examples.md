@@ -23,7 +23,7 @@ cargo run -p seleniumbase-rs-scrape --example capture_tls -- --help
 cargo run -p seleniumbase-rs-scrape --example capture_hints -- --snippet
 ```
 
-## seleniumbase-rs-mimic
+## seleniumbase-rs-wire
 
 These build BoringSSL through `btls`, so they need `cmake` and a C/C++ toolchain, and about 1 GB
 of target directory on the first build.
@@ -36,10 +36,10 @@ of target directory on the first build.
 | `capture_h2` | Measures the HTTP/2 connection start and the request headers of the local Chrome and adds them to its measured file. Run `capture_tls` and `capture_hints` first. | The local Chrome (headed). Writes into the repository. |
 
 ```sh
-cargo run -p seleniumbase-rs-mimic --example custom_profile
-cargo run -p seleniumbase-rs-mimic --example http_session
-cargo run -p seleniumbase-rs-mimic --example stealth_session
-cargo run -p seleniumbase-rs-mimic --example capture_h2 -- --help
+cargo run -p seleniumbase-rs-wire --example custom_profile
+cargo run -p seleniumbase-rs-wire --example http_session
+cargo run -p seleniumbase-rs-wire --example stealth_session
+cargo run -p seleniumbase-rs-wire --example capture_h2 -- --help
 ```
 
 Only one Chrome-driving program should run on the machine at a time.
@@ -49,7 +49,7 @@ Only one Chrome-driving program should run on the machine at a time.
 Run `capture_tls`, then `capture_hints`, then `capture_h2` against the new Chrome. They rewrite
 `crates/codec/src/measured/<browser>-<major>-<os>.json` and the raw fixtures next to the wire
 tests; `cargo test -p seleniumbase-rs-codec --test wire_measurement` and
-`cargo test -p seleniumbase-rs-mimic --test impersonate_capture_h2` then check the files
+`cargo test -p seleniumbase-rs-wire --test impersonate_capture_h2` then check the files
 against each other. The full procedure is the section "Re-measuring when Chrome updates" of
 [docs/tutorial.md](tutorial.md).
 
@@ -59,5 +59,5 @@ They are the `*_chrome.rs` files and are `#[ignore]`d. Run them one binary at a 
 
 ```sh
 cargo test -p seleniumbase-rs-scrape --test scrape_browser_chrome -- --ignored --test-threads=1
-cargo test -p seleniumbase-rs-mimic --test stealth_session_chrome -- --ignored --test-threads=1
+cargo test -p seleniumbase-rs-wire --test stealth_session_chrome -- --ignored --test-threads=1
 ```

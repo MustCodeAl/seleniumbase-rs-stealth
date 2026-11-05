@@ -18,7 +18,7 @@ use std::time::Duration;
 use phantom::profile::catalog::{profile_for, RequestTemplateKind};
 use phantom::{Client, HttpProtocol, ResponseInfo};
 use seleniumbase_rs_codec::BrowserKind;
-use seleniumbase_rs_mimic::client::{impersonation_client, ImpersonationProfile};
+use seleniumbase_rs_wire::client::{impersonation_client, ImpersonationProfile};
 use wreq::tls::trust::CertStore;
 
 /// The phantom profile used for every phantom request: Chrome 156 on Windows, navigation headers.

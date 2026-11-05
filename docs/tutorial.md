@@ -3,7 +3,7 @@
 > [!NOTE]
 > Use the unified `seleniumbase-rs-stealth` facade. It re-exports the core API,
 > including `sb_cdp`, `evasion` and `fingerprint`, plus default `codec` and
-> `scrape` modules. Enable `mimic` for TLS/HTTP2 impersonation. The `cargo run -p`
+> `scrape` modules. Enable `wire` for TLS/HTTP2 impersonation. The `cargo run -p`
 > commands in this guide run implementation-crate examples inside this repository.
 
 A site can tell a client apart before any page script runs: by the TLS
@@ -25,16 +25,16 @@ of it.
 | Wire parsers: `ClientHello`, JA3, JA4 and `JA4_r`, peetprint, Akamai HTTP/2 strings | `codec` | Available |
 | Measured browser tables (Chrome 155 on macOS) and the lookup that refuses everything else | `codec` | Available |
 | Capture tools `capture_tls` and `capture_hints` | `scrape` | Available |
-| Capture tool `capture_h2` | `mimic` | Available |
-| `WireFormat`, `WireFormatBuilder`, `wire_client` (wreq with BoringSSL) | `mimic` | Available |
+| Capture tool `capture_h2` | `wire` | Available |
+| `WireFormat`, `WireFormatBuilder`, `wire_client` (wreq with BoringSSL) | `wire` | Available |
 | RFC 6265 cookie jar | `scrape` | Available |
 | `Identity`, its identity file, `EscalationPolicy` | `scrape` | Available |
 | Challenge detection, mitigation policy, proxy pool, per-site state, events | `scrape` | Available |
 | `BrowserScraper` (a real Chrome, no TLS spoofing) | `scrape` | Available |
-| Ephemeral-CA TLS server | `mimic` | Available |
-| `HttpSession` | `mimic` | Available |
-| `MitmProxy` | `mimic` | Available |
-| `StealthSession` | `mimic` | Available |
+| Ephemeral-CA TLS server | `wire` | Available |
+| `HttpSession` | `wire` | Available |
+| `MitmProxy` | `wire` | Available |
+| `StealthSession` | `wire` | Available |
 
 The last three are tested against loopback sites, a scripted browser and, in
 tests marked `#[ignore]`, a local Chrome 155 on macOS, run headless. None of
@@ -74,24 +74,24 @@ needs cmake and a C/C++ toolchain):
 
 ```toml
 [dependencies]
-seleniumbase-rs-stealth = { git = "https://github.com/MustCodeAl/seleniumbase-rs-stealth", features = ["mimic"] }
+seleniumbase-rs-stealth = { git = "https://github.com/MustCodeAl/seleniumbase-rs-stealth", features = ["wire"] }
 ```
 
-The default `scrape` feature also enables `codec`. `mimic` keeps both enabled.
+The default `scrape` feature also enables `codec`. `wire` keeps both enabled.
 Import every browser and fingerprint type through the same facade; no separate
-core or implementation-crate Git dependency is needed. With `mimic` enabled:
+core or implementation-crate Git dependency is needed. With `wire` enabled:
 
 ```rust
 use seleniumbase_rs_stealth::{
     fingerprint::{CanvasNoise, Fingerprint, StealthPolicy},
     scrape::BrowserScraper,
-    mimic::{StealthSession, MitmProxy},
+    wire::{StealthSession, MitmProxy},
 };
 ```
 
-Examples importing the `mimic` module require that feature; the codec, scraping
+Examples importing the `wire` module require that feature; the codec, scraping
 and in-page examples use the default configuration. The facade's feature
-switches are `codec`, `scrape` and `mimic`; optional core APIs retain their own
+switches are `codec`, `scrape` and `wire`; optional core APIs retain their own
 feature gates. TLS and HTTP/2 spec errors remain `TlsSpecError` and `H2SpecError`
 in the codec re-exports.
 
@@ -168,7 +168,7 @@ new version:
    ```text
    cargo run -p seleniumbase-rs-scrape      --example capture_tls
    cargo run -p seleniumbase-rs-scrape      --example capture_hints
-   cargo run -p seleniumbase-rs-mimic --example capture_h2
+   cargo run -p seleniumbase-rs-wire --example capture_h2
    ```
 
    - `capture_tls` points the browser at a loopback listener that records each
@@ -253,10 +253,10 @@ BoringSSL and wreq stack can send it, and names what it cannot.
 
 ## An impersonating client
 
-The `mimic` crate turns a measured profile into a wreq client:
+The `wire` crate turns a measured profile into a wreq client:
 
 ```rust
-use seleniumbase_rs_stealth::mimic::client::{
+use seleniumbase_rs_stealth::wire::client::{
     wire_client, WireFormat, WireProtocol,
 };
 use seleniumbase_rs_stealth::codec::header_spec::RequestShape;
@@ -305,7 +305,7 @@ the base: a JA3 has no signature algorithms, an Akamai string has no HEADERS
 priority, a header list has no TLS.
 
 ```rust
-use seleniumbase_rs_stealth::mimic::client::WireFormat;
+use seleniumbase_rs_stealth::wire::client::WireFormat;
 
 # fn demo() -> Result<(), Box<dyn std::error::Error>> {
 let profile = WireFormat::builder()
@@ -360,7 +360,7 @@ For example, a JA3 that adds `trust_anchors` and a signature algorithm BoringSSL
 cannot write:
 
 ```rust
-use seleniumbase_rs_stealth::mimic::client::{WireFormatError, WireFormat};
+use seleniumbase_rs_stealth::wire::client::{WireFormatError, WireFormat};
 use seleniumbase_rs_stealth::codec::tls_spec::TlsSpecError;
 
 # fn demo(ja3_with_trust_anchors: &str) {
@@ -683,7 +683,7 @@ be used again.
 
 ## HttpSession
 
-`mimic::http_session::HttpSession` sends plain HTTP requests that look like
+`wire::http_session::HttpSession` sends plain HTTP requests that look like
 the Chrome a browser page came from. A browser spends a second or more on a page;
 a request spends milliseconds. Once a page has earned its cookies (a login, a
 passed check), an `HttpSession` carries them on: the measured TLS `ClientHello`
@@ -693,7 +693,7 @@ identity. A browser or system that was not measured is refused, not
 approximated.
 
 ```rust
-use seleniumbase_rs_stealth::mimic::{HttpSessionOptions, HttpSession};
+use seleniumbase_rs_stealth::wire::{HttpSessionOptions, HttpSession};
 use seleniumbase_rs_stealth::sb_cdp::Page;
 
 # async fn demo(page: Page) -> Result<(), Box<dyn std::error::Error>> {
@@ -740,7 +740,7 @@ Both refuse, before any request, what would contradict the measured handshake:
 is reported there.
 
 ```rust
-use seleniumbase_rs_stealth::mimic::{HttpSession, Method};
+use seleniumbase_rs_stealth::wire::{HttpSession, Method};
 use seleniumbase_rs_stealth::codec::header_spec::RequestShape;
 
 # async fn demo(session: HttpSession) -> Result<(), Box<dyn std::error::Error>> {
@@ -811,8 +811,8 @@ println!("{}: {}", reply.status(), reply.text()?);
   pieces of your own loop; [`StealthSession`](#stealthsession) is that loop.
 
   ```rust
-  use seleniumbase_rs_stealth::mimic::http_session::{Attempt, Rules};
-  use seleniumbase_rs_stealth::mimic::HttpSession;
+  use seleniumbase_rs_stealth::wire::http_session::{HttpAttempt, HttpRules};
+  use seleniumbase_rs_stealth::wire::HttpSession;
   use seleniumbase_rs_stealth::scrape::Identity;
 
   # async fn demo(session: HttpSession, identity: Identity) -> Result<(), Box<dyn std::error::Error>> {
@@ -860,7 +860,7 @@ println!("{}: {}", reply.status(), reply.text()?);
 
 ## The ephemeral-CA TLS server
 
-`mimic::tls_server` is the building block under `capture_h2` and under
+`wire::tls_server` is the building block under `capture_h2` and under
 [`MitmProxy`](#mitmproxy). `EphemeralCa::generate()` creates a P-256
 certificate authority in memory for the life of one process. `leaf_for(host,
 now)` issues a leaf for one DNS name or IP address (never a wildcard), cached in
@@ -870,7 +870,7 @@ handshake and refuses the connection when the client's SNI names another host.
 
 ```rust
 use std::time::SystemTime;
-use seleniumbase_rs_stealth::mimic::tls_server::{
+use seleniumbase_rs_stealth::wire::tls_server::{
     accept, acceptor, EphemeralCa, ALPN_HTTP1, DEFAULT_HANDSHAKE_TIMEOUT,
 };
 
@@ -914,7 +914,7 @@ Things to know before you use it:
 
 ## MitmProxy
 
-`HttpSession` covers the requests you make yourself. `mimic::mitm::MitmProxy`
+`HttpSession` covers the requests you make yourself. `wire::mitm::MitmProxy`
 covers the ones a real Chrome makes. It is a loopback forward proxy that ends
 the browser's TLS with a leaf of the [ephemeral CA](#the-ephemeral-ca-tls-server)
 and replays each request through the impersonating client, so the origin sees the
@@ -927,7 +927,7 @@ the browser is valid over `HttpSession`.
 use std::sync::Arc;
 use std::time::Duration;
 
-use seleniumbase_rs_stealth::mimic::{WireFormat, MitmOptions, MitmProxy};
+use seleniumbase_rs_stealth::wire::{WireFormat, MitmOptions, MitmProxy};
 use seleniumbase_rs_stealth::sb_cdp::{Browser, LaunchOptions};
 use seleniumbase_rs_stealth::scrape::NoopEventSink;
 use seleniumbase_rs_stealth::codec::BrowserKind;
@@ -1089,7 +1089,7 @@ in a cache that every tab of the browser context shares, and every later
 WebSocket as another tab's first request, goes through.
 
 So the proxy owns one page, `mitm.prime_url()`: `https://sb-mitm.invalid/`
-(`mimic::mitm::PRIME_HOST`, under the reserved `.invalid` name) and a path
+(`wire::mitm::PRIME_HOST`, under the reserved `.invalid` name) and a path
 of 128 random bits. After the token check, a `GET` of exactly that is answered by
 the proxy itself with an empty page that is never cached (`mitm.stats().primed`
 counts it). Any other request for that host, Chrome's `favicon.ico` included,
@@ -1107,7 +1107,7 @@ does not share the default context's (measured). Before a WebSocket in a context
 behind the proxy, load the priming page in its first tab:
 
 ```rust
-use seleniumbase_rs_stealth::mimic::MitmProxy;
+use seleniumbase_rs_stealth::wire::MitmProxy;
 use seleniumbase_rs_stealth::sb_cdp::{Browser, ContextOptions};
 
 # async fn demo(browser: Browser, mitm: MitmProxy) -> Result<(), Box<dyn std::error::Error>> {
@@ -1188,7 +1188,7 @@ test of the file skipped there.
 
 ## StealthSession
 
-`mimic::stealth_session::StealthSession` joins the pieces. It presents one
+`wire::stealth_session::StealthSession` joins the pieces. It presents one
 `Identity` (the fingerprint, the measured browser it belongs to, the
 cookies it earned and the egress they were earned through) in one of two modes
 and moves between them by the policies:
@@ -1200,7 +1200,7 @@ and moves between them by the policies:
   handshake. A clearance earned here is valid in the other mode.
 
 ```rust
-use seleniumbase_rs_stealth::mimic::StealthSession;
+use seleniumbase_rs_stealth::wire::StealthSession;
 use seleniumbase_rs_stealth::scrape::CountryCode;
 
 # async fn demo() -> Result<(), Box<dyn std::error::Error>> {
@@ -1343,16 +1343,16 @@ not any vendor's challenge, and getting past it says nothing about a real servic
 | Example | Crate | Needs | What it shows |
 |---|---|---|---|
 | `examples/cookie_jar.rs` | `scrape` | Nothing | Made-up `Set-Cookie` headers into the [cookie jar](#the-cookie-jar): which are stored, which are refused and why, and the `Cookie` header for five requests. |
-| `examples/custom_profile.rs` | `mimic` | `cmake`; Chrome 155 on macOS | The measured profile, with an Akamai string and a JA3 laid over it with `WireFormatBuilder`, and four inputs the stack [refuses](#what-is-refused). |
-| `examples/http_session.rs` | `mimic` | `cmake`; Chrome 155 on macOS | An [`HttpSession`](#httpsession) fetching from a loopback TLS shop, its jar carrying the cookie the shop sets, and the JA4 the shop saw next to the measured one. |
-| `examples/stealth_session.rs` | `mimic` | `cmake`; Chrome 155 on macOS, installed | A [`StealthSession`](#stealthsession) that meets a challenge over HTTP, goes to a headless Chrome behind the proxy, comes back, and prints its changes of mode. |
+| `examples/custom_profile.rs` | `wire` | `cmake`; Chrome 155 on macOS | The measured profile, with an Akamai string and a JA3 laid over it with `WireFormatBuilder`, and four inputs the stack [refuses](#what-is-refused). |
+| `examples/http_session.rs` | `wire` | `cmake`; Chrome 155 on macOS | An [`HttpSession`](#httpsession) fetching from a loopback TLS shop, its jar carrying the cookie the shop sets, and the JA4 the shop saw next to the measured one. |
+| `examples/stealth_session.rs` | `wire` | `cmake`; Chrome 155 on macOS, installed | A [`StealthSession`](#stealthsession) that meets a challenge over HTTP, goes to a headless Chrome behind the proxy, comes back, and prints its changes of mode. |
 | `examples/browser_scraper.rs` | `scrape` | A Chrome | A [`BrowserScraper`](#browserscraper) detecting and solving the same kind of challenge in a headless Chrome. |
 
 ```text
 cargo run -p seleniumbase-rs-scrape      --example cookie_jar
-cargo run -p seleniumbase-rs-mimic --example custom_profile
-cargo run -p seleniumbase-rs-mimic --example http_session
-cargo run -p seleniumbase-rs-mimic --example stealth_session
+cargo run -p seleniumbase-rs-wire --example custom_profile
+cargo run -p seleniumbase-rs-wire --example http_session
+cargo run -p seleniumbase-rs-wire --example stealth_session
 cargo run -p seleniumbase-rs-scrape      --example browser_scraper
 ```
 
@@ -1360,7 +1360,7 @@ The three that use the measured emulation stop at once with the `NotMeasured`
 message on any system but macOS: they do not borrow the values of another system.
 `stealth_session` also needs the installed Chrome to be the measured major, or it is
 refused before it loads a page. The two that drive Chrome should run one at a time,
-and not beside another Chrome-driving program. The `mimic` ones start from the
+and not beside another Chrome-driving program. The `wire` ones start from the
 [crate costs](#which-crate-to-depend-on); the first build compiles BoringSSL.
 
 What was run: each example was run once on macOS with Chrome 155.0.8059.40, the two
@@ -1442,7 +1442,7 @@ State these plainly to yourself before you build on any of this.
 | `NotMeasured { kind, os }` | The browser and system pair has no capture. | Run the capture tools on that system, or use the measured one. |
 | `VersionMismatch { browser, measured }` | The identity's user agent claims another Chrome major than the measured profile. | Build the identity with `Fingerprint::randomized_with_major(os, seed, measured_major)`, or re-measure. |
 | `UnsupportedExtension`, `UnsupportedSigalg`, `UnsupportedSetting` | The input asks for something BoringSSL or wreq cannot send. | Remove it. The error names the id. |
-| The build fails while compiling BoringSSL | `cmake` or a C/C++ toolchain is missing. | Install them, or do not depend on the `mimic` crate. |
+| The build fails while compiling BoringSSL | `cmake` or a C/C++ toolchain is missing. | Install them, or do not depend on the `wire` crate. |
 | `IdentityFileError::Permissions` | Group or others can read the identity file. | `chmod 600` it, or delete it and make a new one. |
 | `ScrapeError::CoolingDown` | The site answered with a block or rate limit and is being left alone. | Wait until the time in the error (seconds since the Unix epoch), or give the scraper another egress. |
 | `ScrapeError::Unsolved` | A challenge was still there after the attempts allowed. | Raise `max_challenge_attempts`, add egresses, or accept that this page needs a person. |
@@ -1458,7 +1458,7 @@ State these plainly to yourself before you build on any of this.
 ---
 
 Verified against commit `4184e74` and the re-exports added after it, by reading
-`crates/codec/src/**`, `crates/scrape/src/**`, `crates/mimic/src/**`, `examples/capture_*.rs`,
+`crates/codec/src/**`, `crates/scrape/src/**`, `crates/wire/src/**`, `examples/capture_*.rs`,
 `crates/codec/src/measured/chrome-155-macos.json` and the tests that pin the behaviour
 described here. The code samples were checked against the signatures in those
 files; they were not compiled or run for this check. The real-Chrome tests named

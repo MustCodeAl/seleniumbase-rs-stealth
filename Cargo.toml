@@ -11,20 +11,20 @@ publish = false
 default = ["scrape"]
 codec = ["dep:seleniumbase-rs-codec"]
 scrape = ["dep:seleniumbase-rs-scrape", "codec"]
-mimic = ["dep:seleniumbase-rs-mimic", "scrape"]
+wire = ["dep:seleniumbase-rs-wire", "scrape"]
 
 [dependencies]
 seleniumbase-rs = { workspace = true }
 seleniumbase-rs-codec = { workspace = true, optional = true }
 seleniumbase-rs-scrape = { workspace = true, optional = true }
-seleniumbase-rs-mimic = { workspace = true, optional = true }
+seleniumbase-rs-wire = { workspace = true, optional = true }
 
 [lints]
 workspace = true
 
 [workspace]
 resolver = "3"
-members = [".", "crates/codec", "crates/scrape", "crates/mimic"]
+members = [".", "crates/codec", "crates/scrape", "crates/wire"]
 
 [workspace.package]
 version = "0.1.0"
@@ -40,7 +40,7 @@ repository = "https://github.com/MustCodeAl/seleniumbase-rs-stealth"
 seleniumbase-rs = { git = "https://github.com/MustCodeAl/seleniumbase-rs" }
 seleniumbase-rs-codec = { path = "crates/codec" }
 seleniumbase-rs-scrape = { path = "crates/scrape" }
-seleniumbase-rs-mimic = { path = "crates/mimic" }
+seleniumbase-rs-wire = { path = "crates/wire" }
 
 [workspace.lints.clippy]
 pedantic = { level = "warn", priority = -1 }

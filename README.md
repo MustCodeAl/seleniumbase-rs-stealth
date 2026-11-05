@@ -9,12 +9,12 @@ Documentation: <https://mustcodeal-seleniumbase-rs.docs7.io>. Start with the
 
 | Crate | What it is |
 |---|---|
-| `seleniumbase-rs-stealth` (root `.`) | Unified facade crate: re-exports all of `seleniumbase-rs` (including `sb_cdp` and `evasion`) alongside `codec`, `scrape` (enabled by default), and `mimic` (with `features = ["mimic"]`) so downstream projects need only one dependency. |
+| `seleniumbase-rs-stealth` (root `.`) | Unified facade crate: re-exports all of `seleniumbase-rs` (including `sb_cdp` and `evasion`) alongside `codec`, `scrape` (enabled by default), and `wire` (with `features = ["wire"]`) so downstream projects need only one dependency. |
 | `seleniumbase-rs-codec` (`crates/codec`) | Pure wire formats, no I/O: a TLS `ClientHello` parser, JA3, JA4 and peetprint, the Akamai HTTP/2 fingerprint, HTTP/2 frame and HPACK reading, the TLS, HTTP/2 and header specs, and the measured browser table (`emulation`) embedded from `src/measured/*.json`. |
 | `seleniumbase-rs-scrape` (`crates/scrape`) | Stealth scraping without TLS spoofing, over the pure CDP engine of seleniumbase-rs. Pure modules for challenge detection and the mitigation policy, egress (proxy pool, geo locale, URL redaction), an RFC 6265 cookie jar, the per-site ledger and its events, and the stealth identity with its session policy; the `runtime` module holds the I/O: `BrowserScraper`, `ProxySwitch`, `JsonLedger`, the identity file, the tracing sink and the capture tools. No TLS spoofing and no BoringSSL. |
-| `seleniumbase-rs-mimic` (`crates/mimic`) | Browser-identical TLS and HTTP/2 through wreq and BoringSSL: `WireFormat` and `WireFormatBuilder`, `HttpSession` (plain HTTP that continues a browser's session), `MitmProxy` (a loopback proxy that gives a real Chrome the measured TLS), `StealthSession` (moves between plain HTTP and Chrome), `EphemeralCa`, and the HTTP/2 capture tool. Builds BoringSSL, so it needs `cmake` and a C/C++ toolchain. |
+| `seleniumbase-rs-wire` (`crates/wire`) | Browser-identical TLS and HTTP/2 through wreq and BoringSSL: `WireFormat` and `WireFormatBuilder`, `HttpSession` (plain HTTP that continues a browser's session), `MitmProxy` (a loopback proxy that gives a real Chrome the measured TLS), `StealthSession` (moves between plain HTTP and Chrome), `EphemeralCa`, and the HTTP/2 capture tool. Builds BoringSSL, so it needs `cmake` and a C/C++ toolchain. |
 
-`mimic` depends on `scrape`, which depends on `codec`; all three depend on `seleniumbase-rs`, and the root `seleniumbase-rs-stealth` crate re-exports them all.
+`wire` depends on `scrape`, which depends on `codec`; all three depend on `seleniumbase-rs`, and the root `seleniumbase-rs-stealth` crate re-exports them all.
 
 ## Status
 
@@ -38,7 +38,7 @@ services.
 ### Measured fingerprints, checked by a round trip
 
 - The capture tools (`capture_tls` and `capture_hints` in `scrape`,
-  `capture_h2` in `mimic`) record the TLS `ClientHello`, the client hints,
+  `capture_h2` in `wire`) record the TLS `ClientHello`, the client hints,
   `User-Agent`, `Accept-Language`, the HTTP/2 connection start and the header
   lists of a local Chrome. They write
   `crates/codec/src/measured/chrome-155-macos.json` and keep the raw bytes as
@@ -222,11 +222,11 @@ All crates declare `#![forbid(unsafe_code)]`, and their error types are
 
 ### TLS stack and licences
 
-`mimic` uses wreq `=6.0.0-rc.31` (Apache-2.0) over `btls` and `tokio-btls`
+`wire` uses wreq `=6.0.0-rc.31` (Apache-2.0) over `btls` and `tokio-btls`
 `=0.5.6`, which build BoringSSL (`btls-sys`) and need `cmake` and a C/C++
 toolchain. The core crate uses `reqwest` with `rustls` and `ring` for its own
 HTTP (the WebDriver engine, downloads), and the CDP engine talks to Chrome over
-a plain WebSocket; `codec` and `mimic` also use `ring` for hashing. The stealth
+a plain WebSocket; `codec` and `wire` also use `ring` for hashing. The stealth
 crates are MIT (workspace `Cargo.toml` and `LICENSE`); BoringSSL carries its own
 licences.
 
@@ -244,26 +244,26 @@ For TLS/HTTP2 impersonation, use this dependency instead:
 
 ```toml
 [dependencies]
-seleniumbase-rs-stealth = { git = "https://github.com/MustCodeAl/seleniumbase-rs-stealth", features = ["mimic"] }
+seleniumbase-rs-stealth = { git = "https://github.com/MustCodeAl/seleniumbase-rs-stealth", features = ["wire"] }
 ```
 
-`mimic` builds BoringSSL and needs cmake and a C/C++ toolchain. With that
+`wire` builds BoringSSL and needs cmake and a C/C++ toolchain. With that
 feature enabled, the combined import is:
 
 ```rust
 use seleniumbase_rs_stealth::{
     fingerprint::{CanvasNoise, Fingerprint, StealthPolicy},
     scrape::BrowserScraper,
-    mimic::{StealthSession, MitmProxy},
+    wire::{StealthSession, MitmProxy},
 };
 ```
 
 The facade also re-exports `sb_cdp`, `evasion`, `BrowserConfig`, `BaseCase` and
 the rest of the core public API. Import these through `seleniumbase_rs_stealth`
 to share the same core types; no separate core or implementation-crate Git
-dependency is needed. Without `mimic`, omit the `mimic` imports. Core APIs behind
+dependency is needed. Without `wire`, omit the `wire` imports. Core APIs behind
 optional Cargo features retain their gates; this facade currently exposes the
-`codec`, `scrape` and `mimic` feature switches.
+`codec`, `scrape` and `wire` feature switches.
 
 Fingerprints use API v2: one `Spoof` per setting, read through accessors and
 changed with `to_builder()....build()?`. The core dependency selected by Cargo
@@ -292,9 +292,9 @@ cargo clippy -p seleniumbase-rs-stealth --all-targets -- -D warnings
 cargo test -p seleniumbase-rs-stealth
 ```
 
-Use `--features mimic` for impersonation, or `--workspace` to check every
+Use `--features wire` for impersonation, or `--workspace` to check every
 implementation crate; both include BoringSSL.
-The first build of `mimic` compiles BoringSSL (about 1 GB of target directory). Tests that
+The first build of `wire` compiles BoringSSL (about 1 GB of target directory). Tests that
 start a real Chrome are the `*_chrome.rs` files and are `#[ignore]`d; run them one binary at a time
 with `-- --ignored --test-threads=1`.
 

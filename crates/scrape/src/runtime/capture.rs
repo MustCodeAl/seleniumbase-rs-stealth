@@ -13,7 +13,7 @@
 //!
 //! A loopback listener cannot complete a TLS handshake without a certificate, so the TLS capture records
 //! the `ClientHello` and drops the connection. The HTTP/2 capture that needs a certificate belongs to the
-//! mimic crate (`seleniumbase-rs-mimic`).
+//! wire crate (`seleniumbase-rs-wire`).
 
 pub mod args;
 pub mod chrome;
