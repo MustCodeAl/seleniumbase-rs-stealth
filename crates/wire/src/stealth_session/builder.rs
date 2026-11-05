@@ -13,7 +13,7 @@ use super::{Clock, Egress, StealthError, StealthSession, Wiring};
 use crate::http_session::{HttpRules, HttpSessionOptions};
 use crate::mitm::MitmOptions;
 use seleniumbase_rs::evasion::fingerprint::{Fingerprint, OsType};
-use seleniumbase_rs::sb_cdp::LaunchOptionsBuilder;
+use seleniumbase_rs::sb_cdp::LaunchOptions;
 use seleniumbase_rs_codec::{measurement, BrowserKind};
 use seleniumbase_rs_scrape::challenge::mitigation::{
     MitigationPolicy, DEFAULT_MAX_CHALLENGE_ATTEMPTS,
@@ -46,7 +46,7 @@ pub const MITM_SHUTDOWN_GRACE: Duration = Duration::from_secs(5);
 /// in memory, events written to `tracing`, HTTP as the preferred mode, [`DEFAULT_ATTEMPTS`]
 /// attempts per fetch, and a profile drawn from a random seed.
 pub struct StealthSessionBuilder {
-    launch: LaunchOptionsBuilder,
+    launch: LaunchOptions,
     launcher: Option<Arc<dyn BrowserLauncher>>,
     egresses: Vec<ProxyRoute>,
     strategy: RotationStrategy,
@@ -82,7 +82,7 @@ impl fmt::Debug for StealthSessionBuilder {
 impl StealthSessionBuilder {
     pub(super) fn new() -> Self {
         Self {
-            launch: LaunchOptionsBuilder::default(),
+            launch: LaunchOptions::default(),
             launcher: None,
             egresses: Vec::new(),
             strategy: RotationStrategy::RoundRobin,
@@ -103,11 +103,11 @@ impl StealthSessionBuilder {
         }
     }
 
-    /// The launch options of the browser. The fingerprint of the session is applied after them,
+    /// The launch options of the browser, as built. The session adds its fingerprint to a copy of them,
     /// so a setting made here (a user agent, say) wins over the fingerprint's. The proxy is the
     /// MITM proxy's, whatever is set here.
     #[must_use]
-    pub fn launch_options(mut self, launch: LaunchOptionsBuilder) -> Self {
+    pub fn launch_options(mut self, launch: LaunchOptions) -> Self {
         self.launch = launch;
         self
     }

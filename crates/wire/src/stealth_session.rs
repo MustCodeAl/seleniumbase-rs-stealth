@@ -95,7 +95,7 @@ use self::pace::SiteLimits;
 use super::http_session::{HttpRules, HttpSession, HttpSessionOptions};
 use super::mitm::{MitmOptions, MitmProxy};
 use seleniumbase_rs::evasion::fingerprint::OsType;
-use seleniumbase_rs::sb_cdp::{LaunchOptionsBuilder, Page};
+use seleniumbase_rs::sb_cdp::{LaunchOptions, Page};
 use seleniumbase_rs_scrape::challenge::mitigation::FetchKind;
 use seleniumbase_rs_scrape::egress::geo::GeoResolver;
 use seleniumbase_rs_scrape::egress::pool::ProxyPool;
@@ -107,7 +107,7 @@ use seleniumbase_rs_scrape::runtime::browser_scraper::BrowserLauncher;
 
 /// The ports and settings that are fixed when the session is built.
 struct Wiring {
-    launch: LaunchOptionsBuilder,
+    launch: LaunchOptions,
     launcher: Arc<dyn BrowserLauncher>,
     store: Arc<dyn Ledger>,
     sink: Arc<dyn EventSink>,

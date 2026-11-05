@@ -51,9 +51,12 @@ impl BrowserLeg {
         identity: &Identity,
         measured: u32,
     ) -> Result<Self, StealthError> {
-        let options = mitm
-            .configure_launch(wiring.launch.clone().fingerprint(&identity.fingerprint))
-            .build()?;
+        let options = mitm.configure_launch(
+            wiring
+                .launch
+                .clone()
+                .with_fingerprint(&identity.fingerprint)?,
+        )?;
         let browser = wiring.launcher.launch(options).await?;
         match Self::settle(&browser, identity, measured, (wiring.clock)()).await {
             Ok(page) => Ok(Self {

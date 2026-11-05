@@ -158,8 +158,11 @@ fn respond(request: &str, name: &str, served: &Served) -> (&'static str, String)
     )
 }
 
-fn headless() -> seleniumbase_rs::sb_cdp::LaunchOptionsBuilder {
-    LaunchOptions::builder().headless(true)
+fn headless() -> LaunchOptions {
+    LaunchOptions::builder()
+        .headless(true)
+        .build()
+        .expect("valid launch options")
 }
 
 fn builder(sink: &CollectingEventSink) -> BrowserScraperBuilder {

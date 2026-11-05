@@ -57,7 +57,7 @@ async fn run() -> Result<(), Box<dyn Error>> {
     let sink = CollectingEventSink::new();
     let mut session = Box::pin(
         StealthSession::builder()
-            .launch_options(LaunchOptions::builder().headless(true))
+            .launch_options(LaunchOptions::builder().headless(true).build()?)
             .http_session_options(shop.http_session_options()?)
             .mitm_options(shop.mitm_options()?)
             .event_sink(Arc::new(sink.clone()))

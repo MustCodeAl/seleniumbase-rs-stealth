@@ -46,7 +46,12 @@ const SOLVE_WITHIN: Duration = Duration::from_secs(30);
 /// A builder wired to `site`, with Chrome headless.
 fn builder(site: &ChallengeSite, sink: &CollectingEventSink) -> StealthSessionBuilder {
     StealthSession::builder()
-        .launch_options(LaunchOptions::builder().headless(true))
+        .launch_options(
+            LaunchOptions::builder()
+                .headless(true)
+                .build()
+                .expect("valid launch options"),
+        )
         .http_session_options(site.http_session_options())
         .mitm_options(site.mitm_options())
         .event_sink(Arc::new(sink.clone()))

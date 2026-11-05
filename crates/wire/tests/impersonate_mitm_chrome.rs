@@ -54,7 +54,7 @@ use btls::ssl::{Ssl, SslAcceptor, SslMethod};
 use btls::x509::extension::SubjectAlternativeName;
 use btls::x509::{X509Name, X509};
 use seleniumbase_rs::evasion::fingerprint::OsType;
-use seleniumbase_rs::sb_cdp::{Browser, ContextOptions, LaunchOptions, LaunchOptionsBuilder, Page};
+use seleniumbase_rs::sb_cdp::{Browser, ContextOptions, LaunchOptions, Page};
 use seleniumbase_rs_codec::ja4::Ja4;
 use seleniumbase_rs_codec::measurement;
 use seleniumbase_rs_codec::BrowserKind;
@@ -89,8 +89,8 @@ const LIFETIME_SECS: i64 = 86_400;
 /// Starts Chrome with `builder` and checks it is the measured major, for the tests that compare
 /// the browser with the measured persona. Those skip on a system that is not measured
 /// (`measured_host`), and fail on a measured one whose Chrome has moved on.
-async fn launch(builder: LaunchOptionsBuilder) -> Browser {
-    let browser = start(builder).await;
+async fn launch(options: LaunchOptions) -> Browser {
+    let browser = start(options).await;
     let (major, product) = browser_major(&browser).await;
     assert_eq!(
         major,
@@ -108,8 +108,8 @@ async fn launch(builder: LaunchOptionsBuilder) -> Browser {
 /// (`MitmError::VersionMismatch`), which none of these tests is about. A browser of another major
 /// (Chromium 154 on Linux, say) is therefore started again with the profile's user agent; the
 /// measured Chrome keeps its own.
-async fn launch_any(builder: LaunchOptionsBuilder) -> Browser {
-    let browser = start(builder.clone()).await;
+async fn launch_any(options: LaunchOptions) -> Browser {
+    let browser = start(options.clone()).await;
     let (major, product) = browser_major(&browser).await;
     if major == Some(profile().major()) {
         return browser;
@@ -119,15 +119,15 @@ async fn launch_any(builder: LaunchOptionsBuilder) -> Browser {
         profile().major()
     );
     browser.close().await.expect("Chrome closes");
-    start(builder.user_agent(profile().user_agent())).await
+    let own = options
+        .with_args([format!("--user-agent={}", profile().user_agent())])
+        .expect("valid launch options");
+    start(own).await
 }
 
 /// Starts a headless browser with `builder`.
-async fn start(builder: LaunchOptionsBuilder) -> Browser {
-    let options = builder
-        .headless(true)
-        .build()
-        .expect("valid launch options");
+async fn start(options: LaunchOptions) -> Browser {
+    let options = options.with_headless(true).expect("valid launch options");
     Browser::launch(options).await.expect("Chrome starts")
 }
 
@@ -148,12 +148,20 @@ async fn browser_major(browser: &Browser) -> (Option<u32>, String) {
 
 /// The measured Chrome behind `mitm`.
 async fn launch_behind(mitm: &MitmProxy) -> Browser {
-    launch(mitm.configure_launch(LaunchOptions::builder())).await
+    launch(
+        mitm.configure_launch(LaunchOptions::default())
+            .expect("valid launch options"),
+    )
+    .await
 }
 
 /// Any Chrome or Chromium behind `mitm` (see [`launch_any`]).
 async fn launch_any_behind(mitm: &MitmProxy) -> Browser {
-    launch_any(mitm.configure_launch(LaunchOptions::builder())).await
+    launch_any(
+        mitm.configure_launch(LaunchOptions::default())
+            .expect("valid launch options"),
+    )
+    .await
 }
 
 /// The text of the page, or an empty string.
@@ -257,7 +265,13 @@ async fn without_the_proxy_the_leaf_pin_alone_trusts_a_chain_carrying_the_leaf_k
         .into_iter()
         .find(|arg| arg.starts_with("--ignore-certificate-errors-spki-list="))
         .expect("the pin switch");
-    let browser = launch_any(LaunchOptions::builder().arg(pin)).await;
+    let browser = launch_any(
+        LaunchOptions::builder()
+            .arg(pin)
+            .build()
+            .expect("valid launch options"),
+    )
+    .await;
     let page = browser.new_page().await.expect("a tab");
 
     let _loaded = page

@@ -134,7 +134,9 @@ async fn the_launch_options_of_the_caller_win_over_the_profile() {
     let rig = Rig::new(vec![real_page()]);
     let launch = LaunchOptions::builder()
         .user_agent("Custom/1.0")
-        .lang("fr-FR");
+        .lang("fr-FR")
+        .build()
+        .expect("valid launch options");
 
     rig.builder()
         .launch_options(launch)

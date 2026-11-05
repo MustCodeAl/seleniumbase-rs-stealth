@@ -181,7 +181,7 @@ async fn run() -> Result<(), Box<dyn Error>> {
     let site = Site::start()?;
     let sink = CollectingEventSink::new();
     let mut scraper = BrowserScraper::builder()
-        .launch_options(LaunchOptions::builder().headless(true))
+        .launch_options(LaunchOptions::builder().headless(true).build()?)
         .event_sink(Arc::new(sink.clone()))
         .solve_timeout(SOLVE_WITHIN)
         .build()
