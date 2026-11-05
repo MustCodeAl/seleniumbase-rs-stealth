@@ -168,7 +168,7 @@ fn response(status: &str, extra_headers: &str, body: &str) -> String {
 
 #[tokio::main]
 async fn main() -> ExitCode {
-    match run().await {
+    match Box::pin(run()).await {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
             eprintln!("browser_scraper: {error}");
