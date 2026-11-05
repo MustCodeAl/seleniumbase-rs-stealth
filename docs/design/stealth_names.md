@@ -191,40 +191,42 @@ each computes the same result the same way (`with_locale`, for example, calls co
 | `per_site_rate`, `pacing` | `rate_limit` (core's `RateLimiter`) |
 | aliases in `lib.rs` (`Fetched as HttpFetched`, `SpecError as H2SpecError`, ...) | the exported name becomes the source name |
 
-## Decisions for the owner
+## Decisions (taken, so the work could start; the owner can change any of them)
+
+The user asked to start phase 2 without waiting for the owner, taking this note's
+recommended answer for each decision. Each answer is marked **Taken**.
 
 1. **`Identity`.** The saved identity becomes `Identity`, built on core's `Session` and
    `Fingerprint`. Core's `sb_cdp::identity` module holds `StealthPlan` (there is no core
-   `Identity` type). Is the name right?
+   `Identity` type). **Taken: `Identity`.**
 2. **`fingerprint(...)`.** The stealth builders read the first fingerprint from the
    `LaunchOptionsBuilder` given to `launch_options` (core's `fingerprint` option) instead
-   of their own setter. Agreed?
-3. **Where the challenge strategies go.** The proposal puts rounds, proxy and fingerprint
-   rotation, cooldown and the clearance check on core's `SolveOptions`, and the interstitial
-   wait in `Page::solve_captcha`. Rotating needs the page to reach a proxy list and a
-   fingerprint source; is `SolveOptions` the right home, or a separate core option on the
-   launch (`LaunchOptionsBuilder::challenges(...)`)?
-4. **Proxy countries.** Core's `ProxyList` gains the rotation strategies. Should
-   `ProxyEntry` also carry an exit country (a country code type in core), or do country
-   picks stay a stealth extension trait on `ProxyList`, as proposed?
-5. **The `mimic` crate.** Rename the package `seleniumbase-rs-wire` (feature and facade
-   path `wire`)?
-6. **Two wire words.** `WireMeasurement` (codec: measured data with provenance) and
-   `WireFormat` (mimic: what a client sends, built from a measurement and a core
-   `Fingerprint`), or one word for both?
-7. **Events.** Keep the typed `EventSink` with its `tracing` sink, or send stealth events
-   through `tracing` only?
-8. **Client hints by default.** With both ways kept, which fills a `WireFormat`'s client
-   hints when the caller says nothing: the measured values of the capture (what the
-   claimed Chrome really sent) or core's values computed from the fingerprint's major (the
-   same as the browser tab claims)?
+   of their own setter. **Taken: yes**, once core's launch builder can hand its fingerprint
+   back (it lives in `src/sb_cdp/launch.rs`, which is someone else's this week; until
+   then the setters stay).
+3. **Where the challenge strategies go.** **Taken: core's `SolveOptions`** (rounds, proxy
+   and fingerprint rotation, cooldown, clearance check, `retry_policy`) and the interstitial
+   wait in `Page::solve_captcha`. The alternative was a launch option
+   (`LaunchOptionsBuilder::challenges(...)`).
+4. **Proxy countries.** **Taken: country picks stay a stealth extension trait on core's
+   `ProxyList`**; `ProxyEntry` gets no country.
+5. **The `mimic` crate.** **Taken: rename the package `seleniumbase-rs-wire`** (feature and
+   facade path `wire`).
+6. **Two wire words.** **Taken: keep both**, `WireMeasurement` (codec: measured data with
+   provenance) and `WireFormat` (what a client sends, built from a measurement and a core
+   `Fingerprint`).
+7. **Events.** **Taken: keep the typed `EventSink`** with its `tracing` sink.
+8. **Client hints by default.** **Taken: the measured values of the capture**, so the
+   client hints match the measured TLS and HTTP/2 of the same Chrome; core's computed ones
+   are the other way (`ClientHeaders::from_fingerprint`).
 
-## Phase 2 (after approval)
+## Phase 2 (started)
 
-One core PR for the strategies in "What core gains", then one stealth PR: renames with
-`tokensave rename` (a dry run first), the build-on-core changes, the removals, the switch
-to core's new strategies, every caller and test, the stealth API reference pages and the
-contract files. Breaking changes, no shims.
+One core PR for the strategies in "What core gains" and one stealth PR for the renames,
+the build-on-core changes and the removals that need nothing new from core, with every
+caller and test, the docs and the CHANGELOG. The stealth parts that use a new core option
+(the rotation strategies, the `SolveOptions` options, the clearance wait) follow once the
+core PR is merged. Breaking changes, no shims.
 
 ## Every public item
 
