@@ -1,4 +1,4 @@
-//! Per-site rate_limit: at most so many requests to one site in a window.
+//! Per-site pacing: at most so many requests to one site in a window.
 
 use std::collections::HashMap;
 use std::fmt;

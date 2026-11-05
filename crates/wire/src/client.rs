@@ -28,7 +28,7 @@
 //!
 //! Only a browser and system pair with a capture exists
 //! ([`NotMeasured`](WireFormatError::Measurement) otherwise); there is no fallback to another
-//! system's values. [`WireFormat::custom`] layers caller-supplied inputs over a measured
+//! system's values. [`WireFormat::builder`] layers caller-supplied inputs over a measured
 //! base: a JA3, a `JA4_r` or `JA4_ro`, a peetprint, signature algorithms, an Akamai HTTP/2
 //! fingerprint, header names, order and values, the `User-Agent`, `Accept-Language` and the
 //! client hints. Each input is checked for what this client stack can emit; the rest is refused
@@ -152,7 +152,7 @@ pub enum WireProtocol {
 ///
 /// Build one with [`WireFormat::measured`], [`WireFormat::for_system`],
 /// [`WireFormat::random`], [`WireFormat::from_fingerprint`] or
-/// [`WireFormat::custom`]. `Debug` shows the specs and the identity but never a cookie:
+/// [`WireFormat::builder`]. `Debug` shows the specs and the identity but never a cookie:
 /// a cookie is passed per request and never stored.
 #[derive(Debug, Clone, PartialEq)]
 pub struct WireFormat {

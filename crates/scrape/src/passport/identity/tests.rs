@@ -1,4 +1,4 @@
-//! Tests of the identity: construction, serde, clearances, and the proxy and wire_measurement checks.
+//! Tests of the identity: construction, serde, clearances, and the proxy and wire measurement checks.
 
 use super::fixtures::{
     fingerprint, identity, identity_with_clearance, proxy, set_cookie, wire_measurement, MAJOR, NOW,

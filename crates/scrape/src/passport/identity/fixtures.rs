@@ -20,7 +20,7 @@ pub(crate) fn fingerprint() -> Fingerprint {
     Fingerprint::randomized_with_major(OsType::Macos, 7, MAJOR)
 }
 
-/// The wire_measurement the sample identity was measured against.
+/// The wire measurement the sample identity was measured against.
 pub(crate) fn wire_measurement() -> WireMeasurementRef {
     WireMeasurementRef {
         kind: BrowserKind::Chrome,

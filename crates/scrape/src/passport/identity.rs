@@ -1,7 +1,7 @@
-//! The stealth identity: fingerprint, wire_measurement, cookies and proxy, serialized so that a later run can restore it.
+//! The stealth identity: fingerprint, wire measurement, cookies and proxy, serialized so that a later run can restore it.
 //!
 //! An identity is what a scrape session presents to a site: the browser fingerprint, the
-//! measured TLS and HTTP/2 wire_measurement it goes with, the cookies it earned, and the proxy those
+//! measured TLS and HTTP/2 wire measurement it goes with, the cookies it earned, and the proxy those
 //! cookies were earned through. A clearance cookie is bound to the address that earned it, so an
 //! identity is only used again through the same proxy ([`Identity::check_proxy`]).
 //!
@@ -101,7 +101,7 @@ pub struct Clearance {
     pub expires_at: u64,
 }
 
-/// A fingerprint, its wire_measurement, and what the identity earned with them.
+/// A fingerprint, its wire measurement, and what the identity earned with them.
 #[derive(Clone, PartialEq, Serialize, Deserialize)]
 pub struct Identity {
     /// The layout version, [`IDENTITY_SCHEMA`].

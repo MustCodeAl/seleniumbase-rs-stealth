@@ -1,5 +1,5 @@
 //! The limits and the plumbing of an [`HttpSession`](super::HttpSession): timeouts, body and redirect
-//! bounds, rate_limit, the event sink, the trust store and the resolver entries.
+//! bounds, the rate limit, the event sink, the trust store and the resolver entries.
 //!
 //! Every field has a default that is safe on the open web and a setter that takes a custom value.
 //! [`HttpSessionOptions::validate`] refuses a value outside the documented range before a client exists.
@@ -107,7 +107,7 @@ impl fmt::Debug for HttpSessionOptions {
 
 impl HttpSessionOptions {
     /// The defaults: [`DEFAULT_TIMEOUT`], [`DEFAULT_MAX_BODY_BYTES`], [`DEFAULT_MAX_REDIRECTS`]
-    /// redirects followed, no rate_limit, no events, the system trust roots.
+    /// redirects followed, no rate limit, no events, the system trust roots.
     #[must_use]
     pub fn new() -> Self {
         Self {

@@ -3,7 +3,7 @@
 //!
 //! Everything here works on bytes and header lists already in memory. The evidence is what the
 //! measured JSON keeps under `capture.h2` and `capture.h1`, so the specs can be derived again from
-//! the file alone: [`derive`] is the one function both the tool and the tests use.
+//! the file alone: [`derive()`] is the one function both the tool and the tests use.
 //!
 //! # Where each spec comes from
 //!

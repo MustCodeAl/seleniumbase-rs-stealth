@@ -42,7 +42,7 @@ const MAX_SESSION_ID_LEN: usize = 32;
 /// Name type of a host name in the `server_name` list (RFC 6066).
 const SERVER_NAME_TYPE_HOST: u8 = 0;
 
-/// TlsExtension ids the parser decodes, plus the ones the spec layer reasons about.
+/// Extension ids the parser decodes, plus the ones the spec layer reasons about.
 pub mod ext_id {
     /// `server_name` (RFC 6066).
     pub const SERVER_NAME: u16 = 0x0000;

@@ -8,7 +8,7 @@
 //!
 //! Only an HTTP session ever leaves here; a browser session stays where it is.
 //!
-//! | FetchKind | The identity holds | Other | Escalation |
+//! | Fetch kind | The identity holds | Other | Escalation |
 //! |---|---|---|---|
 //! | Browser | anything | anything | [`Escalation::Stay`] |
 //! | Http | a clearance with at most `clearance_margin` left, or an expired one | anything | escalate: [`EscalateReason::ClearanceExpiring`] |
@@ -27,7 +27,7 @@
 //! out. For [`Mitigation::Solve`] that means the challenge was solved. Call
 //! [`Identity::refresh_clearances`] first so the identity shows what the solve earned.
 //!
-//! | FetchKind | Mitigation | Other | Escalation |
+//! | Fetch kind | Mitigation | Other | Escalation |
 //! |---|---|---|---|
 //! | Http | [`Mitigation::Escalate`] | anything | escalate: [`EscalateReason::Challenge`] with the detected kind |
 //! | Browser | [`Mitigation::Solve`] | `demote_after_solve`, `prefer` is HTTP, the identity holds a clearance | demote: [`DemoteReason::ChallengeSolved`] |

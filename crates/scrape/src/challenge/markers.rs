@@ -7,7 +7,7 @@
 //!
 //! What is not a marker: a vendor header such as `cf-ray`, a vendor script that every protected
 //! page loads (`/cdn-cgi/challenge-platform/scripts/jsd/main.js`, Kasada's `p.js`), and a CAPTCHA
-//! widget a login form embeds. Those are evidence ([`HEADER_HINTS`], [`WIDGETS`]), never a
+//! widget a login form embeds. Those are evidence (`HEADER_HINTS`, `WIDGETS`), never a
 //! verdict.
 
 use seleniumbase_rs::sb_cdp::Captcha;

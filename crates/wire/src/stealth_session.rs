@@ -52,7 +52,7 @@
 //! browser's requests through it. A clearance belongs to the address that earned it, so changing
 //! the egress ([`rotate_proxy`](StealthSession::rotate_proxy)) drops the cookies and the
 //! clearances, and an identity can only be restored through the egress it names
-//! ([`StealthSessionBuilder::restore`], [`StealthSession::import_identity`]).
+//! ([`StealthSessionBuilder::identity`], [`StealthSession::import_identity`]).
 //!
 //! # Lifetime
 //!

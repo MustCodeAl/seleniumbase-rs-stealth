@@ -18,7 +18,7 @@ pub const TARGET: &str = "seleniumbase_rs_scrape";
 
 /// An event sink that writes to `tracing`.
 ///
-/// Requests and decisions are logged at `DEBUG`, challenges, changes of fetch_kind, egress or profile and
+/// Requests and decisions are logged at `DEBUG`, challenges, changes of fetch kind, proxy or fingerprint and
 /// identity moves at `INFO`, and a cooldown at `WARN`.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct TracingEventSink;
