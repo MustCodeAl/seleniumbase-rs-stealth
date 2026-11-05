@@ -5,7 +5,7 @@
 //! it can name the URL, the proxy and its password. A header is named, never quoted: its value
 //! may be a token.
 
-use crate::client::ImpersonateError;
+use crate::client::WireFormatError;
 use seleniumbase_rs::error::SeleniumBaseError;
 use seleniumbase_rs_scrape::egress::redact::RedactedUrl;
 use seleniumbase_rs_scrape::passport::identity::IdentityError;
@@ -16,7 +16,7 @@ use seleniumbase_rs_scrape::passport::identity::IdentityError;
 pub enum HttpError {
     /// The measured browser could not be turned into a client.
     #[error(transparent)]
-    Impersonate(ImpersonateError),
+    WireFormat(WireFormatError),
     /// The browser is another Chrome than the one the TLS and HTTP/2 were measured on.
     ///
     /// A request that claims Chrome `browser` over the hello of Chrome `measured` is a
@@ -38,7 +38,7 @@ pub enum HttpError {
     /// through the proxy from this machine's own address, which discloses it and presents a
     /// clearance from an address that did not earn it. Pass the egress the proxy leaves
     /// through, or say that it leaves directly. The proxy is named without credentials.
-    #[error("the page's browser leaves through the proxy {proxy}, which a page does not show; pass the egress it really leaves through, or say with HttpOptions::browser_proxy_exits_directly that it leaves directly")]
+    #[error("the page's browser leaves through the proxy {proxy}, which a page does not show; pass the egress it really leaves through, or say with HttpSessionOptions::browser_proxy_exits_directly that it leaves directly")]
     BrowserProxy {
         /// The proxy of the browser, as its command line names it (no credentials).
         proxy: String,
@@ -106,14 +106,14 @@ pub enum HttpError {
     Browser(#[from] SeleniumBaseError),
 }
 
-impl From<ImpersonateError> for HttpError {
+impl From<WireFormatError> for HttpError {
     /// A version mismatch keeps its own variant; every other failure is wrapped.
-    fn from(error: ImpersonateError) -> Self {
+    fn from(error: WireFormatError) -> Self {
         match error {
-            ImpersonateError::VersionMismatch { browser, measured } => {
+            WireFormatError::VersionMismatch { browser, measured } => {
                 Self::VersionMismatch { browser, measured }
             }
-            other => Self::Impersonate(other),
+            other => Self::WireFormat(other),
         }
     }
 }
@@ -131,7 +131,7 @@ mod tests {
 
     #[test]
     fn an_impersonation_version_mismatch_becomes_the_session_variant() {
-        let error = HttpError::from(ImpersonateError::VersionMismatch {
+        let error = HttpError::from(WireFormatError::VersionMismatch {
             browser: 156,
             measured: 155,
         });
@@ -142,8 +142,8 @@ mod tests {
                 measured: 155
             }
         ));
-        let other = HttpError::from(ImpersonateError::Build("x".to_owned()));
-        assert!(matches!(other, HttpError::Impersonate(_)));
+        let other = HttpError::from(WireFormatError::Build("x".to_owned()));
+        assert!(matches!(other, HttpError::WireFormat(_)));
     }
 
     #[test]

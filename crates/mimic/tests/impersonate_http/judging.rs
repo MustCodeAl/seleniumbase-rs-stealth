@@ -4,7 +4,7 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
-use seleniumbase_rs_mimic::http_session::{Attempt, HttpError, HttpSession, Rules};
+use seleniumbase_rs_mimic::http_session::{HttpAttempt, HttpError, HttpSession, HttpRules};
 use seleniumbase_rs_scrape::challenge::detect::{ChallengeKind, ProtectionVendor};
 use seleniumbase_rs_scrape::challenge::mitigation::{Mitigation, FetchKind};
 use seleniumbase_rs_scrape::ledger::events::{CollectingEventSink, ScrapeEvent};
@@ -42,8 +42,8 @@ async fn a_challenge_page_asks_for_the_browser_and_says_so_in_events() {
     let fetched = session
         .fetch(
             &site.url(HOST, "/"),
-            &Attempt::default(),
-            &Rules::default(),
+            &HttpAttempt::default(),
+            &HttpRules::default(),
             &identity(),
         )
         .await
@@ -58,7 +58,7 @@ async fn a_challenge_page_asks_for_the_browser_and_says_so_in_events() {
     );
     assert_eq!(fetched.verdict.action, Mitigation::Escalate);
     assert_eq!(
-        fetched.verdict.transition,
+        fetched.verdict.escalation,
         Escalation::Escalate(EscalateReason::Challenge(ChallengeKind::JsChallenge))
     );
     let names: Vec<&str> = sink.events().iter().map(ScrapeEvent::name).collect();
@@ -71,7 +71,7 @@ async fn without_a_browser_the_challenge_is_retried_and_then_given_up() {
     let clock = Arc::new(AtomicU64::new(now()));
     let sink = Arc::new(CollectingEventSink::new());
     let session = clocked(&site, &clock, &sink);
-    let alone = |number, previous_challenges| Attempt {
+    let alone = |number, previous_challenges| HttpAttempt {
         number,
         previous_challenges,
         can_rotate_proxy: false,
@@ -82,7 +82,7 @@ async fn without_a_browser_the_challenge_is_retried_and_then_given_up() {
         .fetch(
             &site.url(HOST, "/"),
             &alone(1, 0),
-            &Rules::default(),
+            &HttpRules::default(),
             &identity(),
         )
         .await
@@ -91,7 +91,7 @@ async fn without_a_browser_the_challenge_is_retried_and_then_given_up() {
         .fetch(
             &site.url(HOST, "/"),
             &alone(3, 2),
-            &Rules::default(),
+            &HttpRules::default(),
             &identity(),
         )
         .await
@@ -102,7 +102,7 @@ async fn without_a_browser_the_challenge_is_retried_and_then_given_up() {
         "{:?}",
         first.verdict
     );
-    assert_eq!(first.verdict.transition, Escalation::Stay);
+    assert_eq!(first.verdict.escalation, Escalation::Stay);
     assert!(
         matches!(last.verdict.action, Mitigation::GiveUp(_)),
         "{:?}",
@@ -121,8 +121,8 @@ async fn a_clear_page_proceeds_and_stays_in_http_mode() {
     let fetched = session
         .fetch(
             &site.url(HOST, "/"),
-            &Attempt::default(),
-            &Rules::default(),
+            &HttpAttempt::default(),
+            &HttpRules::default(),
             &identity(),
         )
         .await
@@ -130,7 +130,7 @@ async fn a_clear_page_proceeds_and_stays_in_http_mode() {
 
     assert!(fetched.verdict.is_clear());
     assert_eq!(fetched.verdict.action, Mitigation::Proceed);
-    assert_eq!(fetched.verdict.transition, Escalation::Stay);
+    assert_eq!(fetched.verdict.escalation, Escalation::Stay);
     assert_eq!(sink.len(), 1, "only the request event");
 }
 
@@ -149,8 +149,8 @@ async fn a_rate_limit_waits_as_long_as_the_server_says() {
     let fetched = session
         .fetch(
             &site.url(HOST, "/"),
-            &Attempt::default(),
-            &Rules::default(),
+            &HttpAttempt::default(),
+            &HttpRules::default(),
             &identity(),
         )
         .await
@@ -168,7 +168,7 @@ async fn a_rate_limit_waits_as_long_as_the_server_says() {
             until: clock.load(Ordering::SeqCst) + 7
         }
     );
-    assert_eq!(fetched.verdict.transition, Escalation::Stay);
+    assert_eq!(fetched.verdict.escalation, Escalation::Stay);
 }
 
 /// An identity holding a clearance for `shop.test` that ends `lifetime` seconds after `at`.
@@ -195,7 +195,7 @@ async fn a_clearance_about_to_end_sends_the_session_to_the_browser_first() {
         .event_sink(Arc::<CollectingEventSink>::clone(&sink));
     let session = HttpSession::from_identity(&base, None, options).expect("a session");
     let url = site.url(HOST, "/");
-    let rules = Rules::default();
+    let rules = HttpRules::default();
 
     let fresh = session
         .preflight(&url, &base, None, &rules)
@@ -237,7 +237,7 @@ async fn a_preflight_for_a_url_that_cannot_be_requested_is_an_error() {
         "https://alice:s3cret@shop.test/",
     ] {
         let error = session
-            .preflight(url, &identity(), None, &Rules::default())
+            .preflight(url, &identity(), None, &HttpRules::default())
             .expect_err(url);
         assert!(matches!(error, HttpError::Url { .. }), "{url}: {error}");
         assert!(!format!("{error} {error:?}").contains("s3cret"));
@@ -258,11 +258,11 @@ async fn a_site_that_needs_a_browser_sends_the_session_there_before_the_request(
             &site.url(HOST, "/"),
             &identity(),
             Some(&state),
-            &Rules::default(),
+            &HttpRules::default(),
         )
         .expect("a verdict");
     let plain = session
-        .preflight(&site.url(HOST, "/"), &identity(), None, &Rules::default())
+        .preflight(&site.url(HOST, "/"), &identity(), None, &HttpRules::default())
         .expect("a verdict");
 
     assert_eq!(
@@ -281,7 +281,7 @@ async fn a_clearance_the_session_just_earned_counts_for_the_preflight() {
     let sink = Arc::new(CollectingEventSink::new());
     let session = clocked(&site, &clock, &sink);
     let url = site.url(HOST, "/");
-    let rules = Rules::default();
+    let rules = HttpRules::default();
     let base = identity();
 
     session.get(&url).await.expect("a reply");

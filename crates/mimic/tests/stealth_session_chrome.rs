@@ -47,7 +47,7 @@ const SOLVE_WITHIN: Duration = Duration::from_secs(30);
 fn builder(site: &ChallengeSite, sink: &CollectingEventSink) -> StealthSessionBuilder {
     StealthSession::builder()
         .launch_options(LaunchOptions::builder().headless(true))
-        .http_options(site.http_options())
+        .http_session_options(site.http_session_options())
         .mitm_options(site.mitm_options())
         .event_sink(Arc::new(sink.clone()))
         .solve_timeout(SOLVE_WITHIN)
@@ -81,7 +81,7 @@ async fn a_challenge_is_passed_in_chrome_and_the_clearance_is_used_over_http() {
     assert_eq!(fetched.status, 200);
     assert!(fetched.body.contains(REAL_MARKER), "{fetched:?}");
     assert_eq!(fetched.solved, Some(ChallengeKind::JsChallenge));
-    assert_eq!((fetched.mode, fetched.attempts), (FetchKind::Http, 3));
+    assert_eq!((fetched.fetch_kind, fetched.attempts), (FetchKind::Http, 3));
     assert_eq!(session.fetch_kind(), FetchKind::Http);
     assert_eq!(
         changes(&sink),
@@ -197,7 +197,7 @@ async fn a_clearance_near_its_end_is_taken_back_to_chrome_which_loads_the_page_w
         ..EscalationPolicy::default()
     };
     let mut session = builder(&site, &sink)
-        .policy(policy)
+        .escalation_policy(policy)
         .build()
         .await
         .expect("a session");
@@ -207,7 +207,7 @@ async fn a_clearance_near_its_end_is_taken_back_to_chrome_which_loads_the_page_w
     let again = session.fetch(&site.url("/")).await.expect("a page");
 
     assert_eq!(
-        (again.mode, again.attempts, again.solved),
+        (again.fetch_kind, again.attempts, again.solved),
         (FetchKind::Browser, 1, None)
     );
     assert!(again.body.contains(REAL_MARKER), "{again:?}");
@@ -230,7 +230,7 @@ async fn a_clearance_near_its_end_is_taken_back_to_chrome_which_loads_the_page_w
     session.demote().await.expect("back to HTTP");
     let over_http = session.fetch(&site.url("/")).await.expect("a page");
     assert_eq!(
-        over_http.mode,
+        over_http.fetch_kind,
         FetchKind::Browser,
         "the policy sends it to Chrome again"
     );

@@ -39,7 +39,7 @@ async fn an_http2_origin_gets_the_http2_headers_and_the_reply_says_so() {
             .find(|field| field.name == name)
             .map(|field| field.value.as_str())
     };
-    let profile = session.profile();
+    let profile = session.wire_format();
     assert_eq!(sent("user-agent"), Some(profile.user_agent()));
     assert_eq!(sent("cookie"), Some("carried=1"));
     assert_eq!(sent(":path"), Some("/page"));

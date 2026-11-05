@@ -3,8 +3,8 @@
 
 use seleniumbase_rs::evasion::fingerprint::OsType;
 use seleniumbase_rs_codec::BrowserKind;
-use seleniumbase_rs_mimic::client::ImpersonateError;
-use seleniumbase_rs_mimic::http_session::{HttpError, HttpOptions, HttpSession};
+use seleniumbase_rs_mimic::client::WireFormatError;
+use seleniumbase_rs_mimic::http_session::{HttpError, HttpSessionOptions, HttpSession};
 use seleniumbase_rs_scrape::passport::identity::{WireMeasurementRef, IdentityError};
 
 use crate::site::{egress, fingerprint, identity, identity_of, measured_major};
@@ -34,8 +34,8 @@ fn an_identity_that_belongs_to_a_proxy_is_refused_on_a_direct_connection_and_the
     let direct = behind(None);
 
     let on_direct =
-        HttpSession::from_identity(&proxied, None, HttpOptions::new()).expect_err("mismatch");
-    let on_proxy = HttpSession::from_identity(&direct, Some(egress(SPEC)), HttpOptions::new())
+        HttpSession::from_identity(&proxied, None, HttpSessionOptions::new()).expect_err("mismatch");
+    let on_proxy = HttpSession::from_identity(&direct, Some(egress(SPEC)), HttpSessionOptions::new())
         .expect_err("mismatch");
 
     for error in [on_direct, on_proxy] {
@@ -59,7 +59,7 @@ fn an_identity_for_one_proxy_is_refused_behind_another() {
     let proxied = behind(Some(SPEC));
     let other = egress("http://alice:s3cret@127.0.0.1:10");
 
-    let error = HttpSession::from_identity(&proxied, Some(other), HttpOptions::new())
+    let error = HttpSession::from_identity(&proxied, Some(other), HttpSessionOptions::new())
         .expect_err("mismatch");
 
     assert!(
@@ -75,7 +75,7 @@ fn an_identity_for_one_proxy_is_refused_behind_another() {
 fn the_matching_proxy_is_accepted_and_its_password_stays_out_of_every_view() {
     let proxied = behind(Some(SPEC));
 
-    let session = HttpSession::from_identity(&proxied, Some(egress(SPEC)), HttpOptions::new())
+    let session = HttpSession::from_identity(&proxied, Some(egress(SPEC)), HttpSessionOptions::new())
         .expect("a session");
 
     assert_eq!(session.proxy_route().map(|key| key.port), Some(9));
@@ -95,7 +95,7 @@ fn an_identity_that_claims_another_chrome_than_the_measured_one_is_refused() {
         None,
     );
 
-    let error = HttpSession::from_identity(&claim, None, HttpOptions::new()).expect_err("refused");
+    let error = HttpSession::from_identity(&claim, None, HttpSessionOptions::new()).expect_err("refused");
 
     assert!(
         matches!(error, HttpError::VersionMismatch { browser, measured: m } if browser == newer && m == measured),
@@ -112,7 +112,7 @@ fn an_identity_whose_emulation_was_recorded_for_another_version_is_refused() {
         None,
     );
 
-    let error = HttpSession::from_identity(&stale, None, HttpOptions::new()).expect_err("refused");
+    let error = HttpSession::from_identity(&stale, None, HttpSessionOptions::new()).expect_err("refused");
 
     assert!(
         matches!(error, HttpError::VersionMismatch { browser, measured: m } if browser == measured - 1 && m == measured),
@@ -126,13 +126,13 @@ fn a_system_that_was_not_measured_is_refused_not_approximated() {
     for os in [OsType::Windows, OsType::Linux] {
         let persona = identity_of(fingerprint(os, major), emulation(major, os), None);
 
-        let error = HttpSession::from_identity(&persona, None, HttpOptions::new())
+        let error = HttpSession::from_identity(&persona, None, HttpSessionOptions::new())
             .expect_err("not measured");
 
         assert!(
             matches!(
                 &error,
-                HttpError::Impersonate(ImpersonateError::Measurement(_))
+                HttpError::WireFormat(WireFormatError::Measurement(_))
             ),
             "{os:?}: {error}"
         );
@@ -146,13 +146,13 @@ fn the_installed_chrome_must_be_the_measured_one() {
     let stale = HttpSession::from_identity(
         &identity(),
         None,
-        HttpOptions::new().installed_chrome_major(measured + 1),
+        HttpSessionOptions::new().installed_chrome_major(measured + 1),
     )
     .expect_err("the measurement is stale");
     let current = HttpSession::from_identity(
         &identity(),
         None,
-        HttpOptions::new().installed_chrome_major(measured),
+        HttpSessionOptions::new().installed_chrome_major(measured),
     );
 
     assert!(
@@ -176,7 +176,7 @@ fn an_identity_that_carries_a_proxy_in_its_fingerprint_is_refused() {
         .expect("a fingerprint with a proxy builds");
 
     let error =
-        HttpSession::from_identity(&tainted, None, HttpOptions::new()).expect_err("refused");
+        HttpSession::from_identity(&tainted, None, HttpSessionOptions::new()).expect_err("refused");
 
     assert!(
         matches!(error, HttpError::Identity(IdentityError::Incoherent(_))),
@@ -189,7 +189,7 @@ fn an_identity_with_another_schema_is_refused() {
     let mut future = identity();
     future.schema += 1;
 
-    let error = HttpSession::from_identity(&future, None, HttpOptions::new()).expect_err("refused");
+    let error = HttpSession::from_identity(&future, None, HttpSessionOptions::new()).expect_err("refused");
 
     assert!(
         matches!(error, HttpError::Identity(IdentityError::Schema(_))),
@@ -201,11 +201,11 @@ fn an_identity_with_another_schema_is_refused() {
 fn the_session_speaks_with_the_identitys_user_agent_and_languages() {
     let base = identity();
 
-    let session = HttpSession::from_identity(&base, None, HttpOptions::new()).expect("a session");
+    let session = HttpSession::from_identity(&base, None, HttpSessionOptions::new()).expect("a session");
 
     assert_eq!(
-        Some(session.profile().user_agent()),
+        Some(session.wire_format().user_agent()),
         base.fingerprint.user_agent().as_str()
     );
-    assert_eq!(session.profile().major(), measured_major());
+    assert_eq!(session.wire_format().major(), measured_major());
 }

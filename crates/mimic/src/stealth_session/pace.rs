@@ -1,4 +1,4 @@
-//! Per-site pacing: at most so many fetches of one site in a window, whichever leg makes them.
+//! Per-site rate_limit: at most so many fetches of one site in a window, whichever leg makes them.
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};

@@ -7,8 +7,8 @@ use wreq::redirect::Policy;
 use wreq::{NoProxy, Proxy};
 
 use super::error::HttpError;
-use super::options::HttpOptions;
-use crate::client::{impersonation_client, ImpersonationProfile};
+use super::options::HttpSessionOptions;
+use crate::client::{wire_client, WireFormat};
 use seleniumbase_rs_scrape::egress::route::ProxyRoute;
 
 /// The notation of the `no_proxy` list for a host that skips the proxy.
@@ -80,14 +80,14 @@ pub(super) fn wreq_proxy(egress: &ProxyRoute, bypass: &[String]) -> Result<Proxy
 ///
 /// # Errors
 ///
-/// Returns [`HttpError::Impersonate`] when the profile cannot be sent, and [`HttpError::Client`]
+/// Returns [`HttpError::WireFormat`] when the profile cannot be sent, and [`HttpError::Client`]
 /// when the proxy or the client is refused.
 pub(super) fn build_client(
-    profile: &ImpersonationProfile,
+    profile: &WireFormat,
     egress: Option<&ProxyRoute>,
-    options: &HttpOptions,
+    options: &HttpSessionOptions,
 ) -> Result<wreq::Client, HttpError> {
-    let mut builder = impersonation_client(profile)?
+    let mut builder = wire_client(profile)?
         .redirect(Policy::none())
         .gzip(true)
         .brotli(true)
@@ -172,8 +172,8 @@ mod tests {
 
     #[test]
     fn a_client_is_built_for_the_measured_profile_with_and_without_a_proxy() {
-        let profile = ImpersonationProfile::measured(BrowserKind::Chrome).expect("measured");
-        let options = HttpOptions::new();
+        let profile = WireFormat::measured(BrowserKind::Chrome).expect("measured");
+        let options = HttpSessionOptions::new();
         assert!(build_client(&profile, None, &options).is_ok());
         let egress =
             ProxyRoute::parse("http://alice:s3cret@proxy.example:8080", None).expect("spec");

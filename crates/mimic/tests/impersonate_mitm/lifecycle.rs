@@ -49,7 +49,7 @@ async fn swapping_the_egress_changes_the_route_between_requests_on_one_listener(
 
     let next = ProxyRoute::parse(&second.spec(None), None).expect("an egress");
     let (from, to) = (mitm.proxy_route(), Some(next.key().clone()));
-    mitm.swap_upstream(Some(next)).expect("the swap works");
+    mitm.swap_proxy(Some(next)).expect("the swap works");
 
     let answer = client.get(&url).send().await.expect("the second request");
     assert_eq!(answer.status(), 200);

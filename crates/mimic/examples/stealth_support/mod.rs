@@ -11,7 +11,7 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use seleniumbase_rs::evasion::fingerprint::OsType;
-use seleniumbase_rs_codec::emulation;
+use seleniumbase_rs_codec::measurement;
 use seleniumbase_rs_codec::BrowserKind;
 
 pub mod shop;

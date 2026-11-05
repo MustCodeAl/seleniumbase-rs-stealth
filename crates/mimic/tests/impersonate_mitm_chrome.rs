@@ -55,7 +55,7 @@ use btls::x509::extension::SubjectAlternativeName;
 use btls::x509::{X509Name, X509};
 use seleniumbase_rs::evasion::fingerprint::OsType;
 use seleniumbase_rs::sb_cdp::{Browser, ContextOptions, LaunchOptions, LaunchOptionsBuilder, Page};
-use seleniumbase_rs_codec::emulation;
+use seleniumbase_rs_codec::measurement;
 use seleniumbase_rs_codec::ja4::Ja4;
 use seleniumbase_rs_codec::BrowserKind;
 use seleniumbase_rs_mimic::mitm::{MitmOptions, MitmProxy};
@@ -253,7 +253,7 @@ async fn without_the_proxy_the_leaf_pin_alone_trusts_a_chain_carrying_the_leaf_k
     let (mitm, _sink) = start_mitm(None, MitmOptions::default().ca(Arc::clone(&ca))).await;
     let attacker = Attacker::start(pinned_leaf(&mitm, &der(&ca)).await).await;
     let pin = mitm
-        .chrome_args()
+        .launch_args()
         .into_iter()
         .find(|arg| arg.starts_with("--ignore-certificate-errors-spki-list="))
         .expect("the pin switch");
@@ -519,7 +519,7 @@ fn assert_measured_navigation(seen: &Seen) {
     let preface = seen.h2();
     assert_eq!(
         preface.akamai().expect("an Akamai string"),
-        measured.http2_spec().akamai(),
+        measured.h2_spec().akamai(),
         "Akamai string"
     );
     assert_eq!(preface.header("sec-fetch-dest"), Some("document"));

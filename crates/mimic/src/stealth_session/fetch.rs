@@ -5,7 +5,7 @@ use std::fmt;
 use std::time::Instant;
 
 use super::{Leg, StealthError, StealthSession};
-use crate::http_session::{Attempt, Fetched, HttpReply, HttpSession};
+use crate::http_session::{HttpAttempt, HttpFetch, HttpResponse, HttpSession};
 use seleniumbase_rs::utils::urls::normalize_page_url;
 use seleniumbase_rs_scrape::challenge::detect::{ChallengeKind, Detection};
 use seleniumbase_rs_scrape::challenge::mitigation::{Mitigation, AttemptContext, GiveUpReason, FetchKind};
@@ -58,10 +58,10 @@ impl fmt::Debug for StealthFetch {
             .field("headers", &self.headers.len())
             .field("body_bytes", &self.body.len())
             .field("detection", &self.detection.kind)
-            .field("mode", &self.mode)
+            .field("fetch_kind", &self.fetch_kind)
             .field("attempts", &self.attempts)
             .field("solved", &self.solved)
-            .field("egress", &self.egress)
+            .field("proxy", &self.proxy)
             .finish()
     }
 }
@@ -69,7 +69,7 @@ impl fmt::Debug for StealthFetch {
 impl StealthFetch {
     /// A page got over HTTP. A body that is not UTF-8 is read lossily: the bytes of a page that
     /// is not text are not what a fetch is for.
-    fn from_reply(reply: &HttpReply, detection: Detection, egress: Option<ProxyKey>) -> Self {
+    fn from_reply(reply: &HttpResponse, detection: Detection, egress: Option<ProxyKey>) -> Self {
         Self {
             url: reply.url().as_str().to_owned(),
             status: reply.status(),
@@ -79,7 +79,7 @@ impl StealthFetch {
             fetch_kind: FetchKind::Http,
             attempts: 0,
             solved: None,
-            egress,
+            proxy: egress,
         }
     }
 
@@ -94,7 +94,7 @@ impl StealthFetch {
             fetch_kind: FetchKind::Browser,
             attempts: 0,
             solved: None,
-            egress,
+            proxy: egress,
         }
     }
 }
@@ -178,7 +178,7 @@ impl StealthSession {
     /// - [`ScrapeError::GaveUp`] when the policy stopped for another reason;
     /// - [`ScrapeError::Navigation`] when the URL is not valid or the browser could not load it;
     /// - [`StealthError::Http`] when an HTTP request failed, and [`StealthError::Mitm`],
-    ///   [`StealthError::Impersonate`] and [`StealthError::Scrape`] when a change of mode, a
+    ///   [`StealthError::WireFormat`] and [`StealthError::Scrape`] when a change of mode, a
     ///   rotation, the store or the browser failed.
     #[tracing::instrument(skip_all, fields(url = %RedactedUrl::new(url)))]
     pub async fn fetch(&mut self, url: &str) -> Result<StealthFetch, StealthError> {
@@ -270,7 +270,7 @@ impl StealthSession {
         state: &mut SiteRecord,
         attempt: u32,
     ) -> Result<Loaded, StealthError> {
-        let context = Attempt {
+        let context = HttpAttempt {
             number: attempt,
             previous_challenges: state.consecutive_challenges,
             can_rotate_proxy: self.egress.size > 1,
@@ -279,7 +279,7 @@ impl StealthSession {
         let fetched = http
             .fetch(&target.url, &context, &self.wiring.rules, &self.identity)
             .await;
-        let Fetched { reply, verdict } = match fetched {
+        let HttpFetch { reply, verdict } = match fetched {
             Ok(fetched) => fetched,
             Err(error) => {
                 self.report(ProxyOutcome::ConnectError);
@@ -296,7 +296,7 @@ impl StealthSession {
                 self.egress_key().cloned(),
             ),
             action: verdict.action,
-            transition: verdict.transition,
+            transition: verdict.escalation,
         })
     }
 
@@ -419,7 +419,7 @@ impl StealthSession {
         };
         leg.solve(detection, seed, timeout).await?;
         let identity = self.synced_identity().await?;
-        let transition = self.wiring.rules.session.after_fetch(
+        let transition = self.wiring.rules.escalation.after_fetch(
             FetchKind::Browser,
             detection,
             &Mitigation::Solve,
@@ -656,7 +656,7 @@ mod tests {
             fetch_kind: FetchKind::Http,
             attempts: 1,
             solved: None,
-            egress: None,
+            proxy: None,
         };
         let shown = format!("{fetch:?}");
         for secret in ["alice", "s3cret", "hunter2"] {

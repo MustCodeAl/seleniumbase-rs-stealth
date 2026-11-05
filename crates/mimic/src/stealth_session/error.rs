@@ -4,7 +4,7 @@
 //! failed, and each of those already keeps URLs redacted and credentials out of its text, so a
 //! `StealthError` can be logged as it is.
 
-use crate::client::ImpersonateError;
+use crate::client::WireFormatError;
 use crate::http_session::HttpError;
 use crate::mitm::MitmError;
 use seleniumbase_rs::error::SeleniumBaseError;
@@ -31,7 +31,7 @@ pub enum StealthError {
     /// The measured browser could not be turned into a profile, or the browser that runs is not
     /// the one that was measured.
     #[error(transparent)]
-    Impersonate(#[from] ImpersonateError),
+    WireFormat(#[from] WireFormatError),
 }
 
 /// Wraps an error of the scrape layer the way [`ScrapeError`] does.

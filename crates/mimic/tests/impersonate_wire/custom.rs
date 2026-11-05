@@ -10,22 +10,22 @@ use seleniumbase_rs_codec::akamai::Akamai;
 use seleniumbase_rs_codec::client_hello::{ext_id, ClientHello};
 use seleniumbase_rs_codec::h2_spec::H2SpecError;
 use seleniumbase_rs_codec::header_spec::{HeaderSource, RequestShape};
-use seleniumbase_rs_codec::ja3::peetprint::Slot;
+use seleniumbase_rs_codec::ja3::peetprint::PeetprintSlot;
 use seleniumbase_rs_codec::ja3::{Ja3, Peetprint};
 use seleniumbase_rs_codec::ja4::{Ja4, Ja4Order, Ja4Raw};
 use seleniumbase_rs_codec::tls_spec::TlsSpecError;
 use seleniumbase_rs_codec::BrowserKind;
-use seleniumbase_rs_mimic::client::{ImpersonateError, ImpersonationProfile, WireProtocol};
+use seleniumbase_rs_mimic::client::{WireFormatError, WireFormat, WireProtocol};
 use seleniumbase_rs_mimic::convert::ConvertError;
 
 use crate::exchange::{exchange, Via};
 use crate::server::Served;
 
-fn base() -> ImpersonationProfile {
-    ImpersonationProfile::measured(BrowserKind::Chrome).expect("the measured profile")
+fn base() -> WireFormat {
+    WireFormat::measured(BrowserKind::Chrome).expect("the measured profile")
 }
 
-async fn send(profile: &ImpersonationProfile) -> Served {
+async fn send(profile: &WireFormat) -> Served {
     exchange(
         profile,
         RequestShape::Document,
@@ -121,7 +121,7 @@ fn without_boringssl_padding(what: &str, hello: &ClientHello) -> ClientHello {
 #[tokio::test]
 async fn a_custom_ja3_arrives_exactly_as_given() {
     for (what, ja3) in ja3_variants() {
-        let profile = ImpersonationProfile::custom()
+        let profile = WireFormat::builder()
             .ja3(&ja3.to_string())
             .unwrap_or_else(|error| panic!("{what}: {error}"))
             .build()
@@ -137,8 +137,8 @@ async fn a_custom_ja3_arrives_exactly_as_given() {
     }
 }
 
-fn refused_ja3(what: &str, ja3: &Ja3) -> ImpersonateError {
-    ImpersonationProfile::custom()
+fn refused_ja3(what: &str, ja3: &Ja3) -> WireFormatError {
+    WireFormat::builder()
         .ja3(&ja3.to_string())
         .err()
         .unwrap_or_else(|| panic!("{what}: a JA3 that cannot be sent was accepted"))
@@ -152,56 +152,56 @@ fn a_ja3_that_cannot_be_sent_is_refused_by_name_before_a_client_exists() {
     with.extensions.insert(1, 0xCA34);
     assert!(matches!(
         refused_ja3("trust_anchors", &with),
-        ImpersonateError::Tls(TlsSpecError::UnsupportedExtension { id: 0xCA34, .. })
+        WireFormatError::Tls(TlsSpecError::UnsupportedExtension { id: 0xCA34, .. })
     ));
 
     let mut with = base.clone();
     with.extensions.push(41);
     assert!(matches!(
         refused_ja3("pre_shared_key", &with),
-        ImpersonateError::Tls(TlsSpecError::UnsupportedExtension { id: 41, .. })
+        WireFormatError::Tls(TlsSpecError::UnsupportedExtension { id: 41, .. })
     ));
 
     let mut with = base.clone();
     with.version = 770;
     assert_eq!(
         refused_ja3("TLS 1.1 handshake version", &with),
-        ImpersonateError::Tls(TlsSpecError::LegacyVersion(770))
+        WireFormatError::Tls(TlsSpecError::LegacyVersion(770))
     );
 
     let mut with = base.clone();
     with.ciphers.push(0x00FF);
     assert_eq!(
         refused_ja3("the renegotiation SCSV", &with),
-        ImpersonateError::Tls(TlsSpecError::UnsupportedCipher(0x00FF))
+        WireFormatError::Tls(TlsSpecError::UnsupportedCipher(0x00FF))
     );
 
     let mut with = base.clone();
     with.ciphers.retain(|id| *id != 0x1302);
     assert_eq!(
         refused_ja3("a TLS 1.3 subset", &with),
-        ImpersonateError::Tls(TlsSpecError::Tls13Suites)
+        WireFormatError::Tls(TlsSpecError::Tls13Suites)
     );
 
     let mut with = base.clone();
     with.groups.push(30);
     assert_eq!(
         refused_ja3("x448", &with),
-        ImpersonateError::Tls(TlsSpecError::UnsupportedGroup(30))
+        WireFormatError::Tls(TlsSpecError::UnsupportedGroup(30))
     );
 
     let mut with = base.clone();
     with.point_formats = vec![0, 1];
     assert_eq!(
         refused_ja3("a compressed point format", &with),
-        ImpersonateError::Tls(TlsSpecError::PointFormats(vec![0, 1]))
+        WireFormatError::Tls(TlsSpecError::PointFormats(vec![0, 1]))
     );
 
     let mut with = base.clone();
     with.extensions.push(5);
     assert_eq!(
         refused_ja3("a repeated extension", &with),
-        ImpersonateError::Tls(TlsSpecError::DuplicateExtension(5))
+        WireFormatError::Tls(TlsSpecError::DuplicateExtension(5))
     );
 }
 
@@ -223,14 +223,14 @@ fn a_ja3_without_what_boringssl_always_sends_is_refused_by_name() {
     with.groups.clear();
     assert_eq!(
         refused_ja3("no supported_groups", &with),
-        ImpersonateError::Convert(ConvertError::ExtensionAlwaysSent(10))
+        WireFormatError::Convert(ConvertError::ExtensionAlwaysSent(10))
     );
 
     let mut with = base.clone();
     with.extensions.retain(|id| *id != 13);
     assert_eq!(
         refused_ja3("no signature_algorithms", &with),
-        ImpersonateError::Convert(ConvertError::ExtensionAlwaysSent(13))
+        WireFormatError::Convert(ConvertError::ExtensionAlwaysSent(13))
     );
 
     for id in [11, 23, 65281] {
@@ -244,7 +244,7 @@ fn a_ja3_without_what_boringssl_always_sends_is_refused_by_name() {
                 "a TLS 1.2 hello without one of its legacy extensions",
                 &with
             ),
-            ImpersonateError::Convert(ConvertError::ExtensionAlwaysSent(id))
+            WireFormatError::Convert(ConvertError::ExtensionAlwaysSent(id))
         );
     }
 }
@@ -256,7 +256,7 @@ fn a_ja3_that_lists_a_tls13_suite_after_a_tls12_suite_is_refused_by_name() {
     ja3.ciphers.extend([0x1301, 0x1302, 0x1303]);
     assert_eq!(
         refused_ja3("TLS 1.3 suites last", &ja3),
-        ImpersonateError::Convert(ConvertError::Tls13SuitesNotFirst)
+        WireFormatError::Convert(ConvertError::Tls13SuitesNotFirst)
     );
 }
 
@@ -271,7 +271,7 @@ fn tls12_ja3_ending_in(tail: &[u16]) -> Ja3 {
 #[tokio::test]
 async fn padding_arrives_when_the_ja3_asks_for_it_after_an_empty_extension() {
     let ja3 = tls12_ja3_ending_in(&[23, 21]);
-    let profile = ImpersonationProfile::custom()
+    let profile = WireFormat::builder()
         .grease(false)
         .expect("accepted")
         .ja3(&ja3.to_string())
@@ -286,40 +286,40 @@ async fn padding_arrives_when_the_ja3_asks_for_it_after_an_empty_extension() {
 #[test]
 fn padding_that_boringssl_would_not_write_or_would_add_is_refused_by_name() {
     let asked_after_a_full_extension = tls12_ja3_ending_in(&[27, 21]);
-    let error = ImpersonationProfile::custom()
+    let error = WireFormat::builder()
         .grease(false)
         .expect("accepted")
         .ja3(&asked_after_a_full_extension.to_string())
         .expect_err("no padding follows a non-empty extension");
     assert_eq!(
         error,
-        ImpersonateError::Convert(ConvertError::PaddingUnavailable)
+        WireFormatError::Convert(ConvertError::PaddingUnavailable)
     );
 
     let silent_padding = tls12_ja3_ending_in(&[23]);
-    let error = ImpersonationProfile::custom()
+    let error = WireFormat::builder()
         .grease(false)
         .expect("accepted")
         .ja3(&silent_padding.to_string())
         .expect_err("BoringSSL would add a padding extension the JA3 does not list");
     assert_eq!(
         error,
-        ImpersonateError::Convert(ConvertError::PaddingAppended)
+        WireFormatError::Convert(ConvertError::PaddingAppended)
     );
 
-    let with_grease = ImpersonationProfile::custom()
+    let with_grease = WireFormat::builder()
         .ja3(&tls12_ja3_ending_in(&[23, 21]).to_string())
         .expect_err("GREASE ends the extension list with a non-empty extension");
     assert_eq!(
         with_grease,
-        ImpersonateError::Convert(ConvertError::PaddingUnavailable)
+        WireFormatError::Convert(ConvertError::PaddingUnavailable)
     );
 }
 
 #[tokio::test]
 async fn a_pinned_order_can_be_given_back_to_boringssl() {
     let ja3 = ja3_variants().remove(0).1;
-    let profile = ImpersonationProfile::custom()
+    let profile = WireFormat::builder()
         .ja3(&ja3.to_string())
         .expect("accepted")
         .permute_extensions(true)
@@ -344,7 +344,7 @@ async fn a_custom_ja4_r_arrives_as_the_same_ja4() {
     raw.ciphers.retain(|id| *id != 0x0035 && *id != 0x009D);
     raw.a = format!("{}{:02}{}", &raw.a[..4], raw.ciphers.len(), &raw.a[6..]);
     raw.signature_algorithms = vec![0x0403, 0x0804, 0x0401];
-    let profile = ImpersonationProfile::custom()
+    let profile = WireFormat::builder()
         .ja4_r(&raw.to_string())
         .expect("accepted")
         .build()
@@ -365,7 +365,7 @@ async fn a_custom_ja4_ro_arrives_with_its_order() {
         .partition(|id| !(0x1301..=0x1303).contains(*id));
     ciphers.reverse();
     raw.ciphers = tls13.into_iter().rev().chain(ciphers).collect();
-    let profile = ImpersonationProfile::custom()
+    let profile = WireFormat::builder()
         .ja4_ro(&raw.to_string())
         .expect("accepted")
         .build()
@@ -380,12 +380,12 @@ fn a_ja4_that_cannot_be_sent_is_refused_by_name() {
     let spec = base().tls_spec().clone();
     let mut raw: Ja4Raw = spec.ja4_raw(Ja4Order::Sorted);
     raw.signature_algorithms.push(0x0904);
-    let error = ImpersonationProfile::custom()
+    let error = WireFormat::builder()
         .ja4_r(&raw.to_string())
         .expect_err("ML-DSA cannot be sent");
     assert!(matches!(
         error,
-        ImpersonateError::Tls(TlsSpecError::UnsupportedSigalg { id: 0x0904, .. })
+        WireFormatError::Tls(TlsSpecError::UnsupportedSigalg { id: 0x0904, .. })
     ));
 }
 
@@ -394,11 +394,11 @@ async fn a_custom_peetprint_arrives_as_the_same_peetprint() {
     let spec = base().tls_spec().clone();
     let mut peet = spec.peetprint();
     peet.ciphers
-        .retain(|slot| *slot != Slot::Id(0x0035) && *slot != Slot::Id(0x009D));
-    peet.groups.retain(|slot| *slot != Slot::Id(24));
+        .retain(|slot| *slot != PeetprintSlot::Id(0x0035) && *slot != PeetprintSlot::Id(0x009D));
+    peet.groups.retain(|slot| *slot != PeetprintSlot::Id(24));
     peet.signature_algorithms
-        .retain(|slot| *slot != Slot::Id(0x0601));
-    let profile = ImpersonationProfile::custom()
+        .retain(|slot| *slot != PeetprintSlot::Id(0x0601));
+    let profile = WireFormat::builder()
         .peetprint(&peet.to_string())
         .expect("accepted")
         .build()
@@ -444,7 +444,7 @@ const AKAMAI_STRINGS: [(&str, &str); 6] = [
 #[tokio::test]
 async fn a_custom_akamai_string_arrives_exactly_as_given() {
     for (what, text) in AKAMAI_STRINGS {
-        let profile = ImpersonationProfile::custom()
+        let profile = WireFormat::builder()
             .akamai(text)
             .unwrap_or_else(|error| panic!("{what}: {error}"))
             .build()
@@ -460,7 +460,7 @@ async fn a_custom_akamai_string_arrives_exactly_as_given() {
         assert_eq!(preface.request_stream_id, first_free, "{what}");
         assert_eq!(
             preface.headers_priority,
-            base().http2_spec().headers_priority,
+            base().h2_spec().headers_priority,
             "{what}: the HEADERS priority is not in the string, so the base's stays"
         );
     }
@@ -469,42 +469,42 @@ async fn a_custom_akamai_string_arrives_exactly_as_given() {
 #[test]
 fn an_akamai_string_wreq_cannot_send_is_refused_by_name() {
     let refused = |text: &str| {
-        ImpersonationProfile::custom()
+        WireFormat::builder()
             .akamai(text)
             .err()
             .unwrap_or_else(|| panic!("`{text}` was accepted"))
     };
     assert_eq!(
         refused("2570:1;4:1048576|0|0|m,a,s,p"),
-        ImpersonateError::Http2(H2SpecError::UnsupportedSetting(2570))
+        WireFormatError::Http2(H2SpecError::UnsupportedSetting(2570))
     );
     assert_eq!(
         refused("1:4096|0|0|m,a,s,p"),
-        ImpersonateError::Http2(H2SpecError::SettingAlwaysSent(4))
+        WireFormatError::Http2(H2SpecError::SettingAlwaysSent(4))
     );
     assert_eq!(
         refused("2:5;4:65535|0|0|m,a,s,p"),
-        ImpersonateError::Http2(H2SpecError::SettingValue { id: 2, value: 5 })
+        WireFormatError::Http2(H2SpecError::SettingValue { id: 2, value: 5 })
     );
     assert_eq!(
         refused("4:65535|2147483647|0|m,a,s,p"),
-        ImpersonateError::Http2(H2SpecError::WindowUpdate(2_147_483_647))
+        WireFormatError::Http2(H2SpecError::WindowUpdate(2_147_483_647))
     );
     assert!(matches!(
         refused("4:65535;4:1|0|0|m,a,s,p"),
-        ImpersonateError::Akamai(_)
+        WireFormatError::Akamai(_)
     ));
     assert!(matches!(
         refused("4:65535|0|0|m,a,s"),
-        ImpersonateError::Akamai(_)
+        WireFormatError::Akamai(_)
     ));
     assert!(matches!(
         refused("4:65535|0|3:0:0:0|m,a,s,p"),
-        ImpersonateError::Akamai(_)
+        WireFormatError::Akamai(_)
     ));
     assert!(matches!(
         refused("4:65535|0|3:0:3:10|m,a,s,p"),
-        ImpersonateError::Http2(H2SpecError::Priority { stream: 3, .. })
+        WireFormatError::Http2(H2SpecError::Priority { stream: 3, .. })
     ));
 }
 
@@ -512,7 +512,7 @@ fn an_akamai_string_wreq_cannot_send_is_refused_by_name() {
 
 #[tokio::test]
 async fn a_custom_header_set_arrives_in_its_order_with_its_values() {
-    let profile = ImpersonationProfile::custom()
+    let profile = WireFormat::builder()
         .header(
             RequestShape::Document,
             "X-Probe",
@@ -571,7 +571,7 @@ async fn custom_client_hints_arrive_as_the_three_hint_headers() {
         mobile: true,
         ..ClientHints::default()
     };
-    let profile = ImpersonationProfile::custom()
+    let profile = WireFormat::builder()
         .client_hints(hints)
         .build()
         .expect("builds");
@@ -587,7 +587,7 @@ async fn custom_client_hints_arrive_as_the_three_hint_headers() {
 
 #[tokio::test]
 async fn a_custom_header_set_keeps_its_spelling_over_http1() {
-    let profile = ImpersonationProfile::custom()
+    let profile = WireFormat::builder()
         .header(
             RequestShape::Document,
             "X-Mixed-Case",

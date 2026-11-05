@@ -12,7 +12,7 @@ use wreq::Method;
 
 use super::error::HttpError;
 use super::redirect::site_name;
-use super::reply::HttpReply;
+use super::reply::HttpResponse;
 use super::request::parse_url;
 use super::HttpSession;
 use seleniumbase_rs_scrape::challenge::detect::{ChallengeKind, Detection};
@@ -26,7 +26,7 @@ use seleniumbase_rs_scrape::passport::policy::{EscalateReason, EscalationPolicy,
 
 /// Where a fetch stands, as the mitigation policy needs to know it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Attempt {
+pub struct HttpAttempt {
     /// The attempt at this URL, counting from one.
     pub number: u32,
     /// The challenges the site showed in a row before this reply.
@@ -37,7 +37,7 @@ pub struct Attempt {
     pub can_escalate: bool,
 }
 
-impl Default for Attempt {
+impl Default for HttpAttempt {
     /// The first attempt, no earlier challenge, no other egress, a browser available.
     fn default() -> Self {
         Self {
@@ -51,25 +51,25 @@ impl Default for Attempt {
 
 /// The two policies that judge a reply.
 #[derive(Clone, Copy, Debug, Default)]
-pub struct Rules {
+pub struct HttpRules {
     /// What to do about a challenge.
     pub mitigation: MitigationPolicy,
     /// When the session changes mode.
-    pub session: EscalationPolicy,
+    pub escalation: EscalationPolicy,
 }
 
 /// What a reply means for the session.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Verdict {
+pub struct HttpVerdict {
     /// Whether the reply is a challenge, and the evidence.
     pub detection: Detection,
     /// What the mitigation policy chose.
     pub action: Mitigation,
     /// Whether the session changes mode because of it.
-    pub transition: Escalation,
+    pub escalation: Escalation,
 }
 
-impl Verdict {
+impl HttpVerdict {
     /// Whether the reply is a real answer: it is not a challenge, a block or a rate limit.
     #[must_use]
     pub fn is_clear(&self) -> bool {
@@ -79,11 +79,11 @@ impl Verdict {
 
 /// A reply and the verdict on it.
 #[derive(Clone, Debug)]
-pub struct Fetched {
+pub struct HttpFetch {
     /// The reply.
-    pub reply: HttpReply,
+    pub reply: HttpResponse,
     /// What it means for the session.
-    pub verdict: Verdict,
+    pub verdict: HttpVerdict,
 }
 
 impl HttpSession {
@@ -96,11 +96,11 @@ impl HttpSession {
     #[must_use]
     pub fn assess(
         &self,
-        reply: &HttpReply,
-        attempt: &Attempt,
-        rules: &Rules,
+        reply: &HttpResponse,
+        attempt: &HttpAttempt,
+        rules: &HttpRules,
         identity: &Identity,
-    ) -> Verdict {
+    ) -> HttpVerdict {
         let detection = reply.detect();
         let challenged = detection.kind != ChallengeKind::Clear;
         let context = AttemptContext {
@@ -115,7 +115,7 @@ impl HttpSession {
         };
         let action = rules.mitigation.decide(&detection, &context);
         let transition = rules
-            .session
+            .escalation
             .after_fetch(FetchKind::Http, &detection, &action, identity);
         if challenged {
             self.emit(&ScrapeEvent::ChallengeDetected {
@@ -129,10 +129,10 @@ impl HttpSession {
                 action,
             });
         }
-        Verdict {
+        HttpVerdict {
             detection,
             action,
-            transition,
+            escalation: transition,
         }
     }
 
@@ -145,13 +145,13 @@ impl HttpSession {
     pub async fn fetch(
         &self,
         url: &str,
-        attempt: &Attempt,
-        rules: &Rules,
+        attempt: &HttpAttempt,
+        rules: &HttpRules,
         identity: &Identity,
-    ) -> Result<Fetched, HttpError> {
+    ) -> Result<HttpFetch, HttpError> {
         let reply = self.request(Method::GET, url).send().await?;
         let verdict = self.assess(&reply, attempt, rules, identity);
-        Ok(Fetched { reply, verdict })
+        Ok(HttpFetch { reply, verdict })
     }
 
     /// Asks, before a request to `url`, whether the session should go to the browser first
@@ -169,14 +169,14 @@ impl HttpSession {
         url: &str,
         identity: &Identity,
         state: Option<&SiteRecord>,
-        rules: &Rules,
+        rules: &HttpRules,
     ) -> Result<Escalation, HttpError> {
         let url = parse_url(url)?;
         let site = site_name(&url);
         let now = self.now();
         let current = self.identity_at(identity, now);
         let transition = rules
-            .session
+            .escalation
             .before_fetch(FetchKind::Http, &current, &site, state, now);
         if let Escalation::Escalate(EscalateReason::ClearanceExpiring { remaining_secs }) =
             transition

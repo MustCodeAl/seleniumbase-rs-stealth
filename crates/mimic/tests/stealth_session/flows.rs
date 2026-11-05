@@ -45,7 +45,7 @@ async fn an_unguarded_page_is_fetched_over_http_and_no_browser_is_started() {
         .expect("a page");
 
     assert_eq!(fetched.status, 200);
-    assert_eq!((fetched.mode, fetched.attempts), (FetchKind::Http, 1));
+    assert_eq!((fetched.fetch_kind, fetched.attempts), (FetchKind::Http, 1));
     assert!(fetched.body.contains(REAL_MARKER));
     assert_eq!(fetched.solved, None);
     assert_eq!(world.launcher.count(), 0, "no browser is needed");
@@ -73,7 +73,7 @@ async fn a_challenge_over_http_goes_to_the_browser_and_the_clearance_comes_back_
     assert_eq!(fetched.status, 200);
     assert!(fetched.body.contains(REAL_MARKER));
     assert_eq!(fetched.solved, Some(ChallengeKind::JsChallenge));
-    assert_eq!((fetched.mode, fetched.attempts), (FetchKind::Http, 3));
+    assert_eq!((fetched.fetch_kind, fetched.attempts), (FetchKind::Http, 3));
     assert_eq!(session.fetch_kind(), FetchKind::Http, "the session went back to HTTP");
     assert_eq!(world.names(), FULL_FLOW);
     assert_eq!(
@@ -140,7 +140,7 @@ async fn what_the_site_learns_is_kept_and_a_solved_site_is_fetched_over_http_nex
     let again = session.fetch(&world.site.url("/")).await.expect("a page");
 
     assert_eq!(
-        (again.mode, again.attempts, again.solved),
+        (again.fetch_kind, again.attempts, again.solved),
         (FetchKind::Http, 1, None)
     );
     assert_eq!(
@@ -169,7 +169,7 @@ async fn a_session_that_prefers_the_browser_starts_in_it_and_stays_after_a_solve
     };
     let mut session = world
         .session()
-        .policy(policy)
+        .escalation_policy(policy)
         .build()
         .await
         .expect("a session");
@@ -178,7 +178,7 @@ async fn a_session_that_prefers_the_browser_starts_in_it_and_stays_after_a_solve
 
     let fetched = session.fetch(&world.site.url("/")).await.expect("a page");
 
-    assert_eq!((fetched.mode, fetched.attempts), (FetchKind::Browser, 2));
+    assert_eq!((fetched.fetch_kind, fetched.attempts), (FetchKind::Browser, 2));
     assert_eq!(fetched.solved, Some(ChallengeKind::JsChallenge));
     assert!(fetched.body.contains(REAL_MARKER));
     assert!(
@@ -201,12 +201,12 @@ async fn escalate_and_demote_by_hand_say_why_and_do_nothing_twice() {
     session.escalate().await.expect("escalates");
     session.escalate().await.expect("already there");
     assert_eq!((session.fetch_kind(), world.launcher.count()), (FetchKind::Browser, 1));
-    assert!(session.page().is_some() && session.http().is_none());
+    assert!(session.page().is_some() && session.http_session().is_none());
 
     session.demote().await.expect("demotes");
     session.demote().await.expect("already there");
     assert_eq!(session.fetch_kind(), FetchKind::Http);
-    assert!(session.http().is_some() && session.page().is_none());
+    assert!(session.http_session().is_some() && session.page().is_none());
     assert!(!world.launcher.last().browser.is_connected());
     assert_eq!(
         world.changes(),
@@ -268,14 +268,14 @@ async fn a_clearance_near_its_end_sends_the_next_fetch_to_the_browser() {
     // 600 s of clearance, a margin of 120 s: still good at 200 s left.
     world.advance(400);
     let early = session.fetch(&world.site.url("/")).await.expect("a page");
-    assert_eq!((early.mode, world.launcher.count()), (FetchKind::Http, 1));
+    assert_eq!((early.fetch_kind, world.launcher.count()), (FetchKind::Http, 1));
 
     // 115 s left: the policy does not wait for the site to refuse.
     world.advance(85);
     let late = session.fetch(&world.site.url("/")).await.expect("a page");
 
     assert_eq!(
-        (late.mode, late.attempts, late.solved),
+        (late.fetch_kind, late.attempts, late.solved),
         (FetchKind::Browser, 1, None)
     );
     assert_eq!(world.launcher.count(), 2);
@@ -314,7 +314,7 @@ async fn a_fresh_challenge_after_a_clearance_goes_to_the_browser_again() {
     world.site.revoke();
     let again = session.fetch(&world.site.url("/")).await.expect("a page");
 
-    assert_eq!((again.mode, again.attempts), (FetchKind::Http, 3));
+    assert_eq!((again.fetch_kind, again.attempts), (FetchKind::Http, 3));
     assert_eq!(again.solved, Some(ChallengeKind::JsChallenge));
     assert_eq!(
         world.launcher.count(),
@@ -402,7 +402,7 @@ async fn challenges_in_a_row_climb_the_ladder_from_solving_to_a_new_egress_to_a_
     };
     let mut session = world
         .session()
-        .policy(policy)
+        .escalation_policy(policy)
         .geo_proxies([
             ("http://one.proxy.test:8080", crate::world::country("US")),
             ("http://two.proxy.test:8080", crate::world::country("DE")),
@@ -505,8 +505,8 @@ async fn a_browser_that_is_not_the_measured_chrome_is_refused_and_the_session_st
     assert!(
         matches!(
             error,
-            StealthError::Impersonate(
-                seleniumbase_rs_mimic::client::ImpersonateError::VersionMismatch {
+            StealthError::WireFormat(
+                seleniumbase_rs_mimic::client::WireFormatError::VersionMismatch {
                     browser,
                     ..
                 }

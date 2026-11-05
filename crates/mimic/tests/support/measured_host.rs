@@ -13,7 +13,7 @@
 //! test harness shows for a passing test only with `-- --nocapture`.
 
 use seleniumbase_rs::evasion::fingerprint::OsType;
-use seleniumbase_rs_codec::emulation;
+use seleniumbase_rs_codec::measurement;
 use seleniumbase_rs_codec::BrowserKind;
 
 /// The operating system this machine runs, as the persona of a real browser on it.

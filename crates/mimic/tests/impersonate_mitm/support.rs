@@ -29,7 +29,7 @@ use seleniumbase_rs_codec::client_hello::{ClientHello, MAX_CLIENT_HELLO};
 use seleniumbase_rs_codec::h2_frames::H2Preface;
 use seleniumbase_rs_codec::BrowserKind;
 use seleniumbase_rs_mimic::capture_h2::site::h2_reply;
-use seleniumbase_rs_mimic::client::ImpersonationProfile;
+use seleniumbase_rs_mimic::client::WireFormat;
 use seleniumbase_rs_mimic::mitm::{MitmOptions, MitmProxy};
 use seleniumbase_rs_mimic::tls_server::{
     accept, acceptor, EphemeralCa, ALPN_HTTP1, DEFAULT_HANDSHAKE_TIMEOUT,
@@ -63,8 +63,8 @@ const PEEK_SLACK: usize = 1024;
 const MAX_HEAD: usize = 64 * 1024;
 
 /// The measured Chrome profile.
-pub fn profile() -> ImpersonationProfile {
-    ImpersonationProfile::measured(BrowserKind::Chrome).expect("Chrome is measured")
+pub fn profile() -> WireFormat {
+    WireFormat::measured(BrowserKind::Chrome).expect("Chrome is measured")
 }
 
 /// A CA of its own, shared.
@@ -91,7 +91,7 @@ pub async fn start_mitm(
 
 /// The token in a proxy's spec.
 pub fn token(mitm: &MitmProxy) -> String {
-    let spec = mitm.proxy_spec();
+    let spec = mitm.proxy_url();
     let (userinfo, _) = spec.expose().rsplit_once('@').expect("userinfo");
     let (_, token) = userinfo.rsplit_once(':').expect("user:token");
     token.to_owned()

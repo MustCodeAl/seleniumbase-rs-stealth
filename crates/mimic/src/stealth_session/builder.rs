@@ -10,11 +10,11 @@ use super::pace::SiteLimits;
 use super::rotate::{check_identity, persona_fingerprint};
 use super::transition::open_leg;
 use super::{Clock, Egress, StealthError, StealthSession, Wiring};
-use crate::http_session::{HttpOptions, Rules};
+use crate::http_session::{HttpSessionOptions, HttpRules};
 use crate::mitm::MitmOptions;
 use seleniumbase_rs::evasion::fingerprint::{Fingerprint, OsType};
 use seleniumbase_rs::sb_cdp::LaunchOptionsBuilder;
-use seleniumbase_rs_codec::{emulation, BrowserKind};
+use seleniumbase_rs_codec::{measurement, BrowserKind};
 use seleniumbase_rs_scrape::challenge::mitigation::{
     MitigationPolicy, DEFAULT_MAX_CHALLENGE_ATTEMPTS,
 };
@@ -60,7 +60,7 @@ pub struct StealthSessionBuilder {
     seed: Option<u64>,
     fingerprint: Option<Fingerprint>,
     restore: Option<Identity>,
-    http: HttpOptions,
+    http: HttpSessionOptions,
     mitm: MitmOptions,
     solve_timeout: Duration,
     clock: Option<Clock>,
@@ -96,7 +96,7 @@ impl StealthSessionBuilder {
             seed: None,
             fingerprint: None,
             restore: None,
-            http: HttpOptions::new(),
+            http: HttpSessionOptions::new(),
             mitm: MitmOptions::default(),
             solve_timeout: DEFAULT_SOLVE_TIMEOUT,
             clock: None,
@@ -164,7 +164,7 @@ impl StealthSessionBuilder {
     /// When the session changes mode: the mode it prefers, whether HTTP needs a clearance, how
     /// close to its end a clearance may get, and whether a solve sends the session back to HTTP.
     #[must_use]
-    pub fn policy(mut self, policy: EscalationPolicy) -> Self {
+    pub fn escalation_policy(mut self, policy: EscalationPolicy) -> Self {
         self.policy = policy;
         self
     }
@@ -223,7 +223,7 @@ impl StealthSessionBuilder {
     /// The identity must belong to one of the proxies added, or to the direct connection when
     /// none was: [`build`](Self::build) refuses an identity of another egress.
     #[must_use]
-    pub fn restore(mut self, identity: Identity) -> Self {
+    pub fn identity(mut self, identity: Identity) -> Self {
         self.restore = Some(identity);
         self
     }
@@ -232,7 +232,7 @@ impl StealthSessionBuilder {
     /// and the resolver entries. The clock and the event sink of the session replace the ones in
     /// these options.
     #[must_use]
-    pub fn http_options(mut self, options: HttpOptions) -> Self {
+    pub fn http_session_options(mut self, options: HttpSessionOptions) -> Self {
         self.http = options;
         self
     }
@@ -270,7 +270,7 @@ impl StealthSessionBuilder {
     ///
     /// # Errors
     ///
-    /// - [`StealthError::Impersonate`] when this machine's system has no measured Chrome, or the
+    /// - [`StealthError::WireFormat`] when this machine's system has no measured Chrome, or the
     ///   profile given claims another Chrome version than the measured one;
     /// - [`StealthError::Scrape`] when the country of an egress has no locale, a restored identity
     ///   belongs to another egress or is not valid, or no browser can be started;
@@ -284,7 +284,7 @@ impl StealthSessionBuilder {
             .then(|| ProxyPool::new(start.egresses.clone(), start.strategy));
         let current = first_egress(&start, pool.as_ref(), now)?;
         let identity = start_identity(&wiring, &start, current.as_ref(), now).await?;
-        let mode = wiring.rules.session.prefer;
+        let mode = wiring.rules.escalation.prefer;
         let mut mitm = None;
         let leg = open_leg(&wiring, &mut mitm, mode, &identity, current.as_ref()).await?;
         Ok(StealthSession {
@@ -332,9 +332,9 @@ impl StealthSessionBuilder {
                 .store
                 .unwrap_or_else(|| Arc::new(InMemoryLedger::new())),
             geo: self.geo.unwrap_or_else(|| Arc::new(StaticGeoResolver)),
-            rules: Rules {
+            rules: HttpRules {
                 mitigation,
-                session: self.policy,
+                escalation: self.policy,
             },
             limits: self
                 .limits
@@ -379,7 +379,7 @@ fn first_egress(
         return Ok(pool.and_then(|pool| pool.pick(None, now)));
     };
     identity.verify()?;
-    let named = identity.egress.as_ref().and_then(|key| {
+    let named = identity.proxy.as_ref().and_then(|key| {
         start.egresses.iter().find(|egress| {
             let held = egress.key();
             held.scheme == key.scheme && held.host == key.host && held.port == key.port
@@ -432,7 +432,7 @@ async fn start_identity(
 /// The Chrome major the measured TLS and HTTP/2 of `os` belong to.
 fn measured_major(os: OsType) -> Result<u32, StealthError> {
     Ok(measurement::get(BrowserKind::Chrome, os)
-        .map_err(crate::client::ImpersonateError::from)?
+        .map_err(crate::client::WireFormatError::from)?
         .major)
 }
 
@@ -513,7 +513,7 @@ mod tests {
         }
         assert!(matches!(
             measured_major(OsType::Windows),
-            Err(StealthError::Impersonate(_))
+            Err(StealthError::WireFormat(_))
         ));
     }
 }

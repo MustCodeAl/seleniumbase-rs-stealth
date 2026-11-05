@@ -58,7 +58,7 @@ async fn an_identity_taken_after_a_solve_holds_the_clearance_and_starts_a_sessio
 
     let mut second = world
         .session()
-        .restore(loaded)
+        .identity(loaded)
         .build()
         .await
         .expect("a session");
@@ -66,7 +66,7 @@ async fn an_identity_taken_after_a_solve_holds_the_clearance_and_starts_a_sessio
     let fetched = second.fetch(&world.site.url("/")).await.expect("a page");
 
     assert_eq!(
-        (fetched.mode, fetched.attempts, fetched.solved),
+        (fetched.fetch_kind, fetched.attempts, fetched.solved),
         (FetchKind::Http, 1, None)
     );
     assert_eq!(
@@ -88,7 +88,7 @@ async fn a_restored_identity_of_another_egress_is_refused() {
         .session()
         .geo_proxies([(US_PROXY, country("US"))])
         .expect("a proxy")
-        .restore(identity)
+        .identity(identity)
         .build()
         .await
         .expect_err("the identity was made without a proxy");
@@ -119,7 +119,7 @@ async fn a_restored_identity_picks_its_egress_from_the_pool_whatever_the_order()
         .expect("a session");
     let identity = only_de.export_identity().await.expect("an identity");
     let key = identity
-        .egress
+        .proxy
         .clone()
         .expect("the identity names its egress");
     only_de.close().await.expect("closes");
@@ -128,7 +128,7 @@ async fn a_restored_identity_picks_its_egress_from_the_pool_whatever_the_order()
         .session()
         .geo_proxies([(US_PROXY, country("US")), (DE_PROXY, country("DE"))])
         .expect("two proxies")
-        .restore(identity)
+        .identity(identity)
         .build()
         .await
         .expect("a session");
@@ -138,7 +138,7 @@ async fn a_restored_identity_picks_its_egress_from_the_pool_whatever_the_order()
         .session()
         .geo_proxies([(US_PROXY, country("US"))])
         .expect("a proxy")
-        .restore(restored.export_identity().await.expect("an identity"))
+        .identity(restored.export_identity().await.expect("an identity"))
         .build()
         .await;
     assert!(
@@ -228,7 +228,7 @@ async fn a_restored_identity_brings_its_own_seed() {
 
     let restored = world
         .session()
-        .restore(identity)
+        .identity(identity)
         .seed(99)
         .build()
         .await
@@ -248,7 +248,7 @@ async fn a_new_profile_earns_its_own_clearance_through_the_same_proxy() {
     let fetched = session.fetch(&world.site.url("/")).await.expect("a page");
 
     assert_eq!(
-        (fetched.mode, fetched.attempts),
+        (fetched.fetch_kind, fetched.attempts),
         (FetchKind::Http, 3),
         "no cookie, so a challenge"
     );
@@ -292,7 +292,7 @@ async fn rotating_the_egress_over_http_moves_the_identity_and_the_language() {
 
     let to = session.proxy_route().cloned().expect("the next egress");
     assert_ne!(from, to);
-    assert_eq!(session.identity().egress, Some(to.clone()));
+    assert_eq!(session.identity().proxy, Some(to.clone()));
     assert_ne!(
         session.identity().fingerprint.locale(),
         &language,

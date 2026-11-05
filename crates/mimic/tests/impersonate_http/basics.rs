@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use seleniumbase_rs_codec::header_spec::RequestShape;
 use seleniumbase_rs_mimic::http_session::{
-    HttpError, HttpOptions, HttpSession, Method, ReplyProtocol,
+    HttpError, HttpSessionOptions, HttpSession, Method, ReplyProtocol,
 };
 use seleniumbase_rs_scrape::ledger::events::{CollectingEventSink, ScrapeEvent};
 
@@ -47,7 +47,7 @@ async fn the_request_carries_the_identity_of_the_profile_and_no_cookie() {
     session.get(&site.url(HOST, "/")).await.expect("a reply");
 
     let seen = &site.seen()[0];
-    let profile = session.profile();
+    let profile = session.wire_format();
     assert_eq!(seen.header("user-agent"), Some(profile.user_agent()));
     assert!(seen
         .header("sec-ch-ua")
@@ -157,7 +157,7 @@ async fn a_post_sends_its_body_with_the_headers_of_a_script_request() {
     assert_eq!(seen.header("content-type"), Some("application/json"));
     assert_eq!(seen.body, br#"{"q":"shoes"}"#);
     let fetch = session
-        .profile()
+        .wire_format()
         .headers_for(
             RequestShape::Fetch,
             None,
@@ -327,7 +327,7 @@ async fn a_plain_http_url_is_requested_with_the_headers_of_http1() {
         String::from_utf8_lossy(&head).to_ascii_lowercase()
     });
     let session =
-        HttpSession::from_identity(&identity(), None, HttpOptions::new()).expect("a session");
+        HttpSession::from_identity(&identity(), None, HttpSessionOptions::new()).expect("a session");
 
     let reply = session
         .get(&format!("http://127.0.0.1:{port}/plain"))
@@ -354,18 +354,18 @@ fn the_session_its_replies_and_its_futures_can_cross_threads() {
     fn send_sync<T: Send + Sync>() {}
     fn is_send<T: Send>(_: &T) {}
     send_sync::<HttpSession>();
-    send_sync::<HttpOptions>();
+    send_sync::<HttpSessionOptions>();
     send_sync::<HttpError>();
-    send_sync::<seleniumbase_rs_mimic::http_session::HttpReply>();
+    send_sync::<seleniumbase_rs_mimic::http_session::HttpResponse>();
     let session =
-        HttpSession::from_identity(&identity(), None, HttpOptions::new()).expect("a session");
+        HttpSession::from_identity(&identity(), None, HttpSessionOptions::new()).expect("a session");
     let future = session.get("https://shop.test/");
     is_send(&future);
 }
 
 #[test]
 fn bad_options_are_refused_before_a_session_exists() {
-    let options = HttpOptions::new().max_redirects(1000);
+    let options = HttpSessionOptions::new().max_redirects(1000);
     let error = HttpSession::from_identity(&identity(), None, options).expect_err("refused");
     assert!(matches!(error, HttpError::Options(_)));
 }

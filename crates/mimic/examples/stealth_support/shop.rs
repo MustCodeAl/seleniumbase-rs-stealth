@@ -37,7 +37,7 @@ use seleniumbase_rs_codec::ja4::Ja4;
 use seleniumbase_rs_mimic::tls_server::{
     accept, acceptor, EphemeralCa, ALPN_HTTP1, DEFAULT_HANDSHAKE_TIMEOUT,
 };
-use seleniumbase_rs_mimic::{HttpOptions, MitmOptions};
+use seleniumbase_rs_mimic::{HttpSessionOptions, MitmOptions};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::task::JoinHandle;
 use url::Host;
@@ -148,10 +148,10 @@ impl Shop {
 
     /// The options of an HTTP session that trusts the shop's authority and resolves the shop's
     /// name to it. Certificate verification stays on.
-    pub fn http_options(&self) -> Result<HttpOptions, Box<dyn Error>> {
+    pub fn http_session_options(&self) -> Result<HttpSessionOptions, Box<dyn Error>> {
         let der = self.ca.certificate().to_der()?;
         let store = CertStore::from_der_certs([der.as_slice()])?;
-        Ok(HttpOptions::new().trust(store).resolve(HOST, self.addr))
+        Ok(HttpSessionOptions::new().trust(store).resolve(HOST, self.addr))
     }
 
     /// The options of a MITM proxy whose upstream trusts the shop's authority and resolves the

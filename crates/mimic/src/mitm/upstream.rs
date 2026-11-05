@@ -24,11 +24,11 @@ use super::destination::{self, PublicOnly};
 use super::forward::ProxyBody;
 use super::websocket::RelayIo;
 use super::{MitmError, MitmOptions};
-use crate::client::{impersonation_client, ImpersonateError, ImpersonationProfile};
+use crate::client::{wire_client, WireFormatError, WireFormat};
 use crate::convert;
 use crate::sync::locked;
 use seleniumbase_rs_codec::client_hello::ext_id;
-use seleniumbase_rs_codec::emulation;
+use seleniumbase_rs_codec::measurement;
 use seleniumbase_rs_codec::header_spec::RequestShape;
 use seleniumbase_rs_codec::tls_spec::TlsSpec;
 use seleniumbase_rs_scrape::egress::route::{ProxyKey, ProxyRoute};
@@ -103,7 +103,7 @@ pub(super) struct Upstream {
     /// profile's browser.
     websocket: Option<wreq::Client>,
     /// The profile whose TLS, HTTP/2 and spelling the client sends.
-    profile: ImpersonationProfile,
+    profile: WireFormat,
     /// The egress, `None` for a direct connection.
     egress: Option<ProxyRoute>,
     /// Measured spelling of header names, for HTTP/1.1 upstreams.
@@ -125,7 +125,7 @@ impl fmt::Debug for Upstream {
 impl Upstream {
     /// Builds the client for `profile` through `egress`.
     pub(super) fn build(
-        profile: ImpersonationProfile,
+        profile: WireFormat,
         egress: Option<ProxyRoute>,
         options: &MitmOptions,
     ) -> Result<Self, MitmError> {
@@ -145,7 +145,7 @@ impl Upstream {
     }
 
     /// The profile the client sends.
-    pub(super) fn profile(&self) -> &ImpersonationProfile {
+    pub(super) fn profile(&self) -> &WireFormat {
         &self.profile
     }
 
@@ -303,16 +303,16 @@ impl Upstream {
 
 /// The impersonating client for a proxy.
 fn client(
-    profile: &ImpersonationProfile,
+    profile: &WireFormat,
     egress: Option<&ProxyRoute>,
     options: &MitmOptions,
 ) -> Result<wreq::Client, MitmError> {
-    finish(impersonation_client(profile)?, egress, options)
+    finish(wire_client(profile)?, egress, options)
 }
 
 /// The measured WebSocket hello of the profile's browser and system, without the known gaps,
 /// when one is measured for the profile's major version.
-pub(super) fn websocket_spec(profile: &ImpersonationProfile) -> Option<TlsSpec> {
+pub(super) fn websocket_spec(profile: &WireFormat) -> Option<TlsSpec> {
     let entry = measurement::get(profile.kind(), profile.os()).ok()?;
     if entry.major != profile.major() {
         return None;
@@ -328,7 +328,7 @@ fn websocket_client(
     egress: Option<&ProxyRoute>,
     options: &MitmOptions,
 ) -> Result<wreq::Client, MitmError> {
-    let tls = convert::tls_options(spec).map_err(ImpersonateError::from)?;
+    let tls = convert::tls_options(spec).map_err(WireFormatError::from)?;
     let builder = wreq::Client::builder()
         .tls_options(tls)
         .tls_sni(spec.has_extension(ext_id::SERVER_NAME))
@@ -377,7 +377,7 @@ fn finish(
         }
     }
     builder.build().map_err(|_error| {
-        MitmError::Upstream(ImpersonateError::Build(
+        MitmError::Upstream(WireFormatError::Build(
             "the client refused the proxy settings".to_owned(),
         ))
     })
@@ -438,7 +438,7 @@ fn websocket_spelling(name: &HeaderName) -> Option<&'static str> {
 }
 
 /// The measured spelling of every header name the profile's lists hold.
-fn spelling_of(profile: &ImpersonationProfile) -> HashMap<HeaderName, String> {
+fn spelling_of(profile: &WireFormat) -> HashMap<HeaderName, String> {
     let spec = profile.header_spec();
     [RequestShape::Document, RequestShape::Fetch]
         .into_iter()
@@ -515,9 +515,9 @@ impl UpstreamSlot {
     }
 
     /// Builds an upstream for `profile` with the current egress and puts it in place.
-    pub(super) fn swap_profile(
+    pub(super) fn swap_wire_format(
         &self,
-        profile: ImpersonationProfile,
+        profile: WireFormat,
         options: &MitmOptions,
     ) -> Result<(), MitmError> {
         let _swapping = locked(&self.swapping);

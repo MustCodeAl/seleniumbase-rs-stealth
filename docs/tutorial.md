@@ -26,7 +26,7 @@ of it.
 | Measured browser tables (Chrome 155 on macOS) and the lookup that refuses everything else | `codec` | Available |
 | Capture tools `capture_tls` and `capture_hints` | `scrape` | Available |
 | Capture tool `capture_h2` | `mimic` | Available |
-| `ImpersonationProfile`, `CustomProfileBuilder`, `impersonation_client` (wreq with BoringSSL) | `mimic` | Available |
+| `WireFormat`, `WireFormatBuilder`, `wire_client` (wreq with BoringSSL) | `mimic` | Available |
 | RFC 6265 cookie jar | `scrape` | Available |
 | `Identity`, its identity file, `EscalationPolicy` | `scrape` | Available |
 | Challenge detection, mitigation policy, proxy pool, per-site state, events | `scrape` | Available |
@@ -139,14 +139,14 @@ the crate has no way to know which of the two differ. Windows, Linux, Android,
 iOS and Safari stay refused until someone runs the capture tools on that system
 and commits the result. The same rule shows up higher up:
 
-- `ImpersonationProfile::for_system(BrowserKind::Chrome, OsType::Windows)` and
-  `ImpersonationProfile::from_fingerprint` of a Windows `Fingerprint` return
-  `ImpersonateError::Measurement(WireMeasurementError::NotMeasured { .. })`.
-- `ImpersonationProfile::from_fingerprint` of a fingerprint whose user agent
+- `WireFormat::for_system(BrowserKind::Chrome, OsType::Windows)` and
+  `WireFormat::from_fingerprint` of a Windows `Fingerprint` return
+  `WireFormatError::Measurement(WireMeasurementError::NotMeasured { .. })`.
+- `WireFormat::from_fingerprint` of a fingerprint whose user agent
   claims another Chrome major than the measured one returns
-  `ImpersonateError::VersionMismatch`: Chrome 155's handshake under a Chrome 153
+  `WireFormatError::VersionMismatch`: Chrome 155's handshake under a Chrome 153
   user agent is a contradiction too.
-- `ImpersonationProfile::random(seed)` only draws from measured entries, and
+- `WireFormat::random(seed)` only draws from measured entries, and
   the identity it builds claims the measured major
   (`Fingerprint::randomized_with_major`).
 
@@ -257,14 +257,14 @@ The `mimic` crate turns a measured profile into a wreq client:
 
 ```rust
 use seleniumbase_rs_stealth::mimic::client::{
-    impersonation_client, ImpersonationProfile, WireProtocol,
+    wire_client, WireFormat, WireProtocol,
 };
 use seleniumbase_rs_stealth::codec::header_spec::RequestShape;
 use seleniumbase_rs_stealth::codec::BrowserKind;
 
 # async fn demo() -> Result<(), Box<dyn std::error::Error>> {
-let profile = ImpersonationProfile::measured(BrowserKind::Chrome)?;
-let client = impersonation_client(&profile)?.build()?;
+let profile = WireFormat::measured(BrowserKind::Chrome)?;
+let client = wire_client(&profile)?.build()?;
 
 let request = client.get("https://example.com/");
 let request = profile.apply(request, RequestShape::Document, None, WireProtocol::Http2)?;
@@ -274,7 +274,7 @@ let response = request.send().await?;
 # }
 ```
 
-- `impersonation_client` returns a `wreq::ClientBuilder` with the profile's
+- `wire_client` returns a `wreq::ClientBuilder` with the profile's
   `ClientHello`, HTTP/2 start and default headers. You add proxies, timeouts and
   a trust store, then build. Certificate verification stays on: trust a private
   root with `tls_cert_store`, never by turning verification off.
@@ -291,24 +291,24 @@ let response = request.send().await?;
 - Cookies, redirects, body limits and the hand-over from a browser are not part
   of this client. That is what [`HttpSession`](#httpsession) is for.
 
-Other ways to get a profile: `ImpersonationProfile::for_system(kind, os)`,
-`ImpersonationProfile::from_fingerprint(&fp)` (a Chromium identity that claims
-the measured major), `ImpersonationProfile::random(seed)`, and
+Other ways to get a profile: `WireFormat::for_system(kind, os)`,
+`WireFormat::from_fingerprint(&fp)` (a Chromium identity that claims
+the measured major), `WireFormat::random(seed)`, and
 `.with_locale(&locale)` to change the `Accept-Language`.
 
 ## Custom inputs
 
-Every part of a profile can be supplied by the caller. `CustomProfileBuilder`
+Every part of a profile can be supplied by the caller. `WireFormatBuilder`
 starts from the newest measured Chrome (or `base`/`base_on` another measured
 entry) and layers your inputs over it. What an input does not carry comes from
 the base: a JA3 has no signature algorithms, an Akamai string has no HEADERS
 priority, a header list has no TLS.
 
 ```rust
-use seleniumbase_rs_stealth::mimic::client::ImpersonationProfile;
+use seleniumbase_rs_stealth::mimic::client::WireFormat;
 
 # fn demo() -> Result<(), Box<dyn std::error::Error>> {
-let profile = ImpersonationProfile::custom()
+let profile = WireFormat::builder()
     .akamai("1:65536;2:0;4:6291456;6:262144|15663105|0|m,a,s,p")?
     .user_agent("Mozilla/5.0 (custom)")
     .accept_language("de-DE,de;q=0.9")
@@ -340,7 +340,7 @@ client exists.
 BoringSSL and wreq cannot emit everything a browser can. Anything they cannot
 reproduce is refused with a named error before a client exists, and
 `tests/impersonate_wire.rs` proves on the wire that an accepted input arrives as
-given. The errors are variants of `ImpersonateError`: `Tls(..)` wraps
+given. The errors are variants of `WireFormatError`: `Tls(..)` wraps
 `codec::tls_spec::TlsSpecError`, `Http2(..)` wraps `codec::h2_spec::H2SpecError`,
 `Convert(..)` wraps the rules that belong to the client stack itself. A string that
 is not well formed at all is `Ja3(..)`, `Ja4(..)`, `Peetprint(..)` or `Akamai(..)`.
@@ -360,20 +360,20 @@ For example, a JA3 that adds `trust_anchors` and a signature algorithm BoringSSL
 cannot write:
 
 ```rust
-use seleniumbase_rs_stealth::mimic::client::{ImpersonateError, ImpersonationProfile};
+use seleniumbase_rs_stealth::mimic::client::{WireFormatError, WireFormat};
 use seleniumbase_rs_stealth::codec::tls_spec::TlsSpecError;
 
 # fn demo(ja3_with_trust_anchors: &str) {
-let refused = ImpersonationProfile::custom().ja3(ja3_with_trust_anchors);
+let refused = WireFormat::builder().ja3(ja3_with_trust_anchors);
 assert!(matches!(
     refused,
-    Err(ImpersonateError::Tls(SpecError::UnsupportedExtension { id: 0xCA34, .. }))
+    Err(WireFormatError::Tls(SpecError::UnsupportedExtension { id: 0xCA34, .. }))
 ));
 
-let refused = ImpersonationProfile::custom().signature_algorithms(&[0x0904]);
+let refused = WireFormat::builder().signature_algorithms(&[0x0904]);
 assert!(matches!(
     refused,
-    Err(ImpersonateError::Tls(SpecError::UnsupportedSigalg { id: 0x0904, .. }))
+    Err(WireFormatError::Tls(SpecError::UnsupportedSigalg { id: 0x0904, .. }))
 ));
 # }
 ```
@@ -693,11 +693,11 @@ identity. A browser or system that was not measured is refused, not
 approximated.
 
 ```rust
-use seleniumbase_rs_stealth::mimic::{HttpOptions, HttpSession};
+use seleniumbase_rs_stealth::mimic::{HttpSessionOptions, HttpSession};
 use seleniumbase_rs_stealth::sb_cdp::Page;
 
 # async fn demo(page: Page) -> Result<(), Box<dyn std::error::Error>> {
-let session = HttpSession::from_page(&page, None, HttpOptions::new()).await?;
+let session = HttpSession::from_page(&page, None, HttpSessionOptions::new()).await?;
 let reply = session.get("https://example.com/api/orders").await?;
 let orders: serde_json::Value = reply.json()?;
 println!("{orders}");
@@ -728,7 +728,7 @@ Both refuse, before any request, what would contradict the measured handshake:
   agent and `Browser.getVersion` are checked.
 - A browser that is not Chrome (Edge, Opera, Firefox and the like), a Chrome
   whose user agent says `HeadlessChrome`, or a system that was not measured:
-  `HttpError::Impersonate(..)`. A headless Chrome that was given no fingerprint
+  `HttpError::WireFormat(..)`. A headless Chrome that was given no fingerprint
   announces itself, so give it one or run it headed.
 - An identity of another egress than the one passed, or a page whose context
   proxy is another than `egress`: `HttpError::Identity(..)`.
@@ -766,8 +766,8 @@ println!("{}: {}", reply.status(), reply.text()?);
   a silent overwrite. Any other header replaces the profile's value in place or is
   added. `CONNECT`, `TRACE` and `TRACK` are refused, and so is a URL with
   credentials in it or a scheme other than http and https.
-- A status other than 2xx is a reply, not an error. `HttpReply` has `status()`,
-  `headers()` (`ReplyHeaders`), `bytes()`, `text()`, `json::<T>()`, `url()` after
+- A status other than 2xx is a reply, not an error. `HttpResponse` has `status()`,
+  `headers()` (`ResponseHeaders`), `bytes()`, `text()`, `json::<T>()`, `url()` after
   redirects (and `redacted_url()`), `redirects()`, `protocol()`, `elapsed()` and
   `detect()`.
 
@@ -785,7 +785,7 @@ println!("{}: {}", reply.status(), reply.text()?);
   are dropped when a hop leaves the origin (`Accept` and `Content-Type` stay). A
   redirect is followed where it points, a private address included, so a session
   that fetches URLs for someone else must filter them before it asks.
-- **Limits** are `HttpOptions`, with defaults that are safe on the open web:
+- **Limits** are `HttpSessionOptions`, with defaults that are safe on the open web:
 
   | Setting | Default | Largest accepted |
   |---|---|---|
@@ -794,11 +794,11 @@ println!("{}: {}", reply.status(), reply.text()?);
   | `max_body_bytes`, the reply after decompression | 64 MiB | 1 GiB |
   | `max_request_bytes` | 64 MiB | |
   | `max_redirects`, `follow_redirects` | 10, on | 30 |
-  | `pacing(calls, window)`, per site | off | |
+  | `rate_limit(calls, window)`, per site | off | |
 
   Also `event_sink`, `trust(CertStore)` for a private root (certificate
   verification is never turned off), `resolve(host, addr)`, `bypass(host)`,
-  `installed_chrome_major(major)` and `clock(..)`. `HttpOptions::validate`
+  `installed_chrome_major(major)` and `clock(..)`. `HttpSessionOptions::validate`
   refuses a value out of range before a client exists.
 - **Judging replies.** `reply.detect()` runs the [challenge
   detection](#challenge-detection-and-mitigation). `session.assess(&reply,
@@ -876,7 +876,7 @@ use seleniumbase_rs_stealth::mimic::tls_server::{
 
 # async fn demo(tcp: tokio::net::TcpStream) -> Result<(), Box<dyn std::error::Error>> {
 let ca = EphemeralCa::generate()?;
-let chrome_flag = ca.chrome_spki_arg(); // pass to Chrome together with --user-data-dir
+let chrome_flag = ca.spki_launch_arg(); // pass to Chrome together with --user-data-dir
 let server = acceptor(&[ALPN_HTTP1])?;
 let host = url::Host::parse("example.com")?;
 let leaf = ca.leaf_for(&host, SystemTime::now())?;
@@ -927,13 +927,13 @@ the browser is valid over `HttpSession`.
 use std::sync::Arc;
 use std::time::Duration;
 
-use seleniumbase_rs_stealth::mimic::{ImpersonationProfile, MitmOptions, MitmProxy};
+use seleniumbase_rs_stealth::mimic::{WireFormat, MitmOptions, MitmProxy};
 use seleniumbase_rs_stealth::sb_cdp::{Browser, LaunchOptions};
 use seleniumbase_rs_stealth::scrape::NoopEventSink;
 use seleniumbase_rs_stealth::codec::BrowserKind;
 
 # async fn demo() -> Result<(), Box<dyn std::error::Error>> {
-let profile = ImpersonationProfile::measured(BrowserKind::Chrome)?;
+let profile = WireFormat::measured(BrowserKind::Chrome)?;
 let mitm =
     MitmProxy::start(profile, None, MitmOptions::default(), Arc::new(NoopEventSink)).await?;
 let options = mitm.configure_launch(LaunchOptions::builder()).build()?;
@@ -984,7 +984,7 @@ An absolute-form `http://` request is checked the same way and forwarded without
 
 `mitm.configure_launch(builder)` sets the proxy, makes the proxy's priming page
 the start page (see [the priming page](#the-priming-page)) and adds
-`mitm.chrome_args()`: the `--ignore-certificate-errors-spki-list` switch with the
+`mitm.launch_args()`: the `--ignore-certificate-errors-spki-list` switch with the
 leaf pin only (never
 the CA pin), `--proxy-bypass-list=<-loopback>` so loopback hosts go through the
 proxy too, and `--disable-quic`. Because that switch trusts any chain that
@@ -1123,7 +1123,7 @@ let page = context.new_page_at(mitm.prime_url()).await?;
 
 ### Changing the upstream, and stopping
 
-`swap_upstream(egress)` and `swap_profile(profile)` build the new upstream
+`swap_proxy(egress)` and `swap_wire_format(profile)` build the new upstream
 client first and then replace the old one. Requests under way finish on the old
 one, and the listener, its port and the browser's open connections stay.
 `shutdown(grace)` stops accepting, lets requests finish for up to `grace`, then
@@ -1209,7 +1209,7 @@ let mut session = StealthSession::builder()
     .build()
     .await?;
 let page = session.fetch("https://example.com/").await?;
-println!("{} bytes, {:?} mode", page.body.len(), page.mode);
+println!("{} bytes, {:?} mode", page.body.len(), page.fetch_kind);
 session.close().await?;
 # Ok(())
 # }
@@ -1268,10 +1268,10 @@ HTTP preferred, and a profile drawn from a random seed.
 | `ledger(..)`, `event_sink(..)`, `geo_resolver(..)`, `rate_limit(calls, window)` | As for `BrowserScraper`. The HTTP leg and the proxy report to the same sink. |
 | `seed(..)`, `fingerprint(..)` | The first profile. A fingerprint must claim the measured Chrome. |
 | `restore(identity)` | Starts from a saved identity: its fingerprint, cookies and clearances. It must belong to one of the proxies added, or to the direct connection when there is none. |
-| `http_options(HttpOptions)`, `mitm_options(MitmOptions)` | The limits of each leg. The session's clock and event sink replace the ones in the HTTP options. |
+| `http_session_options(HttpSessionOptions)`, `mitm_options(MitmOptions)` | The limits of each leg. The session's clock and event sink replace the ones in the HTTP options. |
 | `solve_timeout(..)`, `clock(..)` | How long a solve is waited for, and the clock. |
 
-`build()` fails with `StealthError::Impersonate` when this machine's system has no
+`build()` fails with `StealthError::WireFormat` when this machine's system has no
 measured Chrome or the profile claims another version, `StealthError::Scrape` for
 an egress whose country has no locale, an identity that belongs to another egress
 or no browser to start, `StealthError::Http` and `StealthError::Mitm` for the
@@ -1304,7 +1304,7 @@ boundary it maps to `SeleniumBaseError`.
 
 - The measured Chrome and the installed Chrome must have the same major version.
   A browser that is another version is refused before it loads a page
-  (`StealthError::Impersonate`).
+  (`StealthError::WireFormat`).
 - A launched browser lives until the session leaves the browser mode or is
   closed. There is no idle timeout and no deadline in the session.
 - It runs the same fetch loop as `BrowserScraper`, with plain HTTP as the first
@@ -1343,7 +1343,7 @@ not any vendor's challenge, and getting past it says nothing about a real servic
 | Example | Crate | Needs | What it shows |
 |---|---|---|---|
 | `examples/cookie_jar.rs` | `scrape` | Nothing | Made-up `Set-Cookie` headers into the [cookie jar](#the-cookie-jar): which are stored, which are refused and why, and the `Cookie` header for five requests. |
-| `examples/custom_profile.rs` | `mimic` | `cmake`; Chrome 155 on macOS | The measured profile, with an Akamai string and a JA3 laid over it with `CustomProfileBuilder`, and four inputs the stack [refuses](#what-is-refused). |
+| `examples/custom_profile.rs` | `mimic` | `cmake`; Chrome 155 on macOS | The measured profile, with an Akamai string and a JA3 laid over it with `WireFormatBuilder`, and four inputs the stack [refuses](#what-is-refused). |
 | `examples/http_session.rs` | `mimic` | `cmake`; Chrome 155 on macOS | An [`HttpSession`](#httpsession) fetching from a loopback TLS shop, its jar carrying the cookie the shop sets, and the JA4 the shop saw next to the measured one. |
 | `examples/stealth_session.rs` | `mimic` | `cmake`; Chrome 155 on macOS, installed | A [`StealthSession`](#stealthsession) that meets a challenge over HTTP, goes to a headless Chrome behind the proxy, comes back, and prints its changes of mode. |
 | `examples/browser_scraper.rs` | `scrape` | A Chrome | A [`BrowserScraper`](#browserscraper) detecting and solving the same kind of challenge in a headless Chrome. |
@@ -1448,8 +1448,8 @@ State these plainly to yourself before you build on any of this.
 | `ScrapeError::Unsolved` | A challenge was still there after the attempts allowed. | Raise `max_challenge_attempts`, add egresses, or accept that this page needs a person. |
 | `ScrapeError::NoProxyLeft` | A rotation was asked for and the pool has nothing else in rotation. | Add proxies with `geo_proxies`. |
 | `ScrapeError::Fingerprint` | The core refused to build the fingerprint a locale move or a rotation needed (`Off` where an API cannot be off, a proxy without a host, nothing coherent to draw). | Read the message: it names the setting. Build your own fingerprint with `to_builder()` and fix it. |
-| `HttpError::VersionMismatch`, `StealthError::Impersonate` | The page, the identity or the installed Chrome is another major than the measured one. | Update or downgrade Chrome to the measured major, or run the capture tools again. |
-| `HttpError::Impersonate` for a page | The page announces itself as `HeadlessChrome`, is not Chrome, or runs on a system that was not measured. | Give the browser a fingerprint or run it headed; use the measured system. |
+| `HttpError::VersionMismatch`, `StealthError::WireFormat` | The page, the identity or the installed Chrome is another major than the measured one. | Update or downgrade Chrome to the measured major, or run the capture tools again. |
+| `HttpError::WireFormat` for a page | The page announces itself as `HeadlessChrome`, is not Chrome, or runs on a system that was not measured. | Give the browser a fingerprint or run it headed; use the measured system. |
 | `HttpError::ReservedHeader` | A request set a header the profile owns (`User-Agent`, `Sec-CH-UA*`, `Accept-Language`, `Accept-Encoding`, `Cookie`, `priority`). | Remove it. Change the identity instead. |
 | `HttpError::RedirectRefused`, `TooManyRedirects` | A hop led somewhere the session refuses, or past the limit. | Request the final URL, or raise `max_redirects`. |
 | `HttpError::Identity(ProxyMismatch)` | The identity or the page belongs to another egress than the one passed. | Pass the egress the cookies were earned through. |

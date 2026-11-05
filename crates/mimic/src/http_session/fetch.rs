@@ -17,10 +17,10 @@ use wreq::Method;
 use super::error::HttpError;
 use super::options::MAX_TIMEOUT;
 use super::redirect::{site_name, target_of, Hop};
-use super::reply::{Headers, HttpReply, ReplyProtocol};
+use super::reply::{ResponseHeaders, HttpResponse, ReplyProtocol};
 use super::request::{merge_headers, Prepared};
 use super::{HttpSession, MAX_REMEMBERED_ORIGINS};
-use crate::client::{ImpersonateError, WireProtocol};
+use crate::client::{WireFormatError, WireProtocol};
 use crate::convert;
 use seleniumbase_rs_codec::header_spec::RequestShape;
 use seleniumbase_rs_scrape::challenge::mitigation::FetchKind;
@@ -39,7 +39,7 @@ const TIMED_OUT: &str = "timed out";
 /// What a hop got back, before its body is read.
 struct Answer {
     status: u16,
-    headers: Headers,
+    headers: ResponseHeaders,
     protocol: ReplyProtocol,
     response: wreq::Response,
 }
@@ -49,7 +49,7 @@ struct Answer {
 /// # Errors
 ///
 /// See [`HttpRequest::send`](super::HttpRequest::send).
-pub(super) async fn run(session: &HttpSession, prepared: Prepared) -> Result<HttpReply, HttpError> {
+pub(super) async fn run(session: &HttpSession, prepared: Prepared) -> Result<HttpResponse, HttpError> {
     let limits = *session.limits();
     let started = Instant::now();
     let budget = prepared.timeout.unwrap_or(limits.timeout).min(MAX_TIMEOUT);
@@ -67,7 +67,7 @@ pub(super) async fn run(session: &HttpSession, prepared: Prepared) -> Result<Htt
         )?;
         let Some(next) = target else {
             let body = read_body(&hop, answer.response, limits.max_body_bytes, deadline).await?;
-            let reply = HttpReply {
+            let reply = HttpResponse {
                 status: answer.status,
                 url: hop.url,
                 headers: answer.headers,
@@ -89,7 +89,7 @@ pub(super) async fn run(session: &HttpSession, prepared: Prepared) -> Result<Htt
 }
 
 /// Emits the event of a finished request.
-fn announce(session: &HttpSession, reply: &HttpReply) {
+fn announce(session: &HttpSession, reply: &HttpResponse) {
     let elapsed_ms = u64::try_from(reply.elapsed.as_millis()).unwrap_or(u64::MAX);
     session.emit(&ScrapeEvent::Request {
         url: reply.redacted_url(),
@@ -136,8 +136,8 @@ async fn exchange(
 
 /// The headers of a response with lower-case names; a value that is not UTF-8 is read with the
 /// broken bytes replaced.
-fn headers_of(map: &wreq::header::HeaderMap) -> Headers {
-    Headers::new(
+fn headers_of(map: &wreq::header::HeaderMap) -> ResponseHeaders {
+    ResponseHeaders::new(
         map.iter()
             .map(|(name, value)| {
                 (
@@ -151,7 +151,7 @@ fn headers_of(map: &wreq::header::HeaderMap) -> Headers {
 
 /// Stores the `Set-Cookie` headers of an answer. A header that is not UTF-8 is ignored, as a
 /// browser ignores it.
-fn store_cookies(session: &HttpSession, url: &Url, headers: &Headers) {
+fn store_cookies(session: &HttpSession, url: &Url, headers: &ResponseHeaders) {
     let lines: Vec<&str> = headers.get_all(SET_COOKIE.as_str()).collect();
     if lines.is_empty() {
         return;
@@ -211,7 +211,7 @@ fn build_request(
         WireProtocol::Http1 => &[HOST_HEADER],
         WireProtocol::Http2 => &[],
     };
-    let (headers, order) = convert::wreq_headers(&list, leading).map_err(ImpersonateError::from)?;
+    let (headers, order) = convert::wreq_headers(&list, leading).map_err(WireFormatError::from)?;
     let mut request = inner
         .client
         .request(hop.method.clone(), hop.url.as_str())

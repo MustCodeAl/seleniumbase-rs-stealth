@@ -257,7 +257,7 @@ pub fn derive(h2: &[H2Evidence], h1: &[H1Evidence]) -> Result<Derived, CaptureH2
         .iter()
         .map(|evidence| Ok((evidence, evidence.preface()?)))
         .collect::<Result<_, CaptureH2Error>>()?;
-    let http2 = http2_spec(&prefaces)?;
+    let http2 = h2_spec(&prefaces)?;
     let document = find(h1, DOCUMENT.name, |item| item.probe.as_str())?;
     let fetch = find(h1, FETCH.name, |item| item.probe.as_str())?;
     let mut headers =
@@ -278,7 +278,7 @@ pub fn derive(h2: &[H2Evidence], h1: &[H1Evidence]) -> Result<Derived, CaptureH2
 }
 
 /// The spec of the navigation's connection, once every other probe's connection agrees with it.
-fn http2_spec(prefaces: &[(&H2Evidence, H2Preface)]) -> Result<H2Spec, CaptureH2Error> {
+fn h2_spec(prefaces: &[(&H2Evidence, H2Preface)]) -> Result<H2Spec, CaptureH2Error> {
     let (_, document) = prefaces
         .iter()
         .find(|(evidence, _)| evidence.probe == DOCUMENT.name)

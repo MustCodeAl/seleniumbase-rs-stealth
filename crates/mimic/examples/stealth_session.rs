@@ -58,7 +58,7 @@ async fn run() -> Result<(), Box<dyn Error>> {
     let mut session = Box::pin(
         StealthSession::builder()
             .launch_options(LaunchOptions::builder().headless(true))
-            .http_options(shop.http_options()?)
+            .http_session_options(shop.http_session_options()?)
             .mitm_options(shop.mitm_options()?)
             .event_sink(Arc::new(sink.clone()))
             .solve_timeout(SOLVE_WITHIN)
@@ -75,7 +75,7 @@ async fn run() -> Result<(), Box<dyn Error>> {
 
     println!(
         "\nfetched /: status {}, {} loads, served in {:?} mode, challenge solved on the way: {:?}",
-        page.status, page.attempts, page.mode, page.solved
+        page.status, page.attempts, page.fetch_kind, page.solved
     );
     println!(
         "the page is the real one: {}",

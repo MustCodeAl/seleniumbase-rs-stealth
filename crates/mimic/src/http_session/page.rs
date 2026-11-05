@@ -21,13 +21,13 @@ use serde_json::{json, Value};
 
 use super::cookies::Pending;
 use super::error::HttpError;
-use super::options::HttpOptions;
+use super::options::HttpSessionOptions;
 use super::HttpSession;
-use crate::client::{ImpersonateError, ImpersonationProfile};
+use crate::client::{WireFormatError, WireFormat};
 use seleniumbase_rs::error::SeleniumBaseError;
 use seleniumbase_rs::evasion::fingerprint::OsType;
 use seleniumbase_rs::sb_cdp::{Page, Proxy};
-use seleniumbase_rs_codec::emulation;
+use seleniumbase_rs_codec::measurement;
 use seleniumbase_rs_codec::BrowserKind;
 use seleniumbase_rs_scrape::egress::route::{ProxyKey, ProxyRoute};
 use seleniumbase_rs_scrape::jar::store::CookieJar;
@@ -72,7 +72,7 @@ pub(super) fn chrome_major(user_agent: &str) -> Option<u32> {
 }
 
 /// The operating system a user agent names.
-pub(super) fn os_of(user_agent: &str) -> Result<OsType, ImpersonateError> {
+pub(super) fn os_of(user_agent: &str) -> Result<OsType, WireFormatError> {
     let named = |tokens: &[&str]| tokens.iter().any(|token| user_agent.contains(token));
     if named(&["iPhone", "iPad", "iPod"]) {
         Ok(OsType::Ios)
@@ -85,7 +85,7 @@ pub(super) fn os_of(user_agent: &str) -> Result<OsType, ImpersonateError> {
     } else if named(&["Linux", "X11", "CrOS"]) {
         Ok(OsType::Linux)
     } else {
-        Err(ImpersonateError::Fingerprint(
+        Err(WireFormatError::Fingerprint(
             "the operating system cannot be told from its user agent",
         ))
     }
@@ -120,33 +120,33 @@ pub(super) fn accept_language(languages: &[String]) -> Option<String> {
 /// # Errors
 ///
 /// Returns [`HttpError::VersionMismatch`] when the user agent or the browser is another Chrome
-/// major than the measured one, and [`HttpError::Impersonate`] for a browser that is not Chrome,
+/// major than the measured one, and [`HttpError::WireFormat`] for a browser that is not Chrome,
 /// one that announces itself as headless (its user agent would give the session away), or a
 /// system that was not measured.
-pub(super) fn profile_of(probe: &Probe) -> Result<ImpersonationProfile, HttpError> {
+pub(super) fn profile_of(probe: &Probe) -> Result<WireFormat, HttpError> {
     let user_agent = probe.user_agent.as_str();
     if NOT_CHROME.iter().any(|token| user_agent.contains(token)) {
-        return Err(ImpersonateError::Fingerprint("the browser is not Chrome").into());
+        return Err(WireFormatError::Fingerprint("the browser is not Chrome").into());
     }
     if user_agent.contains(HEADLESS_TOKEN) {
-        return Err(ImpersonateError::Fingerprint(
+        return Err(WireFormatError::Fingerprint(
             "the browser announces itself as headless Chrome; give it a fingerprint or run it headed",
         )
         .into());
     }
-    let claimed = chrome_major(user_agent).ok_or(ImpersonateError::Fingerprint(
+    let claimed = chrome_major(user_agent).ok_or(WireFormatError::Fingerprint(
         "its user agent names no Chrome version",
     ))?;
     let os = os_of(user_agent)?;
     let measured = measurement::get(BrowserKind::Chrome, os)
-        .map_err(ImpersonateError::from)?
+        .map_err(WireFormatError::from)?
         .major;
     for browser in std::iter::once(claimed).chain(probe.product_major) {
         if browser != measured {
             return Err(HttpError::VersionMismatch { browser, measured });
         }
     }
-    let mut builder = ImpersonationProfile::custom()
+    let mut builder = WireFormat::builder()
         .base_on(BrowserKind::Chrome, os)
         .user_agent(user_agent);
     if let Some(language) = accept_language(&probe.languages) {
@@ -413,13 +413,13 @@ impl HttpSession {
     /// a page, but it is on the command line of the browser, which is read. A browser that has
     /// one is not taken for a direct one: pass the `egress` it really leaves through (for a proxy
     /// on another machine, that proxy), or say with
-    /// [`HttpOptions::browser_proxy_exits_directly`] that it leaves directly. A browser that will
+    /// [`HttpSessionOptions::browser_proxy_exits_directly`] that it leaves directly. A browser that will
     /// not report its command line is taken as it was before, as a direct one.
     ///
     /// # Errors
     ///
     /// Returns [`HttpError::VersionMismatch`] when the page's Chrome is not the measured major,
-    /// [`HttpError::Impersonate`] for another browser or a system that was not measured,
+    /// [`HttpError::WireFormat`] for another browser or a system that was not measured,
     /// [`HttpError::Identity`] when `egress` is not the proxy of the page's context or of the
     /// browser, [`HttpError::BrowserProxy`] when the browser has a browser-wide proxy and no
     /// egress was given, [`HttpError::Options`] for a bad option, and [`HttpError::Browser`] when
@@ -428,7 +428,7 @@ impl HttpSession {
     pub async fn from_page(
         page: &Page,
         egress: Option<ProxyRoute>,
-        mut options: HttpOptions,
+        mut options: HttpSessionOptions,
     ) -> Result<Self, HttpError> {
         options.validate()?;
         let probe = probe(page).await?;
@@ -620,7 +620,7 @@ mod tests {
         assert!(
             matches!(
                 &error,
-                HttpError::Impersonate(ImpersonateError::Measurement(_))
+                HttpError::WireFormat(WireFormatError::Measurement(_))
             ),
             "{error}"
         );
@@ -634,7 +634,7 @@ mod tests {
             assert!(
                 matches!(
                     profile_of(&probe_with(agent)),
-                    Err(HttpError::Impersonate(_))
+                    Err(HttpError::WireFormat(_))
                 ),
                 "{agent}"
             );

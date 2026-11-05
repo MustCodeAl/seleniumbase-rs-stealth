@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use seleniumbase_rs::evasion::fingerprint::{Fingerprint, OsType};
-use seleniumbase_rs_codec::{emulation, BrowserKind};
+use seleniumbase_rs_codec::{measurement, BrowserKind};
 use seleniumbase_rs_mimic::stealth_session::{StealthSession, StealthSessionBuilder};
 use seleniumbase_rs_scrape::challenge::mitigation::FetchKind;
 use seleniumbase_rs_scrape::egress::geo::CountryCode;
@@ -90,7 +90,7 @@ impl World {
             .event_sink(Arc::new(self.sink.clone()))
             .ledger(Arc::new(self.store.clone()))
             .clock(Arc::new(move || clock.load(Ordering::SeqCst)))
-            .http_options(self.site.http_options())
+            .http_session_options(self.site.http_session_options())
             .mitm_options(self.site.mitm_options())
             .fingerprint(fingerprint(SEED))
             .solve_timeout(PATIENT_SOLVE)

@@ -1,5 +1,5 @@
 //! Build a client from the measured Chrome 155 emulation, override one part of it with
-//! `CustomProfileBuilder`, and see what the stack accepts and what it refuses.
+//! `WireFormatBuilder`, and see what the stack accepts and what it refuses.
 //!
 //! Needs: this crate builds BoringSSL (`cmake` and a C/C++ toolchain), and a
 //! system with a measured Chrome. Today that is Chrome 155 on macOS; on any other system the
@@ -23,7 +23,7 @@ use std::process::ExitCode;
 
 use seleniumbase_rs_codec::BrowserKind;
 use seleniumbase_rs_mimic::{
-    impersonation_client, CustomProfileBuilder, ImpersonateError, ImpersonationProfile,
+    wire_client, WireFormatBuilder, WireFormatError, WireFormat,
 };
 
 /// An Akamai HTTP/2 fingerprint other than Chrome's: its own SETTINGS, connection window,
@@ -45,26 +45,26 @@ fn main() -> ExitCode {
 
 fn run() -> Result<(), Box<dyn Error>> {
     let (os, _major) = stealth_support::measured_chrome()?;
-    let base = ImpersonationProfile::for_system(BrowserKind::Chrome, os)?;
+    let base = WireFormat::for_system(BrowserKind::Chrome, os)?;
     let ja3 = base.tls_spec().ja3().to_string();
     println!("the measured base: {}", base.source());
     println!("  user agent  {}", base.user_agent());
     println!("  JA4         {}", base.tls_spec().ja4());
     println!("  JA3         {ja3}");
-    println!("  HTTP/2      {}", base.http2_spec().akamai());
+    println!("  HTTP/2      {}", base.h2_spec().akamai());
     println!(
         "  not sendable by BoringSSL, so left out of the profile: {:?}",
         base.known_gaps()
     );
 
     // A builder over the same measured base. Each input is checked when it is given.
-    let custom = || ImpersonationProfile::custom().base_on(BrowserKind::Chrome, os);
+    let custom = || WireFormat::builder().base_on(BrowserKind::Chrome, os);
 
     println!("\naccepted");
     let other_h2 = custom().akamai(OTHER_HTTP2_START)?.build()?;
     println!(
         "  an Akamai string:  HTTP/2 -> {}",
-        other_h2.http2_spec().akamai()
+        other_h2.h2_spec().akamai()
     );
     println!(
         "                     the TLS spec is still the base's: {}",
@@ -91,7 +91,7 @@ fn run() -> Result<(), Box<dyn Error>> {
 
     // Chrome 155 offers `trust_anchors` (0xCA34); BoringSSL as pinned here cannot send it.
     let with_trust_anchors = ja3.replacen("-43-", "-51764-43-", 1);
-    let refusals: [(&str, Result<CustomProfileBuilder, ImpersonateError>); 4] = [
+    let refusals: [(&str, Result<WireFormatBuilder, WireFormatError>); 4] = [
         (
             "a JA3 with the trust_anchors extension",
             custom().ja3(&with_trust_anchors),
@@ -115,7 +115,7 @@ fn run() -> Result<(), Box<dyn Error>> {
     }
 
     // A profile becomes a wreq client builder. Building the client sends nothing.
-    let client = impersonation_client(&other_h2)?.build()?;
+    let client = wire_client(&other_h2)?.build()?;
     drop(client);
     println!("\nbuilt a wreq client from the HTTP/2 override; nothing was sent");
     Ok(())

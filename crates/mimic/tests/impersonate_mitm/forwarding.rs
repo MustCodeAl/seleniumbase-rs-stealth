@@ -69,12 +69,12 @@ async fn a_forwarded_request_carries_the_measured_ja4_and_akamai_string() {
     let preface = seen.h2();
     assert_eq!(
         preface.akamai().expect("an Akamai string"),
-        profile.http2_spec().akamai(),
+        profile.h2_spec().akamai(),
         "Akamai string"
     );
     assert_eq!(
         preface.headers_priority,
-        profile.http2_spec().headers_priority
+        profile.h2_spec().headers_priority
     );
     let authority = format!("{ORIGIN}:{port}");
     assert_eq!(preface.header(":authority"), Some(authority.as_str()));

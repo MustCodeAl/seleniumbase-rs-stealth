@@ -28,9 +28,9 @@ const HIDDEN_HEADERS: [&str; 5] = [
 ///
 /// The values of `Set-Cookie` and the credential headers are hidden from `Debug`.
 #[derive(Clone, Default, PartialEq, Eq)]
-pub struct Headers(Vec<(String, String)>);
+pub struct ResponseHeaders(Vec<(String, String)>);
 
-impl Headers {
+impl ResponseHeaders {
     /// Takes the pairs as they came, with the names lower-cased.
     pub(super) fn new(pairs: Vec<(String, String)>) -> Self {
         Self(pairs)
@@ -79,7 +79,7 @@ impl Headers {
     }
 }
 
-impl fmt::Debug for Headers {
+impl fmt::Debug for ResponseHeaders {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut map = f.debug_map();
         for (key, value) in &self.0 {
@@ -118,19 +118,19 @@ pub enum ReplyProtocol {
 /// # }
 /// ```
 #[derive(Clone)]
-pub struct HttpReply {
+pub struct HttpResponse {
     pub(super) status: u16,
     pub(super) url: Url,
-    pub(super) headers: Headers,
+    pub(super) headers: ResponseHeaders,
     pub(super) body: Bytes,
     pub(super) protocol: ReplyProtocol,
     pub(super) redirects: Vec<RedactedUrl>,
     pub(super) elapsed: Duration,
 }
 
-impl fmt::Debug for HttpReply {
+impl fmt::Debug for HttpResponse {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("HttpReply")
+        f.debug_struct("HttpResponse")
             .field("status", &self.status)
             .field("url", &self.redacted_url())
             .field("headers", &self.headers)
@@ -141,7 +141,7 @@ impl fmt::Debug for HttpReply {
     }
 }
 
-impl HttpReply {
+impl HttpResponse {
     /// The status code.
     #[must_use]
     pub fn status(&self) -> u16 {
@@ -170,7 +170,7 @@ impl HttpReply {
 
     /// The response headers.
     #[must_use]
-    pub fn headers(&self) -> &Headers {
+    pub fn headers(&self) -> &ResponseHeaders {
         &self.headers
     }
 
@@ -255,11 +255,11 @@ mod tests {
     use super::*;
     use seleniumbase_rs_scrape::challenge::detect::ChallengeKind;
 
-    fn reply(status: u16, headers: &[(&str, &str)], body: &[u8]) -> HttpReply {
-        HttpReply {
+    fn reply(status: u16, headers: &[(&str, &str)], body: &[u8]) -> HttpResponse {
+        HttpResponse {
             status,
             url: Url::parse("https://shop.example/a?token=hunter2&page=2").expect("url"),
-            headers: Headers::new(
+            headers: ResponseHeaders::new(
                 headers
                     .iter()
                     .map(|(name, value)| ((*name).to_owned(), (*value).to_owned()))

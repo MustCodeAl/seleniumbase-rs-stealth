@@ -159,7 +159,7 @@ impl Site {
     /// The Chrome switch that trusts this site's CA and its leaves, and nothing else.
     #[must_use]
     pub fn chrome_arg(&self) -> String {
-        self.shared.ca.chrome_spki_arg()
+        self.shared.ca.spki_launch_arg()
     }
 
     /// The site's certificate authority, for a test client that must trust it.

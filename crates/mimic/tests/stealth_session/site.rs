@@ -26,7 +26,7 @@ use hyper::{Request, Response};
 use hyper_util::rt::TokioIo;
 use seleniumbase_rs_codec::client_hello::{ClientHello, MAX_CLIENT_HELLO};
 use seleniumbase_rs_codec::ja4::Ja4;
-use seleniumbase_rs_mimic::http_session::HttpOptions;
+use seleniumbase_rs_mimic::http_session::HttpSessionOptions;
 use seleniumbase_rs_mimic::mitm::MitmOptions;
 use seleniumbase_rs_mimic::tls_server::{
     accept, acceptor, EphemeralCa, ALPN_HTTP1, DEFAULT_HANDSHAKE_TIMEOUT,
@@ -139,10 +139,10 @@ impl ChallengeSite {
 
     /// The options of an HTTP session that trusts this site's authority and resolves the shop's
     /// name to it.
-    pub fn http_options(&self) -> HttpOptions {
+    pub fn http_session_options(&self) -> HttpSessionOptions {
         let der = self.ca.certificate().to_der().expect("the CA as DER");
         let store = CertStore::from_der_certs([der.as_slice()]).expect("a store");
-        HttpOptions::new().trust(store).resolve(HOST, self.addr)
+        HttpSessionOptions::new().trust(store).resolve(HOST, self.addr)
     }
 
     /// The options of a MITM proxy whose upstream trusts this site's authority and resolves the

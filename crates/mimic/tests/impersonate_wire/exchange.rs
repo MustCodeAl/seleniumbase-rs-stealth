@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use seleniumbase_rs_codec::client_hello::ClientHello;
 use seleniumbase_rs_codec::header_spec::RequestShape;
-use seleniumbase_rs_mimic::client::{impersonation_client, ImpersonationProfile, WireProtocol};
+use seleniumbase_rs_mimic::client::{wire_client, WireFormat, WireProtocol};
 use seleniumbase_rs_scrape::runtime::capture::stream::{Capture, CapturedH2c};
 use wreq::ClientBuilder;
 
@@ -30,13 +30,13 @@ pub enum Via {
 ///
 /// Panics when the exchange fails, naming which side did.
 pub async fn exchange(
-    profile: &ImpersonationProfile,
+    profile: &WireFormat,
     shape: RequestShape,
     wire: WireProtocol,
     via: Via,
 ) -> Served {
     let server = WireServer::bind().await;
-    let mut builder = impersonation_client(profile)
+    let mut builder = wire_client(profile)
         .expect("a client builder")
         .tls_cert_store(server.trust())
         .resolve(HOST, server.addr())

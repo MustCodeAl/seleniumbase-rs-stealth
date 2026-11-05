@@ -30,7 +30,7 @@ of target directory on the first build.
 
 | Example | What it shows | Needs |
 |---|---|---|
-| `custom_profile` | A client from the measured Chrome 155 emulation, one part overridden with `CustomProfileBuilder`, and what the stack accepts and refuses. Opens no socket. | A measured system. |
+| `custom_profile` | A client from the measured Chrome 155 emulation, one part overridden with `WireFormatBuilder`, and what the stack accepts and refuses. Opens no socket. | A measured system. |
 | `http_session` | An `HttpSession` against a loopback TLS shop: plain HTTP with the measured Chrome handshake and headers, and the cookie jar following the shop. | A measured system. No browser. |
 | `stealth_session` | A `StealthSession` moving between plain HTTP and a real Chrome to pass a script challenge on a loopback shop. | A measured system and that Chrome installed, with the same major version as the measurement (155). |
 | `capture_h2` | Measures the HTTP/2 connection start and the request headers of the local Chrome and adds them to its measured file. Run `capture_tls` and `capture_hints` first. | The local Chrome (headed). Writes into the repository. |

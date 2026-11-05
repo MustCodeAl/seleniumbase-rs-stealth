@@ -24,7 +24,7 @@
 //!
 //! # What Chrome must be told
 //!
-//! [`MitmProxy::configure_launch`] sets the proxy and adds [`MitmProxy::chrome_args`]: the
+//! [`MitmProxy::configure_launch`] sets the proxy and adds [`MitmProxy::launch_args`]: the
 //! `--ignore-certificate-errors-spki-list` switch with the leaf pin only (never the CA pin),
 //! `--proxy-bypass-list=<-loopback>` so loopback hosts go through the proxy too, and
 //! `--disable-quic`. Chrome trusts any chain that carries the pinned key, so the pin is safe only
@@ -54,7 +54,7 @@
 //!
 //! # Hot-swappable upstream
 //!
-//! [`MitmProxy::swap_upstream`] and [`MitmProxy::swap_profile`] build the new upstream client
+//! [`MitmProxy::swap_proxy`] and [`MitmProxy::swap_wire_format`] build the new upstream client
 //! first and then replace the old one; requests already under way finish on the old one and the
 //! listener, its port and the browser's open connections stay.
 //!
@@ -141,14 +141,14 @@
 //! use std::sync::Arc;
 //! use std::time::Duration;
 //!
-//! use seleniumbase_rs_mimic::client::ImpersonationProfile;
+//! use seleniumbase_rs_mimic::client::WireFormat;
 //! use seleniumbase_rs_mimic::mitm::{MitmOptions, MitmProxy};
 //! use seleniumbase_rs::sb_cdp::{Browser, LaunchOptions};
 //! use seleniumbase_rs_scrape::ledger::events::NoopEventSink;
 //! use seleniumbase_rs_codec::BrowserKind;
 //!
 //! # async fn demo() -> Result<(), Box<dyn std::error::Error>> {
-//! let profile = ImpersonationProfile::measured(BrowserKind::Chrome)?;
+//! let profile = WireFormat::measured(BrowserKind::Chrome)?;
 //! let mitm = MitmProxy::start(profile, None, MitmOptions::default(), Arc::new(NoopEventSink))
 //!     .await?;
 //! let options = mitm.configure_launch(LaunchOptions::builder()).build()?;
@@ -189,7 +189,7 @@ use tokio::task::JoinHandle;
 
 use self::connect::ProxyCredentials;
 use self::upstream::{Upstream, UpstreamSlot};
-use super::client::{ImpersonateError, ImpersonationProfile};
+use super::client::{WireFormatError, WireFormat};
 use super::tls_server::{self, EphemeralCa, TlsServerError, ALPN_HTTP1, DEFAULT_HANDSHAKE_TIMEOUT};
 use crate::sync::locked;
 use seleniumbase_rs::common::shutdown::{cleanup_within, spawn_cleanup, timeout_from_env};
@@ -505,7 +505,7 @@ pub enum MitmError {
     Random,
     /// The upstream client cannot be built from the profile.
     #[error("the upstream client cannot be built: {0}")]
-    Upstream(#[from] ImpersonateError),
+    Upstream(#[from] WireFormatError),
     /// The egress cannot be used by the upstream client.
     #[error("the egress cannot be used: {0}")]
     Egress(&'static str),
@@ -701,7 +701,7 @@ impl MitmProxy {
     /// [`MitmError::Random`] when no token can be drawn.
     #[tracing::instrument(level = "debug", skip_all)]
     pub async fn start(
-        profile: ImpersonationProfile,
+        profile: WireFormat,
         egress: Option<ProxyRoute>,
         options: MitmOptions,
         sink: Arc<dyn EventSink>,
@@ -783,7 +783,7 @@ impl MitmProxy {
     /// `http://sb:<token>@127.0.0.1:<port>`, for a launch or a client that sets its own proxy.
     /// It holds the token: pass it on, never print it.
     #[must_use]
-    pub fn proxy_spec(&self) -> Secret {
+    pub fn proxy_url(&self) -> Secret {
         self.inner.spec.clone()
     }
 
@@ -796,12 +796,12 @@ impl MitmProxy {
     /// The Chrome switches the proxy needs besides `--proxy-server`: the leaf pin (never the CA
     /// pin), [`PROXY_EVERYTHING_ARG`] and [`DISABLE_QUIC_ARG`].
     #[must_use]
-    pub fn chrome_args(&self) -> Vec<String> {
+    pub fn launch_args(&self) -> Vec<String> {
         chrome_args_for(&self.inner.shared.ca)
     }
 
     /// Points a Chrome launch at this proxy: the proxy with its token (answered over
-    /// `Fetch.authRequired`, never put on the command line), [`MitmProxy::chrome_args`], and
+    /// `Fetch.authRequired`, never put on the command line), [`MitmProxy::launch_args`], and
     /// [`MitmProxy::prime_url`] as the start page, so that the browser holds the proxy's
     /// credentials before any WebSocket.
     ///
@@ -816,7 +816,7 @@ impl MitmProxy {
             .build()
             .is_ok_and(|options| options.url().is_some());
         let builder = self
-            .chrome_args()
+            .launch_args()
             .into_iter()
             .fold(builder.proxy(self.inner.spec.expose()), |builder, arg| {
                 builder.arg(arg)
@@ -849,7 +849,7 @@ impl MitmProxy {
     /// # Errors
     ///
     /// [`MitmError::Egress`] or [`MitmError::Upstream`] when the new client cannot be built.
-    pub fn swap_upstream(&self, egress: Option<ProxyRoute>) -> Result<(), MitmError> {
+    pub fn swap_proxy(&self, egress: Option<ProxyRoute>) -> Result<(), MitmError> {
         let shared = &self.inner.shared;
         let (from, to) = shared.upstream.swap_egress(egress, &shared.options)?;
         tracing::info!(?from, ?to, "MITM upstream egress swapped");
@@ -862,9 +862,9 @@ impl MitmProxy {
     /// # Errors
     ///
     /// [`MitmError::Upstream`] when the new client cannot be built; nothing changes then.
-    pub fn swap_profile(&self, profile: ImpersonationProfile) -> Result<(), MitmError> {
+    pub fn swap_wire_format(&self, profile: WireFormat) -> Result<(), MitmError> {
         let shared = &self.inner.shared;
-        shared.upstream.swap_profile(profile, &shared.options)
+        shared.upstream.swap_wire_format(profile, &shared.options)
     }
 
     /// Stops accepting, lets requests under way finish for up to `grace`, then aborts what is
@@ -882,7 +882,7 @@ impl MitmProxy {
 /// The Chrome switches for a proxy whose leaves `ca` issues.
 fn chrome_args_for(ca: &EphemeralCa) -> Vec<String> {
     vec![
-        ca.chrome_spki_arg(),
+        ca.spki_launch_arg(),
         PROXY_EVERYTHING_ARG.to_owned(),
         DISABLE_QUIC_ARG.to_owned(),
     ]

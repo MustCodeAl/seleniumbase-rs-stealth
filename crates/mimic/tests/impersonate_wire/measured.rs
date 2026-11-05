@@ -8,12 +8,12 @@ use seleniumbase_rs_codec::client_hello::{ext_id, is_grease, without_grease, Cli
 use seleniumbase_rs_codec::measurement::{self, WireMeasurement, KnownGap};
 use seleniumbase_rs_codec::h2_spec::H2Spec;
 use seleniumbase_rs_codec::header_spec::RequestShape;
-use seleniumbase_rs_codec::ja3::peetprint::Slot;
+use seleniumbase_rs_codec::ja3::peetprint::PeetprintSlot;
 use seleniumbase_rs_codec::ja3::Peetprint;
 use seleniumbase_rs_codec::ja4::{Ja4, Ja4AField};
 use seleniumbase_rs_codec::tls_spec::TlsSpec;
 use seleniumbase_rs_codec::BrowserKind;
-use seleniumbase_rs_mimic::client::{ImpersonationProfile, WireProtocol};
+use seleniumbase_rs_mimic::client::{WireFormat, WireProtocol};
 
 use crate::exchange::{exchange, exchange_with, Via};
 
@@ -24,8 +24,8 @@ fn chrome() -> &'static WireMeasurement {
     measurement::get(BrowserKind::Chrome, OsType::Macos).expect("Chrome on macOS is measured")
 }
 
-fn profile() -> ImpersonationProfile {
-    ImpersonationProfile::measured(BrowserKind::Chrome).expect("the measured profile")
+fn profile() -> WireFormat {
+    WireFormat::measured(BrowserKind::Chrome).expect("the measured profile")
 }
 
 /// The spec a hello shows, with the order Chrome shuffles removed, so it can be compared with a
@@ -184,13 +184,13 @@ async fn the_peetprint_differs_from_the_measured_one_by_the_gaps_and_a_grease_si
     let mut expected = Peetprint::parse(sample).expect("the evidence parses");
     assert_eq!(
         expected.signature_algorithms.first(),
-        Some(&Slot::Grease),
+        Some(&PeetprintSlot::Grease),
         "Chrome writes a GREASE signature algorithm first"
     );
     expected
         .signature_algorithms
-        .retain(|slot| !matches!(slot, Slot::Grease | Slot::Id(0x0904..=0x0906)));
-    expected.extensions.retain(|slot| *slot != Slot::Id(0xCA34));
+        .retain(|slot| !matches!(slot, PeetprintSlot::Grease | PeetprintSlot::Id(0x0904..=0x0906)));
+    expected.extensions.retain(|slot| *slot != PeetprintSlot::Id(0xCA34));
     assert_eq!(Peetprint::of(hello), expected.normalized());
 }
 
@@ -337,7 +337,7 @@ async fn over_http1_the_headers_keep_the_measured_order_and_spelling() {
 async fn a_cookie_is_sent_after_the_language_and_before_the_priority() {
     let profile = profile();
     let server = crate::server::WireServer::bind().await;
-    let client = seleniumbase_rs_mimic::client::impersonation_client(&profile)
+    let client = seleniumbase_rs_mimic::client::wire_client(&profile)
         .expect("a client builder")
         .tls_cert_store(server.trust())
         .resolve(crate::server::HOST, server.addr())

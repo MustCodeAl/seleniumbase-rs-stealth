@@ -8,8 +8,8 @@ use std::sync::Arc;
 
 use seleniumbase_rs::sb_cdp::{Browser, MockCtrl, Page};
 use seleniumbase_rs_codec::BrowserKind;
-use seleniumbase_rs_mimic::client::ImpersonationProfile;
-use seleniumbase_rs_mimic::http_session::{HttpError, HttpOptions, HttpSession};
+use seleniumbase_rs_mimic::client::WireFormat;
+use seleniumbase_rs_mimic::http_session::{HttpError, HttpSessionOptions, HttpSession};
 use seleniumbase_rs_scrape::passport::identity::IdentityError;
 use seleniumbase_rs_scrape::runtime::proxy_switch::{ContextProxySwitch, ProxySwitch};
 use serde_json::{json, Value};
@@ -20,7 +20,7 @@ const HOST: &str = "shop.test";
 
 /// The user agent of the measured Chrome.
 fn measured_agent() -> String {
-    ImpersonationProfile::measured(BrowserKind::Chrome)
+    WireFormat::measured(BrowserKind::Chrome)
         .expect("measured")
         .user_agent()
         .to_owned()
@@ -125,7 +125,7 @@ async fn a_page_that_is_not_a_measured_system_is_refused() {
         .await
         .expect_err("refused");
 
-    assert!(matches!(error, HttpError::Impersonate(_)), "{error}");
+    assert!(matches!(error, HttpError::WireFormat(_)), "{error}");
 }
 
 #[tokio::test]
@@ -224,14 +224,14 @@ async fn the_proxy_of_the_pages_context_is_taken_when_no_egress_is_given() {
         .await
         .expect("a tab behind the proxy");
 
-    let adopted = HttpSession::from_page(&page, None, HttpOptions::new())
+    let adopted = HttpSession::from_page(&page, None, HttpSessionOptions::new())
         .await
         .expect("a session");
-    let same = HttpSession::from_page(&page, Some(proxy.clone()), HttpOptions::new())
+    let same = HttpSession::from_page(&page, Some(proxy.clone()), HttpSessionOptions::new())
         .await
         .expect("a session");
     let other = egress("http://elsewhere.example:8080");
-    let refused = HttpSession::from_page(&page, Some(other), HttpOptions::new())
+    let refused = HttpSession::from_page(&page, Some(other), HttpSessionOptions::new())
         .await
         .expect_err("mismatch");
 
@@ -259,7 +259,7 @@ async fn a_page_that_reports_no_user_agent_is_a_browser_error() {
     let (browser, _mock) = Browser::new_mocked();
     let page = browser.default_page().await.expect("a tab");
 
-    let error = HttpSession::from_page(&page, None, HttpOptions::new())
+    let error = HttpSession::from_page(&page, None, HttpSessionOptions::new())
         .await
         .expect_err("no agent");
 
@@ -293,7 +293,7 @@ async fn a_browser_with_a_browser_wide_proxy_is_not_taken_for_a_direct_one() {
         let (_browser, page, _mock) =
             started_with(&format!("--proxy-server={proxy} --disable-quic")).await;
 
-        let error = HttpSession::from_page(&page, None, HttpOptions::new())
+        let error = HttpSession::from_page(&page, None, HttpSessionOptions::new())
             .await
             .expect_err(proxy);
 
@@ -331,10 +331,10 @@ async fn an_egress_that_is_not_the_browsers_own_proxy_is_refused() {
     let same = egress("http://alice:s3cret@proxy.example:8080");
     let other = egress("http://alice:s3cret@elsewhere.example:8080");
 
-    let accepted = HttpSession::from_page(&page, Some(same.clone()), HttpOptions::new())
+    let accepted = HttpSession::from_page(&page, Some(same.clone()), HttpSessionOptions::new())
         .await
         .expect("its own proxy");
-    let refused = HttpSession::from_page(&page, Some(other), HttpOptions::new())
+    let refused = HttpSession::from_page(&page, Some(other), HttpSessionOptions::new())
         .await
         .expect_err("another proxy");
 
@@ -360,7 +360,7 @@ async fn a_proxy_that_leaves_directly_can_be_said_to_do_so() {
     let session = HttpSession::from_page(
         &page,
         None,
-        HttpOptions::new().browser_proxy_exits_directly(true),
+        HttpSessionOptions::new().browser_proxy_exits_directly(true),
     )
     .await
     .expect("said to leave directly");
@@ -378,7 +378,7 @@ async fn a_browser_with_no_proxy_switch_or_a_direct_one_is_a_direct_browser() {
     ] {
         let (_browser, page, _mock) = started_with(switches).await;
 
-        let session = HttpSession::from_page(&page, None, HttpOptions::new())
+        let session = HttpSession::from_page(&page, None, HttpSessionOptions::new())
             .await
             .expect(switches);
 
@@ -390,7 +390,7 @@ async fn a_browser_with_no_proxy_switch_or_a_direct_one_is_a_direct_browser() {
 async fn a_browser_that_will_not_say_how_it_was_started_is_taken_as_before() {
     let (_browser, page, _mock) = scripted(&measured_agent(), &[], &product(), Vec::new()).await;
 
-    let session = HttpSession::from_page(&page, None, HttpOptions::new())
+    let session = HttpSession::from_page(&page, None, HttpSessionOptions::new())
         .await
         .expect("nothing to go by");
 

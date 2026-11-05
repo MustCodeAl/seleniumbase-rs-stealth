@@ -1,7 +1,7 @@
 //! The builder that layers caller-supplied inputs over a measured base.
 
 use super::identity::with_hints;
-use super::{ImpersonateError, ImpersonationProfile};
+use super::{WireFormatError, WireFormat};
 use crate::convert;
 use seleniumbase_rs::evasion::fingerprint::{ClientHints, OsType};
 use seleniumbase_rs_codec::akamai::Akamai;
@@ -33,10 +33,10 @@ enum HeaderEdit {
     Replace(HeaderSpec),
 }
 
-/// Builds an [`ImpersonationProfile`] from a measured base and caller-supplied inputs.
+/// Builds an [`WireFormat`] from a measured base and caller-supplied inputs.
 ///
 /// Every input is optional and layered over the base, which is the newest measured Chrome unless
-/// [`CustomProfileBuilder::base`] or [`CustomProfileBuilder::base_on`] says otherwise. What an
+/// [`WireFormatBuilder::base`] or [`WireFormatBuilder::base_on`] says otherwise. What an
 /// input does not carry comes from the base: a JA3 has no signature algorithms, an Akamai
 /// fingerprint has no HEADERS priority, a header list has no TLS.
 ///
@@ -48,10 +48,10 @@ enum HeaderEdit {
 /// extension permutation off, so its JA3 arrives exactly as given.
 ///
 /// ```
-/// use seleniumbase_rs_mimic::client::ImpersonationProfile;
+/// use seleniumbase_rs_mimic::client::WireFormat;
 ///
 /// # fn demo() -> Result<(), Box<dyn std::error::Error>> {
-/// let profile = ImpersonationProfile::custom()
+/// let profile = WireFormat::builder()
 ///     .akamai("1:65536;2:0;4:6291456;6:262144|15663105|0|m,a,s,p")?
 ///     .user_agent("Mozilla/5.0 (custom)")
 ///     .build()?;
@@ -61,13 +61,13 @@ enum HeaderEdit {
 /// # demo().unwrap();
 /// ```
 #[derive(Debug, Clone)]
-pub struct CustomProfileBuilder {
+pub struct WireFormatBuilder {
     /// The browser whose measurement is the base.
     kind: BrowserKind,
     /// The system of the base, or the newest measured one.
     os: Option<OsType>,
     /// The base with the TLS and HTTP/2 overlays applied; resolved on first use.
-    profile: Option<ImpersonationProfile>,
+    profile: Option<WireFormat>,
     /// A `User-Agent` that replaces the base's.
     user_agent: Option<String>,
     /// An `Accept-Language` that replaces the base's.
@@ -78,13 +78,13 @@ pub struct CustomProfileBuilder {
     header_edits: Vec<HeaderEdit>,
 }
 
-impl Default for CustomProfileBuilder {
+impl Default for WireFormatBuilder {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl CustomProfileBuilder {
+impl WireFormatBuilder {
     /// A builder over the newest measured Chrome.
     #[must_use]
     pub fn new() -> Self {
@@ -120,15 +120,15 @@ impl CustomProfileBuilder {
     }
 
     /// The base profile, loaded on first use.
-    fn resolved(&mut self) -> Result<&mut ImpersonationProfile, ImpersonateError> {
+    fn resolved(&mut self) -> Result<&mut WireFormat, WireFormatError> {
         if self.profile.is_none() {
             let base = match self.os {
-                Some(os) => ImpersonationProfile::for_system(self.kind, os)?,
-                None => ImpersonationProfile::measured(self.kind)?,
+                Some(os) => WireFormat::for_system(self.kind, os)?,
+                None => WireFormat::measured(self.kind)?,
             };
             self.profile = Some(base);
         }
-        self.profile.as_mut().ok_or(ImpersonateError::Incomplete {
+        self.profile.as_mut().ok_or(WireFormatError::Incomplete {
             what: "base profile",
         })
     }
@@ -137,7 +137,7 @@ impl CustomProfileBuilder {
     fn tls_overlay(
         mut self,
         overlay: impl FnOnce(&TlsSpec) -> Result<TlsSpec, TlsSpecError>,
-    ) -> Result<Self, ImpersonateError> {
+    ) -> Result<Self, WireFormatError> {
         let profile = self.resolved()?;
         profile.tls = overlay(&profile.tls)?;
         convert::check_emittable(&profile.tls)?;
@@ -148,9 +148,9 @@ impl CustomProfileBuilder {
     ///
     /// # Errors
     ///
-    /// Returns [`ImpersonateError::Ja3`] for a malformed string and the named TLS or
+    /// Returns [`WireFormatError::Ja3`] for a malformed string and the named TLS or
     /// client-stack error for a fingerprint this client cannot send.
-    pub fn ja3(self, ja3: &str) -> Result<Self, ImpersonateError> {
+    pub fn ja3(self, ja3: &str) -> Result<Self, WireFormatError> {
         let ja3 = Ja3::parse(ja3)?;
         self.tls_overlay(|base| base.with_ja3(&ja3))
     }
@@ -159,9 +159,9 @@ impl CustomProfileBuilder {
     ///
     /// # Errors
     ///
-    /// Returns [`ImpersonateError::Ja4`] for a malformed string and the named error for a
+    /// Returns [`WireFormatError::Ja4`] for a malformed string and the named error for a
     /// fingerprint this client cannot send.
-    pub fn ja4_r(self, ja4_r: &str) -> Result<Self, ImpersonateError> {
+    pub fn ja4_r(self, ja4_r: &str) -> Result<Self, WireFormatError> {
         let raw = Ja4Raw::parse(ja4_r)?;
         self.tls_overlay(|base| base.with_ja4_raw(&raw, Ja4Order::Sorted))
     }
@@ -170,9 +170,9 @@ impl CustomProfileBuilder {
     ///
     /// # Errors
     ///
-    /// Returns [`ImpersonateError::Ja4`] for a malformed string and the named error for a
+    /// Returns [`WireFormatError::Ja4`] for a malformed string and the named error for a
     /// fingerprint this client cannot send.
-    pub fn ja4_ro(self, ja4_ro: &str) -> Result<Self, ImpersonateError> {
+    pub fn ja4_ro(self, ja4_ro: &str) -> Result<Self, WireFormatError> {
         let raw = Ja4Raw::parse(ja4_ro)?;
         self.tls_overlay(|base| base.with_ja4_raw(&raw, Ja4Order::Original))
     }
@@ -182,9 +182,9 @@ impl CustomProfileBuilder {
     ///
     /// # Errors
     ///
-    /// Returns [`ImpersonateError::Peetprint`] for a malformed string and the named error for a
+    /// Returns [`WireFormatError::Peetprint`] for a malformed string and the named error for a
     /// fingerprint this client cannot send.
-    pub fn peetprint(self, peetprint: &str) -> Result<Self, ImpersonateError> {
+    pub fn peetprint(self, peetprint: &str) -> Result<Self, WireFormatError> {
         let peet = Peetprint::parse(peetprint)?;
         self.tls_overlay(|base| base.with_peetprint(&peet))
     }
@@ -194,7 +194,7 @@ impl CustomProfileBuilder {
     /// # Errors
     ///
     /// Returns the named error for a scheme `BoringSSL` cannot send.
-    pub fn signature_algorithms(self, ids: &[u16]) -> Result<Self, ImpersonateError> {
+    pub fn signature_algorithms(self, ids: &[u16]) -> Result<Self, WireFormatError> {
         self.tls_overlay(|base| base.with_signature_algorithms(ids))
     }
 
@@ -208,7 +208,7 @@ impl CustomProfileBuilder {
     /// # Errors
     ///
     /// Returns the named error when the result cannot be sent.
-    pub fn grease(self, enabled: bool) -> Result<Self, ImpersonateError> {
+    pub fn grease(self, enabled: bool) -> Result<Self, WireFormatError> {
         self.tls_overlay(|base| {
             let mut spec = base.clone();
             spec.grease = enabled;
@@ -223,7 +223,7 @@ impl CustomProfileBuilder {
     /// # Errors
     ///
     /// Returns the named error when the result cannot be sent.
-    pub fn permute_extensions(self, enabled: bool) -> Result<Self, ImpersonateError> {
+    pub fn permute_extensions(self, enabled: bool) -> Result<Self, WireFormatError> {
         self.tls_overlay(|base| {
             let mut spec = base.clone();
             spec.permute_extensions = enabled;
@@ -237,9 +237,9 @@ impl CustomProfileBuilder {
     ///
     /// # Errors
     ///
-    /// Returns [`ImpersonateError::Akamai`] for a malformed string and the named HTTP/2 error
+    /// Returns [`WireFormatError::Akamai`] for a malformed string and the named HTTP/2 error
     /// for a SETTINGS id, value, frame or window wreq cannot send.
-    pub fn akamai(mut self, akamai: &str) -> Result<Self, ImpersonateError> {
+    pub fn akamai(mut self, akamai: &str) -> Result<Self, WireFormatError> {
         let akamai = Akamai::parse(akamai)?;
         let profile = self.resolved()?;
         profile.http2 = profile.http2.with_akamai(&akamai)?;
@@ -333,10 +333,10 @@ impl CustomProfileBuilder {
     ///
     /// Returns the named error of the first check that fails: the base is not measured, a header
     /// is invalid or unknown, or a spec cannot be sent.
-    pub fn build(mut self) -> Result<ImpersonationProfile, ImpersonateError> {
+    pub fn build(mut self) -> Result<WireFormat, WireFormatError> {
         self.resolved()?;
         let edits = std::mem::take(&mut self.header_edits);
-        let mut profile = self.profile.take().ok_or(ImpersonateError::Incomplete {
+        let mut profile = self.profile.take().ok_or(WireFormatError::Incomplete {
             what: "base profile",
         })?;
         profile.source = format!("custom over {}", profile.source);
@@ -360,7 +360,7 @@ impl CustomProfileBuilder {
 }
 
 /// Applies one header change to a spec.
-fn apply_edit(spec: HeaderSpec, edit: HeaderEdit) -> Result<HeaderSpec, ImpersonateError> {
+fn apply_edit(spec: HeaderSpec, edit: HeaderEdit) -> Result<HeaderSpec, WireFormatError> {
     Ok(match edit {
         HeaderEdit::Set { shape, name, value } => spec.with_header(shape, &name, value)?,
         HeaderEdit::Remove { shape, name } => spec.without_header(shape, &name),
@@ -375,14 +375,14 @@ fn reorder(
     mut spec: HeaderSpec,
     shape: RequestShape,
     names: &[String],
-) -> Result<HeaderSpec, ImpersonateError> {
+) -> Result<HeaderSpec, WireFormatError> {
     let list = spec.headers(shape).to_vec();
     let mut ordered: Vec<(String, HeaderSource)> = Vec::with_capacity(list.len());
     for wanted in names {
         let entry = list
             .iter()
             .find(|(name, _)| name.eq_ignore_ascii_case(wanted))
-            .ok_or_else(|| ImpersonateError::UnknownHeader(wanted.clone()))?;
+            .ok_or_else(|| WireFormatError::UnknownHeader(wanted.clone()))?;
         if !ordered
             .iter()
             .any(|(name, _)| name.eq_ignore_ascii_case(wanted))
@@ -404,7 +404,7 @@ fn reorder(
         // `RequestShape` lives in the codec crate and may gain a shape this builder has no list
         // field for; it refuses rather than drop the order.
         other => {
-            return Err(ImpersonateError::Build(format!(
+            return Err(WireFormatError::Build(format!(
                 "the headers of the request shape {other:?} cannot be reordered"
             )));
         }

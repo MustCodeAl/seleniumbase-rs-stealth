@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use super::browser::BrowserLeg;
 use super::{Leg, StealthError, StealthSession, Wiring};
-use crate::client::ImpersonationProfile;
+use crate::client::WireFormat;
 use crate::http_session::HttpSession;
 use crate::mitm::MitmProxy;
 use seleniumbase_rs_scrape::challenge::mitigation::FetchKind;
@@ -34,7 +34,7 @@ pub(super) async fn open_leg(
             wiring.http.clone(),
         )?)),
         FetchKind::Browser => {
-            let profile = ImpersonationProfile::from_fingerprint(&identity.fingerprint)?;
+            let profile = WireFormat::from_fingerprint(&identity.fingerprint)?;
             let claimed = profile.major();
             let proxy = proxy_for(wiring, mitm, profile, egress).await?;
             let leg = BrowserLeg::launch(wiring, &proxy, identity, claimed).await?;
@@ -55,11 +55,11 @@ pub(super) async fn open_leg(
 async fn proxy_for(
     wiring: &Wiring,
     mitm: &mut Option<MitmProxy>,
-    profile: ImpersonationProfile,
+    profile: WireFormat,
     egress: Option<&ProxyRoute>,
 ) -> Result<MitmProxy, StealthError> {
     if let Some(running) = mitm.as_ref() {
-        running.swap_profile(profile)?;
+        running.swap_wire_format(profile)?;
         return Ok(running.clone());
     }
     let started = MitmProxy::start(
@@ -82,7 +82,7 @@ impl StealthSession {
     ///
     /// # Errors
     ///
-    /// Returns [`StealthError::Impersonate`] when the Chrome that starts is not the measured
+    /// Returns [`StealthError::WireFormat`] when the Chrome that starts is not the measured
     /// version, [`StealthError::Mitm`] when the proxy cannot start and [`StealthError::Scrape`]
     /// when no browser can be started. On an error the session is as it was.
     #[tracing::instrument(skip_all)]

@@ -13,7 +13,7 @@ use wreq::header::{HeaderName, HeaderValue};
 use wreq::Method;
 
 use super::error::HttpError;
-use super::reply::HttpReply;
+use super::reply::HttpResponse;
 use super::HttpSession;
 use seleniumbase_rs_codec::header_spec::{
     RequestShape, MAX_HEADERS, MAX_NAME_LEN, MAX_VALUE_LEN, TRANSPORT_HEADERS,
@@ -354,7 +354,7 @@ impl<'a> HttpRequest<'a> {
     /// for a reply past the limit; and [`HttpError::Request`] when the connection, the TLS
     /// handshake or the time fails.
     #[tracing::instrument(level = "debug", skip_all)]
-    pub async fn send(self) -> Result<HttpReply, HttpError> {
+    pub async fn send(self) -> Result<HttpResponse, HttpError> {
         let (session, prepared) = self.prepare()?;
         super::fetch::run(session, prepared).await
     }
@@ -366,13 +366,13 @@ mod tests {
     use std::time::Duration;
 
     use super::*;
-    use crate::client::ImpersonationProfile;
-    use crate::http_session::HttpOptions;
+    use crate::client::WireFormat;
+    use crate::http_session::HttpSessionOptions;
     use seleniumbase_rs_codec::BrowserKind;
     use seleniumbase_rs_scrape::jar::store::CookieJar;
 
-    fn session_with(options: HttpOptions) -> HttpSession {
-        let profile = ImpersonationProfile::measured(BrowserKind::Chrome).expect("measured");
+    fn session_with(options: HttpSessionOptions) -> HttpSession {
+        let profile = WireFormat::measured(BrowserKind::Chrome).expect("measured");
         HttpSession::assemble(profile, CookieJar::new(), None, options).expect("a session")
     }
 
@@ -382,7 +382,7 @@ mod tests {
 
     #[test]
     fn the_shape_follows_the_method_unless_it_is_chosen() {
-        let session = session_with(HttpOptions::new());
+        let session = session_with(HttpSessionOptions::new());
         let url = "https://shop.example/";
         for (method, shape) in [
             (Method::GET, RequestShape::Document),
@@ -404,7 +404,7 @@ mod tests {
 
     #[test]
     fn json_and_form_set_their_bodies_and_content_types() {
-        let session = session_with(HttpOptions::new());
+        let session = session_with(HttpSessionOptions::new());
         let url = "https://shop.example/";
 
         let json = prepared(
@@ -428,7 +428,7 @@ mod tests {
 
     #[test]
     fn a_json_value_that_cannot_be_written_fails_the_request_before_it_is_sent() {
-        let session = session_with(HttpOptions::new());
+        let session = session_with(HttpSessionOptions::new());
         let mut keyed_by_a_pair: HashMap<(u8, u8), u8> = HashMap::new();
         keyed_by_a_pair.insert((1, 2), 3);
 
@@ -443,7 +443,7 @@ mod tests {
 
     #[test]
     fn a_header_set_twice_keeps_the_last_value_and_the_first_error_wins() {
-        let session = session_with(HttpOptions::new());
+        let session = session_with(HttpSessionOptions::new());
         let url = "https://shop.example/";
 
         let twice = prepared(
@@ -468,7 +468,7 @@ mod tests {
 
     #[test]
     fn the_number_of_headers_is_capped() {
-        let session = session_with(HttpOptions::new());
+        let session = session_with(HttpSessionOptions::new());
         let mut request = session.request(Method::GET, "https://shop.example/");
         for index in 0..=MAX_HEADERS {
             request = request.header(&format!("x-h{index}"), "v");
@@ -481,7 +481,7 @@ mod tests {
 
     #[test]
     fn a_body_over_the_sessions_limit_a_bad_url_and_a_forbidden_method_fail_in_prepare() {
-        let session = session_with(HttpOptions::new().max_request_bytes(4));
+        let session = session_with(HttpSessionOptions::new().max_request_bytes(4));
 
         let big = session
             .request(Method::POST, "https://shop.example/")
@@ -509,7 +509,7 @@ mod tests {
 
     #[test]
     fn a_per_request_timeout_is_carried_and_debug_hides_everything_private() {
-        let session = session_with(HttpOptions::new());
+        let session = session_with(HttpSessionOptions::new());
         let request = session
             .request(
                 Method::POST,

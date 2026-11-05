@@ -10,7 +10,7 @@
 //! refuses the connection when the client's SNI names another host.
 //!
 //! Chrome trusts the leaves only through `--ignore-certificate-errors-spki-list` with the leaf
-//! pin of [`EphemeralCa::chrome_spki_arg`]. The CA is never installed in a trust store, and
+//! pin of [`EphemeralCa::spki_launch_arg`]. The CA is never installed in a trust store, and
 //! `--ignore-certificate-errors` is never used.
 //!
 //! # What the Chrome switch trusts
@@ -56,7 +56,7 @@
 //!
 //! # async fn demo(tcp: tokio::net::TcpStream) -> Result<(), Box<dyn std::error::Error>> {
 //! let ca = EphemeralCa::generate()?;
-//! let chrome_flag = ca.chrome_spki_arg(); // pass to Chrome together with --user-data-dir
+//! let chrome_flag = ca.spki_launch_arg(); // pass to Chrome together with --user-data-dir
 //! let server = acceptor(&[ALPN_HTTP1])?;
 //! let host = url::Host::parse("example.com")?;
 //! let leaf = ca.leaf_for(&host, SystemTime::now())?;
@@ -82,7 +82,7 @@ use btls::ssl::{
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_btls::SslStream;
 
-pub use ca::{spki_pin_of, EphemeralCa, Leaf};
+pub use ca::{spki_pin_of, EphemeralCa, LeafCert};
 
 /// The ALPN id of HTTP/1.1, the only protocol the browser-to-proxy leg negotiates.
 pub const ALPN_HTTP1: &[u8] = b"http/1.1";
@@ -247,7 +247,7 @@ pub fn acceptor(alpn: &[&[u8]]) -> Result<SslAcceptor, TlsServerError> {
 #[tracing::instrument(level = "debug", skip_all)]
 pub async fn accept<S>(
     acceptor: &SslAcceptor,
-    leaf: &Leaf,
+    leaf: &LeafCert,
     stream: S,
     handshake_timeout: Duration,
 ) -> Result<SslStream<S>, TlsServerError>

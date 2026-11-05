@@ -17,7 +17,7 @@ use url::Url;
 use wreq::Method;
 
 use super::error::HttpError;
-use super::reply::Headers;
+use super::reply::ResponseHeaders;
 use super::request::{check_target, Prepared, CROSS_ORIGIN_HEADERS};
 use seleniumbase_rs_scrape::egress::redact::RedactedUrl;
 use seleniumbase_rs_scrape::jar::store::site_of;
@@ -104,7 +104,7 @@ fn rewrite(method: &Method, status: u16) -> (Method, bool) {
 /// http or https, or carries credentials.
 pub(super) fn target_of(
     status: u16,
-    headers: &Headers,
+    headers: &ResponseHeaders,
     from: &Url,
     follow: bool,
 ) -> Result<Option<Url>, HttpError> {
@@ -144,8 +144,8 @@ mod tests {
         Url::parse(raw).expect("a test URL")
     }
 
-    fn headers(pairs: &[(&str, &str)]) -> Headers {
-        Headers::new(
+    fn headers(pairs: &[(&str, &str)]) -> ResponseHeaders {
+        ResponseHeaders::new(
             pairs
                 .iter()
                 .map(|(name, value)| ((*name).to_owned(), (*value).to_owned()))

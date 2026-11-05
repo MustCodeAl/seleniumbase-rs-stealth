@@ -30,7 +30,7 @@ use super::sniff::{self, Carried};
 use super::websocket::{self, RelaySlot};
 use super::{Counters, MitmError, MitmOptions, Shared};
 use crate::sync::locked;
-use crate::tls_server::{self, Leaf, TlsServerError};
+use crate::tls_server::{self, LeafCert, TlsServerError};
 use seleniumbase_rs_scrape::egress::redact::Secret;
 
 /// The `Proxy-Authenticate` challenge of a `407`.
@@ -89,7 +89,7 @@ struct Tunnel {
     /// Where the requests inside go.
     origin: Origin,
     /// The leaf for the `CONNECT` host.
-    leaf: Arc<Leaf>,
+    leaf: Arc<LeafCert>,
     /// Resolves to the raw connection once the `200` is written.
     upgrade: OnUpgrade,
 }

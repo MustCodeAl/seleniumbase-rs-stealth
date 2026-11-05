@@ -9,11 +9,11 @@
 //! measured is refused instead of approximated.
 //!
 //! ```no_run
-//! use seleniumbase_rs_mimic::http_session::{HttpOptions, HttpSession};
+//! use seleniumbase_rs_mimic::http_session::{HttpSessionOptions, HttpSession};
 //! use seleniumbase_rs::sb_cdp::Page;
 //!
 //! # async fn demo(page: Page) -> Result<(), Box<dyn std::error::Error>> {
-//! let session = HttpSession::from_page(&page, None, HttpOptions::new()).await?;
+//! let session = HttpSession::from_page(&page, None, HttpSessionOptions::new()).await?;
 //! let reply = session.get("https://example.com/api/orders").await?;
 //! let orders: serde_json::Value = reply.json()?;
 //! println!("{orders}");
@@ -32,8 +32,8 @@
 //!   sent per URL, `303` turned into a `GET`, and the headers the caller set dropped when a hop
 //!   leaves the origin.
 //! - **Limits** bound the whole request: time, body size after decompression, redirects, request
-//!   body size, and requests per window per site ([`HttpOptions`]).
-//! - **Challenges** are detected on every reply ([`HttpReply::detect`]) and judged by the
+//!   body size, and requests per window per site ([`HttpSessionOptions`]).
+//! - **Challenges** are detected on every reply ([`HttpResponse::detect`]) and judged by the
 //!   mitigation and session policies ([`HttpSession::fetch`], [`HttpSession::assess`]), so a
 //!   caller learns whether to carry on, wait, rotate, or hand the URL to a browser.
 //! - **Identity**: [`HttpSession::export_identity`] puts the session's cookies back into a
@@ -76,16 +76,16 @@ pub use wreq::Method;
 
 pub use self::error::HttpError;
 pub use self::options::{
-    Clock, HttpOptions, DEFAULT_CONNECT_TIMEOUT, DEFAULT_MAX_BODY_BYTES, DEFAULT_MAX_REDIRECTS,
+    Clock, HttpSessionOptions, DEFAULT_CONNECT_TIMEOUT, DEFAULT_MAX_BODY_BYTES, DEFAULT_MAX_REDIRECTS,
     DEFAULT_MAX_REQUEST_BYTES, DEFAULT_TIMEOUT, MAX_BODY_LIMIT, MAX_REDIRECT_LIMIT, MAX_TIMEOUT,
 };
-pub use self::outcome::{Attempt, Fetched, Rules, Verdict};
-pub use self::reply::{Headers, HttpReply, ReplyProtocol};
+pub use self::outcome::{HttpAttempt, HttpFetch, HttpRules, HttpVerdict};
+pub use self::reply::{ResponseHeaders, HttpResponse, ReplyProtocol};
 pub use self::request::HttpRequest;
 
 use self::cookies::SessionJar;
 use self::pace::SitePacer;
-use crate::client::{ImpersonationProfile, WireProtocol};
+use crate::client::{WireFormat, WireProtocol};
 use seleniumbase_rs_scrape::egress::route::{ProxyKey, ProxyRoute};
 use seleniumbase_rs_scrape::jar::store::CookieJar;
 use seleniumbase_rs_scrape::ledger::events::{EventSink, ScrapeEvent};
@@ -107,7 +107,7 @@ struct Limits {
 /// What the clones of a session share.
 struct Inner {
     client: wreq::Client,
-    profile: ImpersonationProfile,
+    profile: WireFormat,
     jar: SessionJar,
     egress: Option<ProxyRoute>,
     limits: Limits,
@@ -161,17 +161,17 @@ impl HttpSession {
     ///
     /// Returns [`HttpError::Identity`] when the identity is incoherent or belongs to another
     /// egress, [`HttpError::VersionMismatch`] when it claims another Chrome major than the
-    /// measured one, [`HttpError::Impersonate`] for a system that was not measured, and
+    /// measured one, [`HttpError::WireFormat`] for a system that was not measured, and
     /// [`HttpError::Options`] or [`HttpError::Client`] when the options or the proxy are refused.
     pub fn from_identity(
         identity: &Identity,
         egress: Option<ProxyRoute>,
-        options: HttpOptions,
+        options: HttpSessionOptions,
     ) -> Result<Self, HttpError> {
         options.validate()?;
         identity.verify()?;
         identity.check_proxy(egress.as_ref().map(ProxyRoute::key))?;
-        let profile = ImpersonationProfile::from_fingerprint(&identity.fingerprint)?;
+        let profile = WireFormat::from_fingerprint(&identity.fingerprint)?;
         identity
             .check_wire_measurement(&WireMeasurementRef {
                 kind: profile.kind(),
@@ -188,10 +188,10 @@ impl HttpSession {
 
     /// A session from a profile, a jar of cookies and an egress.
     fn assemble(
-        profile: ImpersonationProfile,
+        profile: WireFormat,
         jar: CookieJar,
         egress: Option<ProxyRoute>,
-        options: HttpOptions,
+        options: HttpSessionOptions,
     ) -> Result<Self, HttpError> {
         if let Some(installed) = options.installed_major
             && installed != profile.major()
@@ -217,7 +217,7 @@ impl HttpSession {
                 egress,
                 limits,
                 pacer: options
-                    .pacing
+                    .rate_limit
                     .map(|(calls, window)| SitePacer::new(calls, window)),
                 sink: options.sink,
                 clock: options.clock,
@@ -239,13 +239,13 @@ impl HttpSession {
     /// # Errors
     ///
     /// See [`HttpRequest::send`].
-    pub async fn get(&self, url: &str) -> Result<HttpReply, HttpError> {
+    pub async fn get(&self, url: &str) -> Result<HttpResponse, HttpError> {
         self.request(Method::GET, url).send().await
     }
 
     /// The profile the requests are made with.
     #[must_use]
-    pub fn profile(&self) -> &ImpersonationProfile {
+    pub fn wire_format(&self) -> &WireFormat {
         &self.inner.profile
     }
 
@@ -308,11 +308,11 @@ mod tests {
 
     #[test]
     fn a_session_from_a_profile_shows_counts_and_the_egress_key_only() {
-        let profile = ImpersonationProfile::measured(BrowserKind::Chrome).expect("measured");
+        let profile = WireFormat::measured(BrowserKind::Chrome).expect("measured");
         let egress =
             ProxyRoute::parse("http://alice:s3cret@proxy.example:8080", None).expect("a spec");
         let session =
-            HttpSession::assemble(profile, CookieJar::new(), Some(egress), HttpOptions::new())
+            HttpSession::assemble(profile, CookieJar::new(), Some(egress), HttpSessionOptions::new())
                 .expect("a session");
         let shown = format!("{session:?}");
         assert!(
@@ -328,13 +328,13 @@ mod tests {
 
     #[test]
     fn the_installed_chrome_must_be_the_measured_one_when_a_profile_is_used_directly() {
-        let profile = ImpersonationProfile::measured(BrowserKind::Chrome).expect("measured");
+        let profile = WireFormat::measured(BrowserKind::Chrome).expect("measured");
         let measured = profile.major();
         let stale = HttpSession::assemble(
             profile.clone(),
             CookieJar::new(),
             None,
-            HttpOptions::new().installed_chrome_major(measured + 3),
+            HttpSessionOptions::new().installed_chrome_major(measured + 3),
         )
         .expect_err("stale");
         assert!(
@@ -344,7 +344,7 @@ mod tests {
             profile,
             CookieJar::new(),
             None,
-            HttpOptions::new().installed_chrome_major(measured),
+            HttpSessionOptions::new().installed_chrome_major(measured),
         );
         assert!(fresh.is_ok());
     }

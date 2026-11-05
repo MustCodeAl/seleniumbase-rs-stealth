@@ -11,7 +11,7 @@ use std::time::Duration;
 use serde_json::json;
 
 use super::{StealthError, Wiring};
-use crate::client::ImpersonateError;
+use crate::client::WireFormatError;
 use crate::mitm::MitmProxy;
 use seleniumbase_rs::sb_cdp::{Browser, Page};
 use seleniumbase_rs_scrape::challenge::detect::{ChallengeKind, Detection};
@@ -78,7 +78,7 @@ impl BrowserLeg {
         if let Some(found) = browser_major(browser).await
             && found != measured
         {
-            return Err(ImpersonateError::VersionMismatch {
+            return Err(WireFormatError::VersionMismatch {
                 browser: found,
                 measured,
             }

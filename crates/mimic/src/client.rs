@@ -1,21 +1,21 @@
 //! Builds an impersonating wreq client from a profile, with the custom JA3 and Akamai builder.
 //!
-//! An [`ImpersonationProfile`] is a browser the crate has measured, as data: the TLS and HTTP/2
+//! An [`WireFormat`] is a browser the crate has measured, as data: the TLS and HTTP/2
 //! specs it was measured with (minus what `BoringSSL` and wreq cannot send, which stays on
-//! record in [`ImpersonationProfile::known_gaps`]), its header lists, and the identity a request
-//! carries (`User-Agent`, `Sec-CH-UA*`, `Accept-Language`). [`impersonation_client`] turns it into
+//! record in [`WireFormat::known_gaps`]), its header lists, and the identity a request
+//! carries (`User-Agent`, `Sec-CH-UA*`, `Accept-Language`). [`wire_client`] turns it into
 //! a [`wreq::ClientBuilder`]; the caller adds proxies, a trust store and timeouts, then builds.
 //!
 //! ```no_run
 //! use seleniumbase_rs_mimic::client::{
-//!     impersonation_client, ImpersonationProfile, WireProtocol,
+//!     wire_client, WireFormat, WireProtocol,
 //! };
 //! use seleniumbase_rs_codec::header_spec::RequestShape;
 //! use seleniumbase_rs_codec::BrowserKind;
 //!
 //! # async fn demo() -> Result<(), Box<dyn std::error::Error>> {
-//! let profile = ImpersonationProfile::measured(BrowserKind::Chrome)?;
-//! let client = impersonation_client(&profile)?.build()?;
+//! let profile = WireFormat::measured(BrowserKind::Chrome)?;
+//! let client = wire_client(&profile)?.build()?;
 //! let request = client.get("https://example.com/");
 //! let request = profile.apply(request, RequestShape::Document, None, WireProtocol::Http2)?;
 //! let response = request.send().await?;
@@ -27,8 +27,8 @@
 //! # What is measured, and what is refused
 //!
 //! Only a browser and system pair with a capture exists
-//! ([`NotMeasured`](ImpersonateError::Measurement) otherwise); there is no fallback to another
-//! system's values. [`ImpersonationProfile::custom`] layers caller-supplied inputs over a measured
+//! ([`NotMeasured`](WireFormatError::Measurement) otherwise); there is no fallback to another
+//! system's values. [`WireFormat::custom`] layers caller-supplied inputs over a measured
 //! base: a JA3, a `JA4_r` or `JA4_ro`, a peetprint, signature algorithms, an Akamai HTTP/2
 //! fingerprint, header names, order and values, the `User-Agent`, `Accept-Language` and the
 //! client hints. Each input is checked for what this client stack can emit; the rest is refused
@@ -39,7 +39,7 @@
 //!
 //! The identity headers (`User-Agent`, the client hints, `Accept-Language`, `Cookie`) are not part
 //! of the TLS or HTTP/2 emulation. They are rendered per request with
-//! [`ImpersonationProfile::apply`], in the order of the measured header list, so rotating an
+//! [`WireFormat::apply`], in the order of the measured header list, so rotating an
 //! identity never needs a new connection setup.
 
 mod custom;
@@ -64,7 +64,7 @@ use seleniumbase_rs_codec::tls_spec::{TlsSpecError, TlsSpec};
 use seleniumbase_rs_codec::BrowserKind;
 use seleniumbase_rs_scrape::egress::geo::{Locale, LocaleExt};
 
-pub use self::custom::CustomProfileBuilder;
+pub use self::custom::WireFormatBuilder;
 
 /// The header the HTTP/2 priority of a request hangs on.
 const SEC_FETCH_DEST: &str = "sec-fetch-dest";
@@ -80,7 +80,7 @@ const HOST_HEADER: &str = "Host";
 /// Why a profile or a client could not be built.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 #[non_exhaustive]
-pub enum ImpersonateError {
+pub enum WireFormatError {
     /// A custom JA3 is malformed.
     #[error("invalid JA3: {0}")]
     Ja3(#[from] Ja3Error),
@@ -148,12 +148,12 @@ pub enum WireProtocol {
 
 /// A measured browser as data: what to send on the wire and in the headers to look like it.
 ///
-/// Build one with [`ImpersonationProfile::measured`], [`ImpersonationProfile::for_system`],
-/// [`ImpersonationProfile::random`], [`ImpersonationProfile::from_fingerprint`] or
-/// [`ImpersonationProfile::custom`]. `Debug` shows the specs and the identity but never a cookie:
+/// Build one with [`WireFormat::measured`], [`WireFormat::for_system`],
+/// [`WireFormat::random`], [`WireFormat::from_fingerprint`] or
+/// [`WireFormat::custom`]. `Debug` shows the specs and the identity but never a cookie:
 /// a cookie is passed per request and never stored.
 #[derive(Debug, Clone, PartialEq)]
-pub struct ImpersonationProfile {
+pub struct WireFormat {
     /// Where the profile comes from, such as `chrome-155-macos`.
     source: String,
     /// The browser.
@@ -176,16 +176,16 @@ pub struct ImpersonationProfile {
     known_gaps: Vec<KnownGap>,
 }
 
-impl ImpersonationProfile {
+impl WireFormat {
     /// The newest measured entry of a browser.
     ///
     /// # Errors
     ///
-    /// Returns [`ImpersonateError::Measurement`] when the embedded tables are broken or hold no
-    /// entry for `kind`, and the errors of [`ImpersonationProfile::from_measured`].
-    pub fn measured(kind: BrowserKind) -> Result<Self, ImpersonateError> {
+    /// Returns [`WireFormatError::Measurement`] when the embedded tables are broken or hold no
+    /// entry for `kind`, and the errors of [`WireFormat::from_measured`].
+    pub fn measured(kind: BrowserKind) -> Result<Self, WireFormatError> {
         let table = measurement::try_measured().map_err(Clone::clone)?;
-        let entry = measurement::newest(table, kind).ok_or(ImpersonateError::Incomplete {
+        let entry = measurement::newest(table, kind).ok_or(WireFormatError::Incomplete {
             what: "measurement for this browser",
         })?;
         Self::from_measured(entry)
@@ -195,9 +195,9 @@ impl ImpersonationProfile {
     ///
     /// # Errors
     ///
-    /// Returns [`ImpersonateError::Measurement`] with `NotMeasured` when the pair has no capture,
-    /// and the errors of [`ImpersonationProfile::from_measured`].
-    pub fn for_system(kind: BrowserKind, os: OsType) -> Result<Self, ImpersonateError> {
+    /// Returns [`WireFormatError::Measurement`] with `NotMeasured` when the pair has no capture,
+    /// and the errors of [`WireFormat::from_measured`].
+    pub fn for_system(kind: BrowserKind, os: OsType) -> Result<Self, WireFormatError> {
         Self::from_measured(measurement::get(kind, os)?)
     }
 
@@ -208,16 +208,16 @@ impl ImpersonationProfile {
     ///
     /// # Errors
     ///
-    /// Returns [`ImpersonateError::Incomplete`] when the entry has no HTTP/2 spec or no client
+    /// Returns [`WireFormatError::Incomplete`] when the entry has no HTTP/2 spec or no client
     /// hints yet, and the error of the check that fails.
-    pub fn from_measured(entry: &Measured) -> Result<Self, ImpersonateError> {
-        let http2 = entry.http2.as_ref().ok_or(ImpersonateError::Incomplete {
+    pub fn from_measured(entry: &Measured) -> Result<Self, WireFormatError> {
+        let http2 = entry.http2.as_ref().ok_or(WireFormatError::Incomplete {
             what: "HTTP/2 spec",
         })?;
         let hints = entry
             .client_hints
             .as_ref()
-            .ok_or(ImpersonateError::Incomplete {
+            .ok_or(WireFormatError::Incomplete {
                 what: "client hints",
             })?;
         let (http2, dropped_settings) = http2.without_unsupported_settings();
@@ -245,13 +245,13 @@ impl ImpersonationProfile {
     ///
     /// # Errors
     ///
-    /// Returns [`ImpersonateError::Incomplete`] when nothing is measured, and the errors of
-    /// [`ImpersonationProfile::from_fingerprint`].
-    pub fn random(seed: u64) -> Result<Self, ImpersonateError> {
+    /// Returns [`WireFormatError::Incomplete`] when nothing is measured, and the errors of
+    /// [`WireFormat::from_fingerprint`].
+    pub fn random(seed: u64) -> Result<Self, WireFormatError> {
         let table = measurement::try_measured().map_err(Clone::clone)?;
         let count = u64::try_from(table.len()).unwrap_or(u64::MAX).max(1);
         let index = usize::try_from(seed % count).unwrap_or_default();
-        let entry = table.get(index).ok_or(ImpersonateError::Incomplete {
+        let entry = table.get(index).ok_or(WireFormatError::Incomplete {
             what: "measurement",
         })?;
         let fingerprint = Fingerprint::randomized_with_major(entry.os, seed, entry.major);
@@ -263,14 +263,14 @@ impl ImpersonationProfile {
     ///
     /// # Errors
     ///
-    /// Returns [`ImpersonateError::Measurement`] with `NotMeasured` for a system with no capture,
-    /// [`ImpersonateError::Fingerprint`] for a fingerprint that is not Chromium or has no user
-    /// agent, and [`ImpersonateError::VersionMismatch`] when the user agent claims a Chrome major
+    /// Returns [`WireFormatError::Measurement`] with `NotMeasured` for a system with no capture,
+    /// [`WireFormatError::Fingerprint`] for a fingerprint that is not Chromium or has no user
+    /// agent, and [`WireFormatError::VersionMismatch`] when the user agent claims a Chrome major
     /// other than the measured one: the TLS of Chrome 155 under a Chrome 153 user agent is a
     /// contradiction a detector can see.
-    pub fn from_fingerprint(fingerprint: &Fingerprint) -> Result<Self, ImpersonateError> {
+    pub fn from_fingerprint(fingerprint: &Fingerprint) -> Result<Self, WireFormatError> {
         if fingerprint.browser_type() != BrowserType::Chromium {
-            return Err(ImpersonateError::Fingerprint(
+            return Err(WireFormatError::Fingerprint(
                 "only Chromium identities have a measured TLS and HTTP/2",
             ));
         }
@@ -278,12 +278,12 @@ impl ImpersonationProfile {
         let user_agent = fingerprint
             .user_agent()
             .as_str()
-            .ok_or(ImpersonateError::Fingerprint("it has no user agent"))?;
-        let claimed = user_agent_major(user_agent).ok_or(ImpersonateError::Fingerprint(
+            .ok_or(WireFormatError::Fingerprint("it has no user agent"))?;
+        let claimed = user_agent_major(user_agent).ok_or(WireFormatError::Fingerprint(
             "its user agent names no Chrome version",
         ))?;
         if claimed != entry.major {
-            return Err(ImpersonateError::VersionMismatch {
+            return Err(WireFormatError::VersionMismatch {
                 browser: claimed,
                 measured: entry.major,
             });
@@ -311,8 +311,8 @@ impl ImpersonationProfile {
 
     /// A builder that layers custom inputs over a measured base.
     #[must_use]
-    pub fn custom() -> CustomProfileBuilder {
-        CustomProfileBuilder::new()
+    pub fn builder() -> WireFormatBuilder {
+        WireFormatBuilder::new()
     }
 
     /// Checks that the specs can be sent and the headers are valid.
@@ -320,7 +320,7 @@ impl ImpersonationProfile {
     /// # Errors
     ///
     /// Returns the first problem found, as a named error.
-    pub fn validate(&self) -> Result<(), ImpersonateError> {
+    pub fn validate(&self) -> Result<(), WireFormatError> {
         self.tls.check_reproducible()?;
         convert::check_emittable(&self.tls)?;
         self.http2.check_reproducible()?;
@@ -372,7 +372,7 @@ impl ImpersonationProfile {
 
     /// The HTTP/2 spec the client sends.
     #[must_use]
-    pub fn http2_spec(&self) -> &H2Spec {
+    pub fn h2_spec(&self) -> &H2Spec {
         &self.http2
     }
 
@@ -384,7 +384,7 @@ impl ImpersonationProfile {
 
     /// The values of the identity placeholders (a cookie is never part of it).
     #[must_use]
-    pub fn identity(&self) -> &ClientHeaders {
+    pub fn client_headers(&self) -> &ClientHeaders {
         &self.identity
     }
 
@@ -411,13 +411,13 @@ impl ImpersonationProfile {
     ///
     /// # Errors
     ///
-    /// Returns [`ImpersonateError::Headers`] when a resolved value is not a valid header value.
+    /// Returns [`WireFormatError::Headers`] when a resolved value is not a valid header value.
     pub fn headers_for(
         &self,
         shape: RequestShape,
         cookie: Option<&str>,
         wire: WireProtocol,
-    ) -> Result<Vec<(String, String)>, ImpersonateError> {
+    ) -> Result<Vec<(String, String)>, WireFormatError> {
         let mut identity = self.identity.clone();
         if let Some(cookie) = cookie {
             identity = identity.with_cookie(cookie);
@@ -451,14 +451,14 @@ impl ImpersonationProfile {
     ///
     /// # Errors
     ///
-    /// Returns an [`ImpersonateError`] when a header cannot be rendered or sent.
+    /// Returns an [`WireFormatError`] when a header cannot be rendered or sent.
     pub fn apply(
         &self,
         request: RequestBuilder,
         shape: RequestShape,
         cookie: Option<&str>,
         wire: WireProtocol,
-    ) -> Result<RequestBuilder, ImpersonateError> {
+    ) -> Result<RequestBuilder, WireFormatError> {
         let list = self.headers_for(shape, cookie, wire)?;
         let leading: &[&'static str] = match wire {
             WireProtocol::Http1 => &[HOST_HEADER],
@@ -475,19 +475,19 @@ impl ImpersonationProfile {
 /// Starts a wreq client with the TLS, HTTP/2 and default headers of a profile.
 ///
 /// The client announces `h2` and `http/1.1`, sends the profile's `ClientHello` and HTTP/2 start,
-/// and carries the navigation headers by default; use [`ImpersonationProfile::apply`] to give a
+/// and carries the navigation headers by default; use [`WireFormat::apply`] to give a
 /// request the headers of its own shape. Certificate verification stays on: trust a private
 /// root with `tls_cert_store`, never by turning verification off. The caller sets proxies and
 /// timeouts and builds the client.
 ///
 /// # Errors
 ///
-/// Returns an [`ImpersonateError`] when a spec cannot be sent by this client stack. That is the
+/// Returns an [`WireFormatError`] when a spec cannot be sent by this client stack. That is the
 /// same check a custom profile passed at build time, so it only fails for a profile whose specs
 /// were changed afterwards.
-pub fn impersonation_client(
-    profile: &ImpersonationProfile,
-) -> Result<wreq::ClientBuilder, ImpersonateError> {
+pub fn wire_client(
+    profile: &WireFormat,
+) -> Result<wreq::ClientBuilder, WireFormatError> {
     let tls = convert::tls_options(&profile.tls)?;
     let http2 = convert::http2_options(&profile.http2)?;
     let document = profile.headers_for(RequestShape::Document, None, WireProtocol::Http2)?;
@@ -499,7 +499,7 @@ pub fn impersonation_client(
         .orig_headers(order)
         .build(Group::default());
     Ok(wreq::Client::builder()
-        .wire_measurement(emulation)
+        .emulation(emulation)
         .tls_sni(profile.tls.has_extension(ext_id::SERVER_NAME)))
 }
 

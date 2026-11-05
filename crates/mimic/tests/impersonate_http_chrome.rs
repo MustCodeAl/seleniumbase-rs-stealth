@@ -24,8 +24,8 @@ use std::time::Duration;
 
 use seleniumbase_rs::sb_cdp::{Browser, LaunchOptions, Page};
 use seleniumbase_rs_codec::BrowserKind;
-use seleniumbase_rs_mimic::client::ImpersonationProfile;
-use seleniumbase_rs_mimic::http_session::{HttpError, HttpOptions, HttpSession};
+use seleniumbase_rs_mimic::client::WireFormat;
+use seleniumbase_rs_mimic::http_session::{HttpError, HttpSessionOptions, HttpSession};
 use seleniumbase_rs_scrape::egress::route::ProxyRoute;
 use serde_json::json;
 
@@ -61,7 +61,7 @@ async fn open() -> (Browser, Page) {
 
 /// Makes the page report the user agent of the measured Chrome instead of the headless one.
 async fn announce_as_measured(page: &Page) -> String {
-    let agent = ImpersonationProfile::measured(BrowserKind::Chrome)
+    let agent = WireFormat::measured(BrowserKind::Chrome)
         .expect("measured")
         .user_agent()
         .to_owned();
@@ -176,14 +176,14 @@ async fn a_browser_started_with_a_proxy_is_not_taken_for_a_direct_one_launched_o
         .expect("a tab")
         .with_timeout(Duration::from_secs(10));
 
-    let launched_none = HttpSession::from_page(&page, None, HttpOptions::new()).await;
-    let attached_none = HttpSession::from_page(&tab, None, HttpOptions::new()).await;
+    let launched_none = HttpSession::from_page(&page, None, HttpSessionOptions::new()).await;
+    let attached_none = HttpSession::from_page(&tab, None, HttpSessionOptions::new()).await;
     let real = ProxyRoute::parse(proxy, None).expect("an egress");
-    let named = HttpSession::from_page(&page, Some(real.clone()), HttpOptions::new()).await;
+    let named = HttpSession::from_page(&page, Some(real.clone()), HttpSessionOptions::new()).await;
     let direct = HttpSession::from_page(
         &page,
         None,
-        HttpOptions::new().browser_proxy_exits_directly(true),
+        HttpSessionOptions::new().browser_proxy_exits_directly(true),
     )
     .await;
     browser.close().await.expect("Chrome closes");
@@ -204,10 +204,10 @@ async fn a_browser_started_with_a_proxy_is_not_taken_for_a_direct_one_launched_o
 async fn a_page_that_announces_itself_as_headless_is_refused() {
     let (browser, page) = open().await;
 
-    let error = HttpSession::from_page(&page, None, HttpOptions::new())
+    let error = HttpSession::from_page(&page, None, HttpSessionOptions::new())
         .await
         .expect_err("the user agent says HeadlessChrome");
     browser.close().await.expect("Chrome closes");
 
-    assert!(matches!(error, HttpError::Impersonate(_)), "{error}");
+    assert!(matches!(error, HttpError::WireFormat(_)), "{error}");
 }

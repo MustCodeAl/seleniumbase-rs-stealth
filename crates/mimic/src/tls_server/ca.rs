@@ -63,7 +63,7 @@ pub struct EphemeralCa {
     /// The CA certificate's validity window.
     validity: Validity,
     /// Issued leaves by host.
-    leaves: Mutex<LeafCache<Arc<Leaf>>>,
+    leaves: Mutex<LeafCache<Arc<LeafCert>>>,
 }
 
 impl EphemeralCa {
@@ -105,7 +105,7 @@ impl EphemeralCa {
     /// The pins of the two public keys: base64 of the SHA-256 of the `SubjectPublicKeyInfo` of
     /// the CA key and of the shared leaf key, in that order.
     ///
-    /// Chrome needs the leaf pin only (see [`EphemeralCa::chrome_spki_arg`]). Do not put the CA
+    /// Chrome needs the leaf pin only (see [`EphemeralCa::spki_launch_arg`]). Do not put the CA
     /// pin in Chrome's list: the server never sends the CA certificate, and a pinned key is a key
     /// that any chain carrying a certificate with it passes with.
     #[must_use]
@@ -124,7 +124,7 @@ impl EphemeralCa {
     /// check: no signature, host name, validity or revocation. So the switch trusts every
     /// chain that contains a certificate with the leaf public key, whoever sends it and whether
     /// or not they hold the private key. The public key is not secret: it is in every
-    /// handshake and in [`Leaf::certificate`]. The pin is safe only while every connection of
+    /// handshake and in [`LeafCert::certificate`]. The pin is safe only while every connection of
     /// that Chrome profile ends at this server, so the proxy that uses it must keep all of
     /// Chrome's traffic, loopback hosts and QUIC included, on the MITM, and nobody may log
     /// or export a leaf certificate. That a chain carrying the pinned key is accepted from any
@@ -136,7 +136,7 @@ impl EphemeralCa {
     /// Only the leaf key is pinned and the server presents the leaf alone, so the CA key is not
     /// a second way in.
     #[must_use]
-    pub fn chrome_spki_arg(&self) -> String {
+    pub fn spki_launch_arg(&self) -> String {
         format!("{CHROME_SPKI_SWITCH}={}", self.leaf_spki_pin())
     }
 
@@ -188,7 +188,7 @@ impl EphemeralCa {
         &self,
         host: &Host<String>,
         now: SystemTime,
-    ) -> Result<Arc<Leaf>, TlsServerError> {
+    ) -> Result<Arc<LeafCert>, TlsServerError> {
         let name = LeafName::from_host(host)?;
         let now = unix_seconds(now)?;
         let margin = seconds(self.options.leaf_renew_margin)?;
@@ -206,10 +206,10 @@ impl EphemeralCa {
     }
 
     /// Signs a new leaf for `name`, valid from `now`.
-    fn issue(&self, name: LeafName, now: i64) -> Result<Leaf, TlsServerError> {
+    fn issue(&self, name: LeafName, now: i64) -> Result<LeafCert, TlsServerError> {
         let validity = Validity::for_leaf(now, self.validity.not_after, &self.options)?;
         let cert = build_leaf_cert(self, &name, validity)?;
-        Ok(Leaf {
+        Ok(LeafCert {
             name,
             cert,
             issuer: self.cert.clone(),
@@ -234,7 +234,7 @@ impl fmt::Debug for EphemeralCa {
 /// One leaf certificate for one CONNECT host, signed by an [`EphemeralCa`].
 ///
 /// It holds a reference to the shared leaf key for the handshake; `Debug` never shows it.
-pub struct Leaf {
+pub struct LeafCert {
     /// The host the SAN names.
     name: LeafName,
     /// The leaf certificate.
@@ -247,7 +247,7 @@ pub struct Leaf {
     validity: Validity,
 }
 
-impl Leaf {
+impl LeafCert {
     /// The leaf certificate.
     #[must_use]
     pub fn certificate(&self) -> &X509Ref {
@@ -293,9 +293,9 @@ impl Leaf {
     }
 }
 
-impl fmt::Debug for Leaf {
+impl fmt::Debug for LeafCert {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Leaf")
+        f.debug_struct("LeafCert")
             .field("host", &self.name.to_string())
             .field("not_before", &self.validity.not_before)
             .field("not_after", &self.validity.not_after)

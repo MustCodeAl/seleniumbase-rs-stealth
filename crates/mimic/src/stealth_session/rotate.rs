@@ -1,7 +1,7 @@
 //! Rotating the profile and the egress of a session, and moving identities in and out.
 
 use super::{StealthError, StealthSession};
-use crate::client::ImpersonationProfile;
+use crate::client::WireFormat;
 use seleniumbase_rs::evasion::fingerprint::{Fingerprint, OsType};
 use seleniumbase_rs::evasion::humanize::Rng;
 use seleniumbase_rs_codec::BrowserKind;
@@ -35,7 +35,7 @@ pub(super) fn check_identity(
 ) -> Result<(), StealthError> {
     identity.verify()?;
     identity.check_proxy(egress)?;
-    let profile = ImpersonationProfile::from_fingerprint(&identity.fingerprint)?;
+    let profile = WireFormat::from_fingerprint(&identity.fingerprint)?;
     identity.check_wire_measurement(&WireMeasurementRef {
         kind: profile.kind(),
         major: profile.major(),
@@ -73,7 +73,7 @@ impl StealthSession {
         )?;
         let identity = Identity::new(
             fingerprint,
-            self.wire_measurement(),
+            self.emulation(),
             self.egress_key().cloned(),
             self.now(),
         )?;
@@ -108,7 +108,7 @@ impl StealthSession {
         let fingerprint = placed.localize(&self.identity.fingerprint)?;
         let identity = Identity::new(
             fingerprint,
-            self.wire_measurement(),
+            self.emulation(),
             Some(next.key().clone()),
             self.now(),
         )?;
@@ -219,7 +219,7 @@ impl StealthSession {
     pub(super) fn route_proxy(&self, egress: Option<ProxyRoute>) -> Result<bool, StealthError> {
         match &self.mitm {
             Some(mitm) => {
-                mitm.swap_upstream(egress)?;
+                mitm.swap_proxy(egress)?;
                 Ok(true)
             }
             None => Ok(false),
@@ -238,7 +238,7 @@ impl StealthSession {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use seleniumbase_rs_codec::emulation;
+    use seleniumbase_rs_codec::measurement;
     use seleniumbase_rs_scrape::egress::geo::{CountryCode, Locale, LocaleExt};
     use seleniumbase_rs_scrape::passport::identity::IdentityError;
 
@@ -276,7 +276,7 @@ mod tests {
         for seed in 0..32 {
             let fingerprint =
                 persona_fingerprint(OsType::Macos, seed, major, None).expect("a persona");
-            let profile = ImpersonationProfile::from_fingerprint(&fingerprint).expect("a profile");
+            let profile = WireFormat::from_fingerprint(&fingerprint).expect("a profile");
             assert_eq!(profile.major(), major, "seed {seed}");
         }
     }
@@ -303,7 +303,7 @@ mod tests {
 
         assert_eq!(fingerprint.locale().as_str(), Some(locale.tag));
         assert_eq!(fingerprint.timezone().as_str(), Some("Europe/Berlin"));
-        assert!(ImpersonationProfile::from_fingerprint(&fingerprint).is_ok());
+        assert!(WireFormat::from_fingerprint(&fingerprint).is_ok());
     }
 
     #[test]
@@ -321,7 +321,7 @@ mod tests {
             StealthError::Scrape(ScrapeError::Identity(IdentityError::ProxyMismatch { .. }))
         ));
         let mut proxied = identity_claiming(measured(), measured());
-        proxied.egress = Some(key("proxy.example"));
+        proxied.proxy = Some(key("proxy.example"));
         assert!(check_identity(&proxied, None).is_err());
         assert!(check_identity(&proxied, Some(&key("other.example"))).is_err());
         assert!(check_identity(&proxied, Some(&key("proxy.example"))).is_ok());
@@ -334,7 +334,7 @@ mod tests {
         assert!(
             matches!(
                 check_identity(&claims_other, None),
-                Err(StealthError::Impersonate(_))
+                Err(StealthError::WireFormat(_))
             ),
             "its user agent names a Chrome that was not measured"
         );

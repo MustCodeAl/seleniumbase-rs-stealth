@@ -18,7 +18,7 @@ use tokio_btls::SslStream;
 use url::Host;
 
 use super::{
-    accept, acceptor, alpn_ids, select_alpn, spki_pin_of, CaOptions, EphemeralCa, Leaf,
+    accept, acceptor, alpn_ids, select_alpn, spki_pin_of, CaOptions, EphemeralCa, LeafCert,
     TlsServerError, ALPN_HTTP1, DEFAULT_HANDSHAKE_TIMEOUT, DEFAULT_LEAF_CAPACITY, MAX_CA_VALIDITY,
 };
 
@@ -74,7 +74,7 @@ fn client_ssl(connector: &SslConnector, server_name: &str, sni: bool) -> Ssl {
 }
 
 /// Accepts one connection on a loopback port with `leaf`, answers `ping` with `pong`.
-async fn serve_once(leaf: Arc<Leaf>) -> (u16, JoinHandle<Result<(), TlsServerError>>) {
+async fn serve_once(leaf: Arc<LeafCert>) -> (u16, JoinHandle<Result<(), TlsServerError>>) {
     let listener = TcpListener::bind("127.0.0.1:0")
         .await
         .expect("bind loopback");
@@ -300,7 +300,7 @@ fn the_ca_is_a_p256_root_and_its_leaves_chain_to_it() {
         .expect("pin is base64");
     assert_eq!(decoded.len(), 32, "a pin is a SHA-256 digest");
     assert_eq!(
-        ca.chrome_spki_arg(),
+        ca.spki_launch_arg(),
         format!("--ignore-certificate-errors-spki-list={leaf_pin}"),
         "Chrome gets the leaf pin only"
     );
@@ -337,7 +337,7 @@ fn the_leaf_cache_evicts_the_least_recently_used_leaf_at_its_bound() {
         ca.leaf_for(&host(&format!("h{i}.test")), fixed_now())
             .expect("leaf")
     };
-    let first: Vec<Arc<Leaf>> = (0..DEFAULT_LEAF_CAPACITY).map(leaf).collect();
+    let first: Vec<Arc<LeafCert>> = (0..DEFAULT_LEAF_CAPACITY).map(leaf).collect();
     assert_eq!(ca.cached_leaves(), DEFAULT_LEAF_CAPACITY);
     assert!(
         Arc::ptr_eq(&leaf(0), &first[0]),
@@ -377,7 +377,7 @@ fn a_leaf_near_expiry_is_issued_again() {
         "inside the margin it is issued again"
     );
     assert!(renewed.not_after_unix() > first.not_after_unix());
-    let serial = |leaf: &Leaf| {
+    let serial = |leaf: &LeafCert| {
         let serial = leaf.certificate().serial_number().to_bn().expect("serial");
         serial.to_vec()
     };

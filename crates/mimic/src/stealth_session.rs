@@ -40,7 +40,7 @@
 //!     .build()
 //!     .await?;
 //! let page = session.fetch("https://example.com/").await?;
-//! println!("{} bytes, {:?} mode", page.body.len(), page.mode);
+//! println!("{} bytes, {:?} mode", page.body.len(), page.fetch_kind);
 //! session.close().await?;
 //! # Ok(())
 //! # }
@@ -92,7 +92,7 @@ pub use super::http_session::Clock;
 
 use self::browser::BrowserLeg;
 use self::pace::SiteLimits;
-use super::http_session::{HttpOptions, HttpSession, Rules};
+use super::http_session::{HttpSessionOptions, HttpSession, HttpRules};
 use super::mitm::{MitmOptions, MitmProxy};
 use seleniumbase_rs::evasion::fingerprint::OsType;
 use seleniumbase_rs::sb_cdp::{LaunchOptionsBuilder, Page};
@@ -112,9 +112,9 @@ struct Wiring {
     store: Arc<dyn Ledger>,
     sink: Arc<dyn EventSink>,
     geo: Arc<dyn GeoResolver>,
-    rules: Rules,
+    rules: HttpRules,
     limits: Option<SiteLimits>,
-    http: HttpOptions,
+    http: HttpSessionOptions,
     mitm: MitmOptions,
     solve_timeout: Duration,
     clock: Clock,
@@ -223,7 +223,7 @@ impl StealthSession {
     /// The HTTP session, in HTTP mode: for requests of your own, such as an API call, that carry
     /// the cookies the session has earned. `None` in browser mode.
     #[must_use]
-    pub fn http(&self) -> Option<&HttpSession> {
+    pub fn http_session(&self) -> Option<&HttpSession> {
         match &self.leg {
             Leg::Http(http) => Some(http),
             Leg::Browser(_) => None,

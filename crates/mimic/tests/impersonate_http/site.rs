@@ -20,9 +20,9 @@ use hyper_util::rt::TokioIo;
 use seleniumbase_rs::evasion::fingerprint::{Fingerprint, OsType};
 use seleniumbase_rs_codec::client_hello::{ClientHello, MAX_CLIENT_HELLO};
 use seleniumbase_rs_codec::h2_frames::H2Preface;
-use seleniumbase_rs_codec::{emulation, BrowserKind};
+use seleniumbase_rs_codec::{measurement, BrowserKind};
 use seleniumbase_rs_mimic::capture_h2::site::h2_reply;
-use seleniumbase_rs_mimic::http_session::{HttpOptions, HttpSession};
+use seleniumbase_rs_mimic::http_session::{HttpSessionOptions, HttpSession};
 use seleniumbase_rs_mimic::tls_server::{
     accept, acceptor, EphemeralCa, ALPN_HTTP1, DEFAULT_HANDSHAKE_TIMEOUT,
 };
@@ -192,7 +192,7 @@ impl Site {
     }
 
     /// Options that trust this site's authority and resolve each host name to it.
-    pub fn options(&self, hosts: &[&str]) -> HttpOptions {
+    pub fn options(&self, hosts: &[&str]) -> HttpSessionOptions {
         options_for(&self.ca, self.addr, hosts)
     }
 
@@ -347,12 +347,12 @@ async fn respond(
 }
 
 /// Options that trust `ca` and resolve each host name to `addr`.
-fn options_for(ca: &EphemeralCa, addr: SocketAddr, hosts: &[&str]) -> HttpOptions {
+fn options_for(ca: &EphemeralCa, addr: SocketAddr, hosts: &[&str]) -> HttpSessionOptions {
     let der = ca.certificate().to_der().expect("the CA as DER");
     let store = CertStore::from_der_certs([der.as_slice()]).expect("a store");
     hosts
         .iter()
-        .fold(HttpOptions::new().trust(store), |options, host| {
+        .fold(HttpSessionOptions::new().trust(store), |options, host| {
             options.resolve(*host, addr)
         })
 }
@@ -416,7 +416,7 @@ impl H2Site {
     }
 
     /// Options that trust this site's authority and resolve each host name to it.
-    pub fn options(&self, hosts: &[&str]) -> HttpOptions {
+    pub fn options(&self, hosts: &[&str]) -> HttpSessionOptions {
         options_for(&self.ca, self.addr, hosts)
     }
 

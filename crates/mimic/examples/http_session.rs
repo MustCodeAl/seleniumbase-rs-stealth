@@ -27,7 +27,7 @@ use std::error::Error;
 use std::process::ExitCode;
 
 use seleniumbase_rs::Fingerprint;
-use seleniumbase_rs_codec::emulation;
+use seleniumbase_rs_codec::measurement;
 use seleniumbase_rs_codec::BrowserKind;
 use seleniumbase_rs_mimic::HttpSession;
 use seleniumbase_rs_scrape::WireMeasurementRef;
@@ -74,8 +74,8 @@ async fn run() -> Result<(), Box<dyn Error>> {
         None,
         stealth_support::unix_now(),
     )?;
-    let session = HttpSession::from_identity(&identity, None, shop.http_options()?)?;
-    println!("profile {}", session.profile().source());
+    let session = HttpSession::from_identity(&identity, None, shop.http_session_options()?)?;
+    println!("profile {}", session.wire_format().source());
 
     for (path, what) in STEPS {
         let reply = session.get(&shop.url(path)).await?;
@@ -109,7 +109,7 @@ async fn run() -> Result<(), Box<dyn Error>> {
     println!("\nJA4 of the measured Chrome {major} (the client cannot send all of it): {measured}");
     println!(
         "left out of the profile because BoringSSL cannot send it: {:?}",
-        session.profile().known_gaps()
+        session.wire_format().known_gaps()
     );
     Ok(())
 }

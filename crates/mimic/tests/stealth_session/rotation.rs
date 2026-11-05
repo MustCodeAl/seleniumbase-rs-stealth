@@ -194,13 +194,13 @@ async fn when_even_the_old_chrome_cannot_come_back_the_session_goes_on_over_http
 
     assert_eq!(session.seed(), seed, "the profile is the old one");
     assert_eq!(session.fetch_kind(), FetchKind::Http);
-    assert!(session.http().is_some() && session.page().is_none());
+    assert!(session.http_session().is_some() && session.page().is_none());
     let fetched = session
         .fetch(&world.site.url("/"))
         .await
         .expect("the session still works");
     assert_eq!(
-        (fetched.mode, fetched.attempts),
+        (fetched.fetch_kind, fetched.attempts),
         (FetchKind::Http, 3),
         "a challenge over HTTP, a solve in a new browser, and the clearance used over HTTP"
     );

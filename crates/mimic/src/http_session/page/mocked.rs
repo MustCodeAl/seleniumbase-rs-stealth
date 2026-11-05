@@ -16,14 +16,14 @@ use seleniumbase_rs_scrape::runtime::proxy_switch::{ContextProxySwitch, ProxySwi
 const HOST: &str = "shop.test";
 
 fn measured_agent() -> String {
-    ImpersonationProfile::measured(BrowserKind::Chrome)
+    WireFormat::measured(BrowserKind::Chrome)
         .expect("measured")
         .user_agent()
         .to_owned()
 }
 
 fn product() -> String {
-    let major = ImpersonationProfile::measured(BrowserKind::Chrome)
+    let major = WireFormat::measured(BrowserKind::Chrome)
         .expect("measured")
         .major();
     format!("Chrome/{major}.0.0.0")
@@ -72,19 +72,19 @@ async fn a_page_hands_over_its_cookies_its_agent_and_its_languages() {
     )
     .await;
 
-    let session = HttpSession::from_page(&page, None, HttpOptions::new())
+    let session = HttpSession::from_page(&page, None, HttpSessionOptions::new())
         .await
         .expect("a session");
 
-    assert_eq!(session.profile().user_agent(), agent);
-    assert_eq!(session.profile().accept_language(), Some("de-DE,de;q=0.9"));
+    assert_eq!(session.wire_format().user_agent(), agent);
+    assert_eq!(session.wire_format().accept_language(), Some("de-DE,de;q=0.9"));
     assert_eq!(session.cookie_count(), 2);
     assert!(session.proxy_route().is_none());
 }
 
 #[tokio::test]
 async fn a_page_of_another_chrome_is_refused_whoever_reports_the_version() {
-    let measured = ImpersonationProfile::measured(BrowserKind::Chrome)
+    let measured = WireFormat::measured(BrowserKind::Chrome)
         .expect("measured")
         .major();
     let newer = measured + 1;
@@ -99,7 +99,7 @@ async fn a_page_of_another_chrome_is_refused_whoever_reports_the_version() {
     .await;
 
     for page in [&by_agent, &by_product] {
-        let error = HttpSession::from_page(page, None, HttpOptions::new())
+        let error = HttpSession::from_page(page, None, HttpSessionOptions::new())
             .await
             .expect_err("refused");
         assert!(
@@ -114,7 +114,7 @@ async fn a_page_that_reports_nothing_is_a_browser_error() {
     let (browser, _mock) = Browser::new_mocked();
     let page = browser.default_page().await.expect("a tab");
 
-    let error = HttpSession::from_page(&page, None, HttpOptions::new())
+    let error = HttpSession::from_page(&page, None, HttpSessionOptions::new())
         .await
         .expect_err("no agent");
 
@@ -133,7 +133,7 @@ async fn sync_back_writes_what_responses_set_and_removed_and_nothing_else() {
         ],
     )
     .await;
-    let session = HttpSession::from_page(&page, None, HttpOptions::new())
+    let session = HttpSession::from_page(&page, None, HttpSessionOptions::new())
         .await
         .expect("a session");
     session.inner().jar.absorb(
@@ -167,7 +167,7 @@ async fn sync_back_writes_what_responses_set_and_removed_and_nothing_else() {
 #[tokio::test]
 async fn a_failed_sync_keeps_the_changes_for_the_next_attempt() {
     let (_browser, page, mock) = scripted(&measured_agent(), &[], &product(), Vec::new()).await;
-    let session = HttpSession::from_page(&page, None, HttpOptions::new())
+    let session = HttpSession::from_page(&page, None, HttpSessionOptions::new())
         .await
         .expect("a session");
     session
@@ -193,7 +193,7 @@ async fn a_failed_removal_is_kept_too() {
         vec![cdp_cookie("old", "O", HOST)],
     )
     .await;
-    let session = HttpSession::from_page(&page, None, HttpOptions::new())
+    let session = HttpSession::from_page(&page, None, HttpSessionOptions::new())
         .await
         .expect("a session");
     session
@@ -232,11 +232,11 @@ async fn the_proxy_of_the_pages_context_is_taken_or_must_match() {
         .await
         .expect("a tab behind the proxy");
 
-    let adopted = HttpSession::from_page(&page, None, HttpOptions::new())
+    let adopted = HttpSession::from_page(&page, None, HttpSessionOptions::new())
         .await
         .expect("a session");
     let other = ProxyRoute::parse("http://elsewhere.example:8080", None).expect("a spec");
-    let refused = HttpSession::from_page(&page, Some(other), HttpOptions::new())
+    let refused = HttpSession::from_page(&page, Some(other), HttpSessionOptions::new())
         .await
         .expect_err("mismatch");
 

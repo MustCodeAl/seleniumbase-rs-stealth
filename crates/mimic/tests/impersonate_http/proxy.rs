@@ -3,7 +3,7 @@
 
 use seleniumbase_rs::evasion::fingerprint::OsType;
 use seleniumbase_rs_codec::BrowserKind;
-use seleniumbase_rs_mimic::http_session::{HttpError, HttpOptions, HttpSession};
+use seleniumbase_rs_mimic::http_session::{HttpError, HttpSessionOptions, HttpSession};
 use seleniumbase_rs_scrape::passport::identity::WireMeasurementRef;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
@@ -45,7 +45,7 @@ fn session_behind(spec: &str) -> HttpSession {
         },
         Some(proxy.key().clone()),
     );
-    HttpSession::from_identity(&base, Some(proxy), HttpOptions::new()).expect("a session")
+    HttpSession::from_identity(&base, Some(proxy), HttpSessionOptions::new()).expect("a session")
 }
 
 #[tokio::test]
@@ -106,7 +106,7 @@ async fn the_bypass_list_sends_a_host_around_the_proxy() {
         Some(proxy.key().clone()),
     );
     let closed = std::net::SocketAddr::from(([127, 0, 0, 1], 1));
-    let options = HttpOptions::new()
+    let options = HttpSessionOptions::new()
         .bypass("direct.test")
         .resolve("direct.test", closed);
     let session = HttpSession::from_identity(&base, Some(proxy), options).expect("a session");
