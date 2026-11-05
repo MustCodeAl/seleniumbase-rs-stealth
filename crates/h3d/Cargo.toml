@@ -1,0 +1,49 @@
+# sbrs-h3d: HTTP/3 requests for the wire crate, out of process (docs/http3.md).
+#
+# A workspace of its own: phantom-http builds its own BoringSSL, and the two BoringSSL builds
+# cannot be linked into one binary (docs/design/http3.md), so this package depends on phantom and
+# on nothing else from this repository, and the root workspace never builds it.
+[package]
+name = "seleniumbase-rs-h3d"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.99"
+license = "MIT"
+repository = "https://github.com/MustCodeAl/seleniumbase-rs-stealth"
+publish = false
+description = "sbrs-h3d: the HTTP/3 helper the wire crate starts and talks to over stdin and stdout"
+
+[workspace]
+
+[[bin]]
+name = "sbrs-h3d"
+path = "src/main.rs"
+
+[dependencies]
+# Pinned to the exact version the HTTP/3 spike measured against Chrome 156. An upgrade is a pull
+# request that runs the spike's capture again and updates docs/http3.md.
+phantom = { package = "phantom-http", version = "=0.6.0" }
+base64 = "0.23"
+http = "1.5"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1.53", features = ["macros", "rt-multi-thread", "time", "io-std", "io-util"] }
+
+[dev-dependencies]
+# The local HTTP/3 server of the tests: upstream quinn, rustls and h3, not phantom's forks.
+bytes = "1.12"
+h3 = "=0.0.8"
+h3-quinn = "=0.0.10"
+quinn = { version = "=0.11.12", default-features = false, features = ["runtime-tokio", "rustls-ring"] }
+rcgen = "=0.13.2"
+rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
+tempfile = "3.27"
+tokio = { version = "1.53", features = ["process"] }
+
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+allow_attributes_without_reason = "warn"
+
+[lints.rust]
+missing_debug_implementations = "warn"
+unsafe_code = "forbid"

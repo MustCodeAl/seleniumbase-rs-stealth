@@ -18,6 +18,8 @@
 pub mod capture_h2;
 pub mod client;
 pub mod convert;
+#[cfg(feature = "http3")]
+pub mod http3;
 pub mod http_session;
 pub mod mitm;
 pub mod stealth_session;
@@ -25,6 +27,8 @@ mod sync;
 pub mod tls_server;
 
 pub use client::{WireFormat, WireFormatBuilder, WireFormatError, WireProtocol};
+#[cfg(feature = "http3")]
+pub use http3::{Http3Client, Http3Error, Http3Options, Http3Request, Http3Response};
 pub use http_session::{
     HttpAttempt, HttpError, HttpFetch, HttpRequest, HttpResponse, HttpRules, HttpSession,
     HttpSessionOptions, HttpVerdict, Method, ResponseHeaders,

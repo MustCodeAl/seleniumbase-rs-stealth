@@ -16,6 +16,7 @@ The design is `docs/design/fingerprint-api-v2.md` in seleniumbase-rs, and its
 at `c0bd111`; a core from before that change does not compile against these crates.
 Only `scrape` and `mimic` were affected; `codec` holds no fingerprint.
 
+
 ### Breaking
 
 - **The stealth API is named after seleniumbase-rs, not after the project it was ported
@@ -141,6 +142,14 @@ Only `scrape` and `mimic` were affected; `codec` holds no fingerprint.
 
 ### Added
 
+- HTTP/3, experimental and off by default (`docs/http3.md`). The new helper program `sbrs-h3d`
+  (`crates/h3d`, a workspace of its own) sends requests with phantom-http `=0.6.0` and its
+  Chrome 156 profile. It talks to the wire crate over stdin and stdout, because the two
+  BoringSSL builds cannot share one binary. The wire crate's feature `http3` (facade feature
+  `http3`) adds `wire::http3::{Http3Client, Http3Options, Http3Request, Http3Response,
+  Http3Error}`. Requests go over HTTP/3 only, never falling back, and a missing helper is a typed
+  error. The helper's tests drive it against a local quinn/h3 server; the docs page lists what
+  matches Chrome and what does not.
 - Unified root facade `seleniumbase-rs-stealth`: re-exports the core public API,
   including `sb_cdp`, `stealth` and `fingerprint`, plus default `codec` and
   `scrape` modules. `mimic` is opt-in for BoringSSL-backed TLS/HTTP2 impersonation.

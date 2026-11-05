@@ -9,6 +9,10 @@ repository.workspace = true
 [lints]
 workspace = true
 
+[features]
+# HTTP/3 through the sbrs-h3d helper program (crates/h3d, docs/http3.md). Off by default.
+http3 = []
+
 [dependencies]
 seleniumbase-rs.workspace = true
 seleniumbase-rs-codec.workspace = true

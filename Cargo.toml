@@ -12,6 +12,8 @@ default = ["scrape"]
 codec = ["dep:seleniumbase-rs-codec"]
 scrape = ["dep:seleniumbase-rs-scrape", "codec"]
 wire = ["dep:seleniumbase-rs-wire", "scrape"]
+# HTTP/3 through the sbrs-h3d helper (crates/h3d, docs/http3.md).
+http3 = ["wire", "seleniumbase-rs-wire/http3"]
 
 [dependencies]
 seleniumbase-rs = { workspace = true }
