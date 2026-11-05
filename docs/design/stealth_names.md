@@ -1,7 +1,7 @@
 # Stealth names: what the stealth API should cover, build on, add to core and be called
 
-Status: phase 1 note, sixth round. Phase 2 started on the user's word, with the decisions
-marked **Taken** below; the owner can change any of them.
+Status: phase 1 note, sixth round, with the user's answers to every decision. Phase 2 is
+under way (stealth PR #6 and a core PR).
 
 ## What the stealth crate is for
 
@@ -64,7 +64,7 @@ impersonating HTTP client) is new ground and stays here.
 | builders' `fingerprint` | `LaunchOptionsBuilder::fingerprint` | same data (the first fingerprint) | build on core: read it from the `LaunchOptionsBuilder` given to `launch_options` |
 | `StealthIdentity` | `Session`, `Fingerprint` | same data plus stealth parts | build on core: `Identity` holding a core `Session` and `Fingerprint`, plus the wire measurement, proxy route and clearances |
 | `ImpersonationProfile` (User-Agent, Accept-Language, client hints) and the matching `CustomProfileBuilder` setters | `Fingerprint` | same data | build on core: `WireFormat` reads them from the `Fingerprint`; `user_agent`, `accept_language`, `with_locale` removed (they return or set the fingerprint's values). `random` stays: it builds on `Fingerprint::randomized_with_major` and also picks the measured wire entry |
-| codec `HeaderIdentity` | `Fingerprint` | User-Agent and languages: same data. Client hints: no, measured instead of computed | build on core: `ClientHeaders::from_fingerprint` beside `from_captured`; both ways of filling the client hints stay |
+| codec `HeaderIdentity` | `Fingerprint` | User-Agent and languages: same data. Client hints: no, measured instead of computed | build on core: `ClientHeaders::from_fingerprint` (the default, decision 8) beside `from_captured`; both ways of filling the client hints stay |
 | `EgressRef`, "egress" | `Proxy`, `ContextRoute` | same data plus the exit country | build on core: `ProxyRoute`; "egress" becomes "proxy" in member names |
 | `GeoInfo.coordinates` | `Geolocation` | same data | build on core |
 | codec `BrowserKind` | `browser::config::Browser` | yes: a list of browsers | remove |
@@ -121,15 +121,15 @@ The strategies and algorithms above, in core's patterns, as one core PR in phase
 |---|---|---|
 | Reviewed | 1686 | 264 |
 | Keep | 1519 | 175 |
-| Rename | 107 | 55 |
+| Rename | 104 | 54 |
 | Add to core (another strategy or algorithm) | 25 | 19 |
 | Build on core | 19 | 8 |
-| Remove (same result, same way) | 16 | 7 |
+| Remove (same result, same way) | 19 | 8 |
 
 | Crate | Keep | Rename | Add to core | Build on core | Remove |
 |---|---|---|---|---|---|
 | packages, features, facade | 10 | 3 | 0 | 0 | 1 |
-| codec | 561 | 12 | 0 | 5 | 3 |
+| codec | 561 | 9 | 0 | 5 | 6 |
 | scrape | 547 | 50 | 25 | 8 | 4 |
 | mimic | 401 | 42 | 0 | 6 | 8 |
 
@@ -201,34 +201,42 @@ each computes the same result the same way (`with_locale`, for example, calls co
 | `per_site_rate`, `pacing` | `rate_limit` (core's `RateLimiter`) |
 | aliases in `lib.rs` (`Fetched as HttpFetched`, `SpecError as H2SpecError`, ...) | the exported name becomes the source name |
 
-## Decisions (taken, so the work could start; the owner can change any of them)
+## Decisions (the user's)
 
-The user asked to start phase 2 without waiting for the owner, taking this note's
-recommended answer for each decision. Each answer is marked **Taken**.
+The user answered every decision: "do all your recommended proposals and yes to everything
+and whatever someone using the library would prefer". The answers:
 
-1. **`Identity`.** The saved identity becomes `Identity`, built on core's `Session` and
+1. **`Identity`.** Yes: the saved identity is `Identity`, built on core's `Session` and
    `Fingerprint`. Core's `sb_cdp::identity` module holds `StealthPlan` (there is no core
-   `Identity` type). **Taken: `Identity`.**
-2. **`fingerprint(...)`.** The stealth builders read the first fingerprint from the
-   `LaunchOptionsBuilder` given to `launch_options` (core's `fingerprint` option) instead
-   of their own setter. **Taken: yes**, once core's launch builder can hand its fingerprint
-   back (it lives in `src/sb_cdp/launch.rs`, which is someone else's this week; until
-   then the setters stay).
-3. **Where the challenge strategies go.** **Taken: core's `SolveOptions`** (rounds, proxy
-   and fingerprint rotation, cooldown, clearance check, `retry_policy`) and the interstitial
-   wait in `Page::solve_captcha`. The alternative was a launch option
-   (`LaunchOptionsBuilder::challenges(...)`).
-4. **Proxy countries.** **Taken: country picks stay a stealth extension trait on core's
-   `ProxyList`**; `ProxyEntry` gets no country.
-5. **The `mimic` crate.** **Taken: rename the package `seleniumbase-rs-wire`** (feature and
-   facade path `wire`).
-6. **Two wire words.** **Taken: keep both**, `WireMeasurement` (codec: measured data with
-   provenance) and `WireFormat` (what a client sends, built from a measurement and a core
-   `Fingerprint`).
-7. **Events.** **Taken: keep the typed `EventSink`** with its `tracing` sink.
-8. **Client hints by default.** **Taken: the measured values of the capture**, so the
-   client hints match the measured TLS and HTTP/2 of the same Chrome; core's computed ones
-   are the other way (`ClientHeaders::from_fingerprint`).
+   `Identity` type).
+2. **`fingerprint(...)`.** Yes: the stealth builders read the first fingerprint from the
+   `LaunchOptionsBuilder` given to `launch_options` (core's `fingerprint` option), and their
+   own setter goes.
+3. **Where the challenge strategies go.** On core's `SolveOptions`, with the interstitial
+   wait in `Page::solve_captcha`: per-call control for the user, and it stays out of
+   `src/sb_cdp/launch.rs`, which is the owner's.
+4. **Proxy countries.** Choosing a proxy by country stays a stealth extension on core's
+   `ProxyList`; `ProxyEntry` gets no country.
+5. **The `mimic` crate.** Yes: it is `seleniumbase-rs-wire` (feature and facade path
+   `wire`), with every caller, doc and contract.
+6. **Two wire words.** Keep both: `WireMeasurement` (codec: measured data with provenance)
+   and `WireFormat` (what a client sends) name two different things, and one name means
+   one thing.
+7. **Events.** Keep the typed `EventSink` with its `tracing` sink, so a library user can
+   act on events in code and still see them in logs.
+8. **Client hints by default.** Core's values computed from the fingerprint's major, so the
+   HTTP client claims the same browser as the tab (`ClientHeaders::from_fingerprint`). The
+   captured values stay available as the other way (`ClientHeaders::from_captured`).
+
+## Naming conventions
+
+The new names follow the Rust API Guidelines and this project's patterns: no `get_`
+prefix on getters (`proxy_route()`, `fetch_kind()`, `h2_spec()`), `with_*` for a consuming
+setter on an owned value that is not a builder (core's `BrowserConfig::with_proxy`, so
+`ProxyList::with_rotation`), plain setters on builders (core's `LaunchOptionsBuilder`),
+`from_*` for constructors, a method instead of a free function when there is an obvious
+receiver, one name per item (no aliases), `<Thing>Error` for errors, and no `Error` in the
+variants of a type that is not an error.
 
 ## Phase 2 (started)
 
@@ -390,9 +398,9 @@ or extend), remove (the same result computed the same way, with the reason).
 
 | Item | Kind | Copied | Verdict | Proposed | Why |
 |---|---|---|---|---|---|
-| `emulation_for_kind` | function | yes | rename | `wire_measurement_for` | **copied** (`for_kind`); follows `WireMeasurement`, and takes core's `Browser` once `BrowserKind` goes |
-| `get_emulation` | function |  | rename | `wire_measurement` | follows `WireMeasurement`; no `get_` prefix (Rust API guidelines, C-GETTER) |
-| `measured_emulations` | function |  | rename | `wire_measurements` | follows `WireMeasurement` |
+| `emulation_for_kind` | function | yes | remove | `measurement::for_kind` | same result, same way: a second name for `measurement::for_kind` at the crate root; one name per item, called through its module |
+| `get_emulation` | function |  | remove | `measurement::get` | same result, same way: a second name for `measurement::get`; one name per item |
+| `measured_emulations` | function |  | remove | `measurement::all` | same result, same way: a second name for the module's lookup, which is now `measurement::all` (`measured` stuttered after `measurement::`) |
 | `Emulation` | struct | yes | rename | `WireMeasurement` | **copied** word (their identity's "emulation kind"); **clash** with core `sb_cdp::state::Emulation` (device emulation). It is one browser's measured TLS, HTTP/2 and header shape, which core does not have |
 | `Emulation.kind` | field | yes | keep |  | plain data name |
 | `Emulation.major` | field | yes | keep |  | plain data name |
@@ -1048,7 +1056,7 @@ or extend), remove (the same result computed the same way, with the reason).
 | `RotationStrategy::StickyPerSite` | enum variant | yes | add to core | variant of core `RotationStrategy` | another strategy core lacks |
 | `EgressOutcome` | enum |  | add to core | core `ProxyOutcome`, the argument of `ProxyList::report` | goes with the rotation strategies |
 | `EgressOutcome::Success` | enum variant |  | add to core | variant of core `ProxyOutcome` | goes with its type |
-| `EgressOutcome::ConnectError` | enum variant |  | add to core | variant of core `ProxyOutcome` | goes with its type |
+| `EgressOutcome::ConnectError` | enum variant |  | add to core | variant `ConnectFailed` of core `ProxyOutcome` | no `Error` in the variant of a type that is not an error |
 | `EgressOutcome::Challenged` | enum variant |  | add to core | variant of core `ProxyOutcome` | goes with its type |
 | `EgressOutcome::Blocked` | enum variant |  | add to core | variant of core `ProxyOutcome` | goes with its type |
 | `DEFAULT_QUARANTINE_AFTER` | const |  | keep |  | says what it is; no core item of that name or concept |
@@ -1111,7 +1119,7 @@ or extend), remove (the same result computed the same way, with the reason).
 | `CookieJar::len` | method | yes | keep |  | says what it does |
 | `CookieJar::is_empty` | method | yes | keep |  | says what it does |
 | `CookieJar::cookies` | method | yes | keep |  | says what it does |
-| `CookieJar::store` | method | yes | rename | `apply_set_cookie` | store means a persistent store in core (`SessionStore`) and here (`StateStore`); this applies one Set-Cookie header |
+| `CookieJar::store` | method | yes | rename | `receive` | it receives one Set-Cookie header; store means a persistent store in core (`SessionStore`) and here (`Ledger`) |
 | `CookieJar::header_for` | method | yes | keep |  | says what it does |
 | `CookieJar::from_cdp` | method | yes | keep |  | says what it does |
 | `CookieJar::to_cdp` | method | yes | keep |  | says what it does |
@@ -1706,7 +1714,7 @@ or extend), remove (the same result computed the same way, with the reason).
 
 | Item | Kind | Copied | Verdict | Proposed | Why |
 |---|---|---|---|---|---|
-| `impersonation_client` | function | yes | rename | `wire_client` | "impersonate" is curl_cffi's word (`impersonate="chrome"`), and core dropped its `impersonate` feature in 0.3.0 |
+| `impersonation_client` | function | yes | rename | method `WireFormat::client_builder()` | **copied** (`impersonation_client`); a free function with an obvious receiver is a method (Rust API guidelines, C-METHOD), and it returns a builder, not a client |
 | `CustomProfileBuilder` | struct |  | rename | `WireFormatBuilder` | follows `WireFormat`; profile means a browser profile in core |
 | `CustomProfileBuilder::new` | method |  | keep |  | says what it does |
 | `CustomProfileBuilder::base` | method |  | keep |  | says what it does |
