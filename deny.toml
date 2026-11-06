@@ -1,0 +1,49 @@
+# cargo-deny configuration — supply-chain gate for seleniumbase-rs-stealth.
+#
+# Modelled on the deny.toml of the core repository (seleniumbase-rs). Run locally with
+# `cargo deny --workspace check`: the root manifest is a package as well as the workspace,
+# so without `--workspace` cargo-deny roots the graph at the root package alone and never
+# sees `crates/codec`, `crates/scrape` and `crates/wire` or their dependencies. Every
+# exception below has to be written down and reviewed rather than silently tolerated.
+
+[graph]
+all-features = true
+
+[advisories]
+# Each ignore needs a rationale and, where the fix is upstream, a pointer to what we are
+# waiting on. None today: `cargo audit` reports no advisory and no unmaintained crate for
+# this lockfile (2026-11-06).
+ignore = []
+
+[licenses]
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-3-Clause",
+    "ISC",
+    "Unicode-3.0",
+    "Zlib",
+    "MPL-2.0",
+    "CDLA-Permissive-2.0",
+    "Unlicense",
+]
+confidence-threshold = 0.9
+
+[bans]
+multiple-versions = "warn"
+# "warn", where the core repository has "deny": the three workspace crates are not
+# `publish = false`, and they depend on one another by path with no `version`, and on the core
+# library by git with no `version`. crates.io accepts neither, so cargo-deny reports 3 crates
+# (codec, scrape, wire) as wildcard dependencies. That is a real finding for the publish lane
+# (docs/design/dependency_review.md in the core repository) and not a reason to fail every
+# run. Make it "deny" once the manifests carry versions.
+wildcards = "warn"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+# The core library (`seleniumbase-rs`) comes from its own repository, as a plain git
+# dependency so that Cargo resolves a user's copy and ours to one commit, until it is on
+# crates.io.
+allow-git = ["https://github.com/MustCodeAl/seleniumbase-rs"]
