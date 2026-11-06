@@ -1,5 +1,11 @@
 # HTTP/3 (experimental, off by default)
 
+> [!IMPORTANT]
+> This page is not on the docs site. Its user-facing copy is
+> [HTTP/3](https://mustcodeal-seleniumbase-rs.docs7.io/stealth/advanced/http3) on the core site
+> (`docs/stealth/advanced/http3.md` in the seleniumbase-rs repository). When the measurements
+> below change (a phantom upgrade), update both.
+
 The wire crate sends HTTP/1.1 and HTTP/2 with Chrome's TLS and HTTP/2 settings through wreq and
 `BoringSSL`. HTTP/3 needs a QUIC stack. The one used here is
 [phantom-http](https://crates.io/crates/phantom-http) `=0.6.0`, which brings its own `BoringSSL`.

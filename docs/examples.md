@@ -1,5 +1,11 @@
 # Examples
 
+> [!IMPORTANT]
+> This page is not on the docs site. Its user-facing copy is
+> [Runnable examples](https://mustcodeal-seleniumbase-rs.docs7.io/scraping/advanced-stealthy/examples)
+> on the core site (`docs/scraping/advanced-stealthy/examples.md` in the seleniumbase-rs
+> repository); a change users should read goes there.
+
 Every example is a file under `crates/<crate>/examples/`. Run them from the workspace root with
 `cargo run -p <package> --example <name>`. None of them reaches the outside network: the sites
 they talk to are started on `127.0.0.1` by the example itself.
