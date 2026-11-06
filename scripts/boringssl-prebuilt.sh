@@ -4,7 +4,7 @@
 # (docs/contributing/boringssl.md).
 #
 #   sh scripts/boringssl-prebuilt.sh
-#   BORING_BSSL_PATH=<the folder it prints> cargo test --workspace --features seleniumbase-rs-stealth/mimic
+#   BORING_BSSL_PATH=<the folder it prints> cargo test --workspace --features seleniumbase-rs-stealth/wire
 #
 # The folder is named after the btls-sys version in Cargo.lock, so a version change builds a
 # new one. Set BORING_BSSL_PATH for this workspace's commands only, never in a shell profile:
@@ -39,4 +39,4 @@ fi
 
 echo
 echo "Use it for one command at a time:"
-echo "  BORING_BSSL_PATH=\"$dir\" cargo test --workspace --features seleniumbase-rs-stealth/mimic"
+echo "  BORING_BSSL_PATH=\"$dir\" cargo test --workspace --features seleniumbase-rs-stealth/wire"
