@@ -1,0 +1,175 @@
+# GitLab CI for seleniumbase-rs-stealth, modelled on the one of seleniumbase-rs (core).
+#
+# The repository is mirrored to GitLab.com after each gated publish; CI runs on GitLab's shared
+# Linux runners (2 vCPUs, 8 GB). Pipelines are created for merge requests, for the default branch
+# (`main`) and for `lane/*` and `batch/*` branches, so a lane is gated on GitLab before main moves
+# to it. A new push cancels a pipeline that is still running (every job is `interruptible`).
+#
+#   gate          fmt and clippy with `-D warnings`, the whole workspace
+#   test          the test suite of every crate (tests that start a real Chrome are `#[ignore]`d)
+#   supply-chain  cargo deny and cargo audit
+#   h3d           MANUAL: the tests of the HTTP/3 helper `crates/h3d`, a workspace of its own
+#
+# The `wire` crate links BoringSSL through btls, whose build script (`btls-sys`) compiles about 280
+# C and C++ files with cmake and runs bindgen: the image needs cmake, a C and C++ compiler and
+# libclang. Nothing is prebuilt in CI (`BORING_BSSL_PATH` is a local speed-up, see
+# docs/contributing/boringssl.md); the build is in the cache, keyed by Cargo.lock.
+#
+# The core library comes in by git (github.com/MustCodeAl/seleniumbase-rs) and builds with it.
+#
+# A pipeline made by hand (Build > Pipelines > New pipeline) holds every job as a manual job.
+# To push a commit that needs no pipeline, put `[ci skip]` in its message.
+#
+# No job needs a secret, and none prints one: there is no `set -x`, no `env` and no token here.
+#
+# The Rust version is `rust-version` of Cargo.toml. When it moves, move RUST_VERSION below.
+
+workflow:
+  auto_cancel:
+    on_new_commit: interruptible
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: '$CI_COMMIT_BRANCH =~ /^(lane|batch)\//'
+    - if: $CI_PIPELINE_SOURCE == "web"
+
+default:
+  interruptible: true
+  retry:
+    max: 1
+    when: runner_system_failure
+
+variables:
+  RUST_VERSION: "1.99"
+  # Two build jobs fit the 2 vCPUs and 8 GB of the runner.
+  CARGO_BUILD_JOBS: "2"
+  CARGO_INCREMENTAL: "0"
+  CARGO_PROFILE_DEV_DEBUG: "0"
+  CARGO_TERM_COLOR: always
+  # A GitLab cache can only hold paths inside the project folder, so cargo keeps its registry there.
+  CARGO_HOME: $CI_PROJECT_DIR/.cargo
+
+.rules_automatic:
+  - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  - if: '$CI_COMMIT_BRANCH =~ /^(lane|batch)\//'
+  - if: $CI_PIPELINE_SOURCE == "web"
+    when: manual
+    allow_failure: true
+
+.rules_by_hand:
+  - when: manual
+    allow_failure: true
+
+.rust:
+  image: rust:${RUST_VERSION}-bookworm
+
+# What btls-sys needs to build BoringSSL (the official Rust image has the C and C++ compilers).
+.boringssl:
+  before_script:
+    - apt-get update -qq
+    - apt-get install -y -qq --no-install-recommends cmake clang libclang-dev pkg-config
+    - cmake --version
+    - clang --version
+
+# The cargo registry and the build folder, keyed by Cargo.lock. Saved even when the job fails: a
+# failed test run still built every dependency (BoringSSL is most of a cold build). Test
+# executables are linked again on the next run, so they are dropped before the upload.
+.target_cache:
+  cache:
+    key:
+      prefix: rust-target
+      files:
+        - Cargo.lock
+    paths:
+      - .cargo/registry/index/
+      - .cargo/registry/cache/
+      - .cargo/git/db/
+      - target/
+    when: always
+  after_script:
+    - |
+      [ -d target/debug ] || exit 0
+      rm -rf target/doc target/debug/incremental target/debug/examples target/tmp
+      find target/debug -maxdepth 1 -type f -delete
+      find target/debug/deps -type f -perm /111 ! -name '*.so' -delete
+
+gate:
+  extends:
+    - .rust
+    - .boringssl
+    - .target_cache
+  rules:
+    - !reference [.rules_automatic]
+  timeout: 2h
+  script:
+    - rustc --version
+    - cargo --version
+    - rustup component add rustfmt clippy
+    - cargo fmt --all -- --check
+    - cargo clippy --workspace --all-targets -- -D warnings
+
+test:
+  extends:
+    - .rust
+    - .boringssl
+    - .target_cache
+  rules:
+    - !reference [.rules_automatic]
+  timeout: 2h
+  script:
+    - cargo test --workspace --no-fail-fast
+
+# `cargo deny --workspace check` covers the facade and the codec, scrape and wire crates; without
+# the flag cargo-deny roots the graph at the facade alone. The tools are built from source the
+# first time and kept in the cache.
+supply-chain:
+  extends: .rust
+  rules:
+    - !reference [.rules_automatic]
+  cache:
+    key:
+      prefix: supply-chain
+      files:
+        - Cargo.lock
+    paths:
+      - .cargo/bin/
+      - .cargo/.crates.toml
+      - .cargo/.crates2.json
+      - .cargo/registry/index/
+      - .cargo/registry/cache/
+      - .cargo/git/db/
+    when: always
+  script:
+    - export PATH="$CARGO_HOME/bin:$PATH"
+    - cargo install --locked --version '^0.20' cargo-deny
+    - cargo install --locked cargo-audit
+    - cargo deny --all-features --workspace check
+    - cargo audit
+
+# MANUAL. `crates/h3d` is a workspace of its own (phantom-http builds its own BoringSSL), so the
+# jobs above never build it. Its tests start a local HTTP/3 server on the loopback interface.
+h3d:
+  extends:
+    - .rust
+    - .boringssl
+  rules:
+    - !reference [.rules_by_hand]
+  timeout: 2h
+  cache:
+    key:
+      prefix: h3d-target
+      files:
+        - crates/h3d/Cargo.lock
+    paths:
+      - .cargo/registry/index/
+      - .cargo/registry/cache/
+      - .cargo/git/db/
+      - crates/h3d/target/
+    when: always
+  script:
+    - cd crates/h3d
+    - rustup component add rustfmt clippy
+    - cargo fmt --all -- --check
+    - cargo clippy --all-targets -- -D warnings
+    - cargo test
