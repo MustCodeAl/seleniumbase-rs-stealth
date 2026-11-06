@@ -39,7 +39,7 @@ pub(super) async fn open_leg(
             let proxy = proxy_for(wiring, mitm, profile, egress).await?;
             let leg = BrowserLeg::launch(wiring, &proxy, identity, claimed).await?;
             wiring.sink.emit(&ScrapeEvent::IdentityRestored {
-                cookies: identity.cookies.len(),
+                cookies: identity.session.cookies().len(),
             });
             Ok(Leg::Browser(leg))
         }
@@ -281,7 +281,7 @@ impl StealthSession {
         if let Leg::Browser(leg) = &self.leg {
             match leg.cookies(now).await {
                 Ok(cookies) => {
-                    identity.cookies = cookies;
+                    identity.replace_cookies(&cookies, now);
                     identity.refresh_clearances(now);
                 }
                 Err(error) => {
@@ -307,10 +307,10 @@ impl StealthSession {
             Leg::Http(http) => Ok(http.export_identity(&self.identity)),
             Leg::Browser(leg) => {
                 let mut identity = self.identity.clone();
-                identity.cookies = leg.cookies(now).await?;
+                identity.replace_cookies(&leg.cookies(now).await?, now);
                 identity.refresh_clearances(now);
                 self.emit(&ScrapeEvent::IdentityExported {
-                    cookies: identity.cookies.len(),
+                    cookies: identity.session.cookies().len(),
                 });
                 Ok(identity)
             }

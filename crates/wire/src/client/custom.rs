@@ -1,6 +1,5 @@
 //! The builder that layers caller-supplied inputs over a measured base.
 
-use super::identity::with_hints;
 use super::{WireFormat, WireFormatError};
 use crate::convert;
 use seleniumbase_rs::evasion::fingerprint::{ClientHints, OsType};
@@ -346,7 +345,7 @@ impl WireFormatBuilder {
         }
         profile.headers = headers;
         if let Some(hints) = &self.client_hints {
-            profile.identity = with_hints(profile.identity, hints);
+            profile.identity = profile.identity.with_client_hints_from(hints);
         }
         if let Some(language) = self.accept_language {
             profile.identity.accept_language = Some(language);

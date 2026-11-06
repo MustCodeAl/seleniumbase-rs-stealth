@@ -290,7 +290,7 @@ async fn an_identity_carries_the_fingerprint_the_cookies_and_the_clearance() {
         .expect("the identity exports");
 
     assert_eq!(&identity.fingerprint, scraper.fingerprint());
-    assert_eq!(identity.cookies.len(), 1);
+    assert_eq!(identity.session.cookies().len(), 1);
     assert_eq!(identity.wire_measurement.kind, BrowserKind::Chrome);
     assert_eq!(identity.wire_measurement.major, 155);
     assert_eq!(identity.wire_measurement.os, host_os());

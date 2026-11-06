@@ -165,7 +165,7 @@ fn assert_origin_saw_one_browser(site: &ChallengeSite) {
 async fn assert_clearance_moved(session: &StealthSession, site: &ChallengeSite) {
     let identity = session.export_identity().await.expect("an identity");
     let names: Vec<_> = identity
-        .cookies
+        .session
         .cookies()
         .iter()
         .map(|c| c.name.as_str())
@@ -180,7 +180,7 @@ async fn assert_clearance_moved(session: &StealthSession, site: &ChallengeSite) 
         "about {DEFAULT_TTL_SECS} s of clearance, not {left}"
     );
     assert!(identity
-        .cookies
+        .session
         .cookies()
         .iter()
         .any(|c| c.value == site.token()));

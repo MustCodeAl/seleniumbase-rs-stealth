@@ -24,6 +24,7 @@ use crate::challenge::detect::{clearance_cookie, ProtectionVendor};
 use crate::egress::route::ProxyKey;
 use crate::jar::store::{site_of, CookieJar};
 use seleniumbase_rs::evasion::fingerprint::{Fingerprint, FingerprintError, OsType, Spoof};
+use seleniumbase_rs::sb_cdp::{Cookie, Session};
 use seleniumbase_rs_codec::BrowserKind;
 
 #[cfg(test)]
@@ -32,7 +33,7 @@ pub(crate) mod fixtures;
 mod tests;
 
 /// The version of the identity layout. A file with another version is refused, not guessed at.
-pub const IDENTITY_SCHEMA: u32 = 1;
+pub const IDENTITY_SCHEMA: u32 = 2;
 
 /// The expiry recorded for a clearance cookie that has none (a session cookie): no known end.
 pub const NO_EXPIRY: u64 = u64::MAX;
@@ -111,8 +112,10 @@ pub struct Identity {
     pub fingerprint: Fingerprint,
     /// The measured browser the wire behaviour comes from.
     pub wire_measurement: WireMeasurementRef,
-    /// The cookies the identity holds.
-    pub cookies: CookieJar,
+    /// The cookies (and local storage) the identity earned, as core keeps a browser's login
+    /// state. [`Identity::cookie_jar`] gives them to an HTTP client.
+    #[serde(with = "session_json")]
+    pub session: Session,
     /// The client hints each origin asked for with `Accept-CH`.
     #[serde(default)]
     pub accept_ch: BTreeMap<String, Vec<String>>,
@@ -241,6 +244,45 @@ fn same_egress(left: Option<&ProxyKey>, right: Option<&ProxyKey>) -> bool {
     }
 }
 
+/// How an identity file holds a core [`Session`], which has no serde form of its own: its
+/// cookies as core's [`Cookie`]s, and the local storage of one origin when it has some.
+mod session_json {
+    use std::collections::BTreeMap;
+
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+    use super::{Cookie, Session};
+
+    #[derive(Serialize, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct Stored {
+        #[serde(default)]
+        cookies: Vec<Cookie>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        origin: Option<String>,
+        #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+        local_storage: BTreeMap<String, String>,
+    }
+
+    pub(super) fn serialize<S: Serializer>(session: &Session, out: S) -> Result<S::Ok, S::Error> {
+        Stored {
+            cookies: session.cookies().to_vec(),
+            origin: session.origin().map(str::to_owned),
+            local_storage: session.local_storage().clone(),
+        }
+        .serialize(out)
+    }
+
+    pub(super) fn deserialize<'de, D: Deserializer<'de>>(input: D) -> Result<Session, D::Error> {
+        let stored = Stored::deserialize(input)?;
+        let session = Session::new(stored.cookies);
+        Ok(match stored.origin {
+            Some(origin) => session.with_local_storage(origin, stored.local_storage),
+            None => session,
+        })
+    }
+}
+
 impl Identity {
     /// Makes an identity from a fingerprint. See the module documentation for what it refuses.
     ///
@@ -266,7 +308,7 @@ impl Identity {
             schema: IDENTITY_SCHEMA,
             fingerprint,
             wire_measurement,
-            cookies: CookieJar::new(),
+            session: Session::default(),
             accept_ch: BTreeMap::new(),
             proxy,
             clearances: Vec::new(),
@@ -296,10 +338,31 @@ impl Identity {
         }
     }
 
+    /// The identity's cookies as an HTTP cookie jar at `now`, for a client that receives
+    /// `Set-Cookie` headers and sends `Cookie` ones. Expired cookies, and ones the jar refuses,
+    /// are left out (see [`CookieJar::from_cdp`]).
+    #[must_use]
+    pub fn cookie_jar(&self, now: u64) -> CookieJar {
+        CookieJar::from_cdp(self.session.cookies(), now)
+    }
+
+    /// Keeps the live cookies of `jar` at `now` as the identity's, in place of the ones it had.
+    /// The local storage stays.
+    pub fn replace_cookies(&mut self, jar: &CookieJar, now: u64) {
+        let session = Session::new(jar.to_cdp(now));
+        self.session = match self.session.origin() {
+            Some(origin) => {
+                session.with_local_storage(origin, self.session.local_storage().clone())
+            }
+            None => session,
+        };
+    }
+
     /// Records a [`Clearance`] for every live clearance cookie in the jar, replacing the old list.
     pub fn refresh_clearances(&mut self, now: u64) {
         let mut found: Vec<Clearance> = Vec::new();
-        for cookie in self.cookies.cookies() {
+        let jar = self.cookie_jar(now);
+        for cookie in jar.cookies() {
             if cookie.is_expired(now) {
                 continue;
             }
@@ -383,7 +446,7 @@ impl Identity {
 impl fmt::Debug for Identity {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Identity")
-            .field("cookies", &self.cookies.len())
+            .field("cookies", &self.session.cookies().len())
             .field("proxy", &self.proxy)
             .finish_non_exhaustive()
     }

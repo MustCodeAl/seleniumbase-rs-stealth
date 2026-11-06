@@ -39,6 +39,21 @@ Only `scrape` and `mimic` were affected; `codec` holds no fingerprint.
   ```
 
 
+- **The stealth types build on core's** (design note decisions 1 and 8; built against
+  seleniumbase-rs PR #40 and on top of PR #6 here):
+  - `ClientHeaders::from_fingerprint(&Fingerprint)` (codec) is the identity a fingerprint claims:
+    its user agent, languages and client hints. The hints are the fingerprint's own when it sets
+    them, otherwise the ones its Chrome major sends, as core computes them (`chromium_hints`).
+    The captured values stay the other way (`ClientHeaders::from_captured`, measured profiles).
+    `ClientHeaders::with_client_hints_from(&ClientHints)` and `header_spec::chrome_major` are new.
+  - `WireFormat::from_fingerprint` uses it: a fingerprint without its own hints now sends the
+    computed ones, not the captured ones. `WireFormat::with_locale` is removed; localize the
+    fingerprint (`LocaleExt::localize`) before building the profile.
+  - `Identity` holds its cookies (and local storage) as a core `Session` (`identity.session`), in
+    place of the `cookies` jar. `Identity::cookie_jar(now)` gives an HTTP cookie jar and
+    `Identity::replace_cookies(&jar, now)` keeps one. The identity file layout is version 2
+    (`IDENTITY_SCHEMA`); a version 1 file is refused.
+
 - **The stealth API is named after seleniumbase-rs, not after the project it was ported
   from** (design note `docs/design/stealth_names.md`, PR #4). The features stay; the names
   and shapes that were copied with them change. No shims.

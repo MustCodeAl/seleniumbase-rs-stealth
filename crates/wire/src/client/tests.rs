@@ -1,13 +1,12 @@
 //! Unit tests of the impersonation profile and its custom builder. None of them opens a socket:
 //! the proof that a profile reaches the wire is `tests/impersonate_wire.rs`.
 
-use super::identity::{quote, sec_ch_ua, user_agent_major};
 use super::{WireFormat, WireFormatError, WireProtocol};
 use crate::convert::ConvertError;
 use seleniumbase_rs::evasion::fingerprint::{BrandVersion, Fingerprint, OsType, Spoof};
 use seleniumbase_rs_codec::client_hello::ext_id;
 use seleniumbase_rs_codec::h2_spec::H2SpecError;
-use seleniumbase_rs_codec::header_spec::{HeaderSource, RequestShape};
+use seleniumbase_rs_codec::header_spec::{ClientHeaders, HeaderSource, RequestShape};
 use seleniumbase_rs_codec::measurement::{self, KnownGap, WireMeasurement, WireMeasurementError};
 use seleniumbase_rs_codec::tls_spec::TlsSpecError;
 use seleniumbase_rs_codec::BrowserKind;
@@ -235,29 +234,6 @@ fn a_cookie_without_a_slot_goes_after_accept_language() {
 }
 
 #[test]
-fn the_client_hints_header_has_the_shape_chrome_writes() {
-    let brands = [
-        BrandVersion::new("Google Chrome", "155"),
-        BrandVersion::new("Not(A:Brand", "24"),
-    ];
-    assert_eq!(
-        sec_ch_ua(&brands),
-        "\"Google Chrome\";v=\"155\", \"Not(A:Brand\";v=\"24\""
-    );
-    assert_eq!(quote("a\"b\\c"), "\"a\\\"b\\\\c\"");
-}
-
-#[test]
-fn a_user_agent_names_its_chrome_major() {
-    assert_eq!(
-        user_agent_major("Mozilla/5.0 (X11) AppleWebKit/537.36 Chrome/155.0.0.0 Safari/537.36"),
-        Some(155)
-    );
-    assert_eq!(user_agent_major("Mozilla/5.0 Firefox/130.0"), None);
-    assert_eq!(user_agent_major("Chrome/"), None);
-}
-
-#[test]
 fn a_random_profile_rides_the_measured_chrome_and_claims_its_version() {
     let profile = WireFormat::random(7).expect("builds");
     assert_eq!(profile.major(), 155);
@@ -312,28 +288,65 @@ fn a_fingerprint_of_an_unmeasured_system_or_another_browser_is_refused() {
 fn a_fingerprint_gives_its_identity_to_the_headers() {
     let fingerprint = Fingerprint::randomized_with_major(OsType::Macos, 11, 155);
     let profile = WireFormat::from_fingerprint(&fingerprint).expect("builds");
+    let identity = profile.client_headers();
     assert_eq!(
-        Some(profile.user_agent()),
+        Some(identity.user_agent.as_str()),
         fingerprint.user_agent().as_str()
     );
     assert_eq!(
-        profile.accept_language(),
+        identity.accept_language.as_deref(),
         fingerprint.accept_languages().as_str()
     );
     let hints = fingerprint.client_hints().value().expect("Chrome hints");
     assert_eq!(
-        profile.client_headers().sec_ch_ua,
-        Some(sec_ch_ua(&hints.brands))
+        identity.sec_ch_ua,
+        ClientHeaders::new("")
+            .with_client_hints_from(hints)
+            .sec_ch_ua
     );
 }
 
 #[test]
-fn a_locale_sets_the_accept_language() {
-    let german = Locale::by_tag("de-DE").expect("a known locale");
-    let profile = chrome().with_locale(german);
+fn a_fingerprint_without_its_own_hints_sends_computed_ones_and_a_measured_profile_captured_ones() {
+    let fingerprint = Fingerprint::randomized_with_major(OsType::Macos, 11, 155)
+        .to_builder()
+        .client_hints(Spoof::Natural)
+        .build()
+        .expect("builds");
+    let profile = WireFormat::from_fingerprint(&fingerprint).expect("builds");
+    let computed = ClientHeaders::from_fingerprint(&fingerprint).expect("a user agent");
+    assert_eq!(profile.client_headers().sec_ch_ua, computed.sec_ch_ua);
+    assert!(
+        computed
+            .sec_ch_ua
+            .as_deref()
+            .is_some_and(|value| value.contains("\"Google Chrome\";v=\"155\"")),
+        "{computed:?}"
+    );
+
+    let captured = measurement::get(BrowserKind::Chrome, OsType::Macos)
+        .expect("an entry")
+        .client_hints
+        .clone()
+        .expect("captured hints");
     assert_eq!(
-        profile.accept_language(),
-        Some(german.accept_language().as_str())
+        chrome().client_headers().sec_ch_ua,
+        ClientHeaders::new("")
+            .with_client_hints_from(&captured)
+            .sec_ch_ua
+    );
+}
+
+#[test]
+fn a_fingerprints_locale_sets_the_accept_language() {
+    let german = Locale::by_tag("de-DE").expect("a known locale");
+    let fingerprint = german
+        .localize(&Fingerprint::randomized_with_major(OsType::Macos, 11, 155))
+        .expect("localizes");
+    let profile = WireFormat::from_fingerprint(&fingerprint).expect("builds");
+    assert_eq!(
+        profile.client_headers().accept_language,
+        Some(german.accept_language())
     );
 }
 

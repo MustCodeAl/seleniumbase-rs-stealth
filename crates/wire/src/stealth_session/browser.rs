@@ -88,7 +88,7 @@ impl BrowserLeg {
             .into());
         }
         let page = browser.default_page().await?;
-        cdp::import_cookies(&page, &identity.cookies, now).await?;
+        cdp::import_cookies(&page, &identity.cookie_jar(now), now).await?;
         Ok(page)
     }
 

@@ -103,10 +103,10 @@ impl BrowserScraper {
             self.current_key(),
             now,
         )?;
-        identity.cookies = cdp::export_cookies(&self.page, now).await?;
+        identity.replace_cookies(&cdp::export_cookies(&self.page, now).await?, now);
         identity.refresh_clearances(now);
         self.emit(&ScrapeEvent::IdentityExported {
-            cookies: identity.cookies.len(),
+            cookies: identity.session.cookies().len(),
         });
         Ok(identity)
     }
@@ -134,9 +134,10 @@ impl BrowserScraper {
                 .await?;
             self.persona.seed = identity.fingerprint.seed();
         }
-        cdp::import_cookies(&self.page, &identity.cookies, self.now()).await?;
+        let now = self.now();
+        cdp::import_cookies(&self.page, &identity.cookie_jar(now), now).await?;
         self.emit(&ScrapeEvent::IdentityRestored {
-            cookies: identity.cookies.len(),
+            cookies: identity.session.cookies().len(),
         });
         Ok(())
     }

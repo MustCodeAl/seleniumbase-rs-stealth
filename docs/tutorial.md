@@ -293,8 +293,12 @@ let response = request.send().await?;
 
 Other ways to get a profile: `WireFormat::for_system(kind, os)`,
 `WireFormat::from_fingerprint(&fp)` (a Chromium identity that claims
-the measured major), `WireFormat::random(seed)`, and
-`.with_locale(&locale)` to change the `Accept-Language`.
+the measured major) and `WireFormat::random(seed)`. A profile from a fingerprint
+sends that fingerprint's user agent, languages and client hints: its own hints when
+it sets them, otherwise the ones its Chrome major sends, as seleniumbase-rs computes
+them (`ClientHeaders::from_fingerprint`). A measured profile sends the hints the
+measured browser sent. To change the `Accept-Language`, localize the fingerprint
+(`locale.localize(&fp)?`) before building the profile.
 
 ## Custom inputs
 
