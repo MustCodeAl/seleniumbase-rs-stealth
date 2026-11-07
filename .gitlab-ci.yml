@@ -22,7 +22,14 @@
 #
 # No job needs a secret, and none prints one: there is no `set -x`, no `env` and no token here.
 #
-# The Rust version is `rust-version` of Cargo.toml. When it moves, move RUST_VERSION below.
+# Every job takes its tools from mise (https://mise.jdx.dev), as mise's "Continuous integration"
+# page describes for GitLab: the Rust toolchain and cargo-deny are the versions mise.toml pins,
+# the ones a local `mise install` gives. The jobs run on the rust image, for its C toolchain and
+# rustup, install mise with its install script (MISE_VERSION pins the release) and run cargo
+# through `mise exec --`. A job names the tools of mise.toml it needs in MISE_ENABLE_TOOLS.
+#
+# The Rust version is `rust-version` of Cargo.toml and the one of mise.toml. When it moves, move
+# RUST_VERSION below with them.
 
 workflow:
   auto_cancel:
@@ -51,6 +58,9 @@ variables:
   CARGO_TERM_COLOR: always
   # A GitLab cache can only hold paths inside the project folder, so cargo keeps its registry there.
   CARGO_HOME: $CI_PROJECT_DIR/.cargo
+  # The mise release the install script fetches, and where it puts it.
+  MISE_VERSION: "v2026.10.4"
+  MISE_INSTALL_PATH: /usr/local/bin/mise
 
 .rules_automatic:
   - if: $CI_PIPELINE_SOURCE == "merge_request_event"
@@ -64,8 +74,23 @@ variables:
   - when: manual
     allow_failure: true
 
+# Installs mise when the image has none, then the tools of mise.toml that MISE_ENABLE_TOOLS names.
+.mise_install:
+  - command -v mise >/dev/null || curl --proto '=https' --tlsv1.2 -fsSL https://mise.run | sh
+  - mise --version
+  - mise install
+
+# The toolchain image and mise. For Rust, mise runs the image's rustup with the version of
+# mise.toml and sets RUSTUP_TOOLCHAIN, so every cargo command goes through `mise exec --`; the
+# image's toolchain has no clippy or rustfmt, so they are added here.
 .rust:
   image: rust:${RUST_VERSION}-bookworm
+  variables:
+    MISE_ENABLE_TOOLS: rust
+  before_script:
+    - !reference [.mise_install]
+    - mise exec -- rustup component add clippy rustfmt
+    - mise exec -- rustup show active-toolchain
 
 # What btls-sys needs to build BoringSSL (the official Rust image has the C and C++ compilers).
 .boringssl:
@@ -74,6 +99,7 @@ variables:
     - apt-get install -y -qq --no-install-recommends cmake clang libclang-dev pkg-config
     - cmake --version
     - clang --version
+    - !reference [.rust, before_script]
 
 # The cargo registry and the build folder, keyed by Cargo.lock. Saved even when the job fails: a
 # failed test run still built every dependency (BoringSSL is most of a cold build). Test
@@ -106,11 +132,9 @@ gate:
     - !reference [.rules_automatic]
   timeout: 2h
   script:
-    - rustc --version
-    - cargo --version
-    - rustup component add rustfmt clippy
-    - cargo fmt --all -- --check
-    - cargo clippy --workspace --all-targets -- -D warnings
+    - mise exec -- cargo --version
+    - mise exec -- cargo fmt --all -- --check
+    - mise exec -- cargo clippy --workspace --all-targets -- -D warnings
 
 test:
   extends:
@@ -121,34 +145,45 @@ test:
     - !reference [.rules_automatic]
   timeout: 2h
   script:
-    - cargo test --workspace --no-fail-fast
+    - mise exec -- cargo test --workspace --no-fail-fast
 
 # `cargo deny --workspace check` covers the facade and the codec, scrape and wire crates; without
-# the flag cargo-deny roots the graph at the facade alone. The tools are built from source the
-# first time and kept in the cache.
+# the flag cargo-deny roots the graph at the facade alone. cargo-deny is the release of mise.toml;
+# mise.toml has no cargo-audit, so it is built from source the first time into .cargo-audit. Both
+# are kept in the cache.
 supply-chain:
   extends: .rust
   rules:
     - !reference [.rules_automatic]
+  variables:
+    MISE_ENABLE_TOOLS: rust,cargo-deny
+    # A GitLab cache can only hold paths inside the project folder.
+    MISE_DATA_DIR: $CI_PROJECT_DIR/.mise
+    MISE_CACHE_DIR: $CI_PROJECT_DIR/.mise/cache
   cache:
-    key:
-      prefix: supply-chain
-      files:
-        - Cargo.lock
-    paths:
-      - .cargo/bin/
-      - .cargo/.crates.toml
-      - .cargo/.crates2.json
-      - .cargo/registry/index/
-      - .cargo/registry/cache/
-      - .cargo/git/db/
-    when: always
+    - key:
+        prefix: supply-chain
+        files:
+          - Cargo.lock
+      paths:
+        - .cargo-audit/
+        - .cargo/registry/index/
+        - .cargo/registry/cache/
+        - .cargo/git/db/
+      when: always
+    - key:
+        prefix: mise-supply-chain-amd64
+        files:
+          - mise.toml
+      paths:
+        - .mise/installs/
+        - .mise/cache/
+      when: always
   script:
-    - export PATH="$CARGO_HOME/bin:$PATH"
-    - cargo install --locked --version '^0.20' cargo-deny
-    - cargo install --locked cargo-audit
-    - cargo deny --all-features --workspace check
-    - cargo audit
+    - mise exec -- cargo install --locked --root .cargo-audit cargo-audit
+    - export PATH="$CI_PROJECT_DIR/.cargo-audit/bin:$PATH"
+    - mise exec -- cargo deny --all-features --workspace check
+    - mise exec -- cargo audit
 
 # MANUAL. `crates/h3d` is a workspace of its own (phantom-http builds its own BoringSSL), so the
 # jobs above never build it. Its tests start a local HTTP/3 server on the loopback interface.
@@ -172,7 +207,6 @@ h3d:
     when: always
   script:
     - cd crates/h3d
-    - rustup component add rustfmt clippy
-    - cargo fmt --all -- --check
-    - cargo clippy --all-targets -- -D warnings
-    - cargo test
+    - mise exec -- cargo fmt --all -- --check
+    - mise exec -- cargo clippy --all-targets -- -D warnings
+    - mise exec -- cargo test
