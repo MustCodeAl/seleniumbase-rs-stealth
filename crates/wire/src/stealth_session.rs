@@ -83,7 +83,6 @@ mod transition;
 
 use std::fmt;
 use std::sync::Arc;
-use std::time::Duration;
 
 pub use self::builder::{StealthSessionBuilder, DEFAULT_ATTEMPTS, MITM_SHUTDOWN_GRACE};
 pub use self::error::StealthError;
@@ -116,7 +115,6 @@ struct Wiring {
     limits: Option<SiteLimits>,
     http: HttpSessionOptions,
     mitm: MitmOptions,
-    solve_timeout: Duration,
     clock: Clock,
 }
 

@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 
-use super::rig::{country, real_page, script_challenge, Rig, SEED};
+use super::rig::{country, policy_with, real_page, script_challenge, Rig, BRIEF_SOLVE, SEED};
 use crate::challenge::detect::{ChallengeEvidence, ChallengeKind, Detection};
 use crate::challenge::mitigation::MitigationPolicy;
 use crate::egress::geo::{GeoError, GeoInfo, GeoResolver};
@@ -312,7 +312,7 @@ async fn the_ports_the_caller_supplies_are_the_ones_used() {
     let sessions = SessionStore::new();
     let policy = MitigationPolicy {
         max_challenge_attempts: 5,
-        ..MitigationPolicy::default()
+        ..policy_with(BRIEF_SOLVE)
     };
     let mut scraper = rig
         .builder()

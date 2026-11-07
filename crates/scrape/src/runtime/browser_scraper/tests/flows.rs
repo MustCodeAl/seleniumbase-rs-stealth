@@ -7,7 +7,9 @@ use std::time::Duration;
 use async_trait::async_trait;
 use tokio::time::Instant;
 
-use super::rig::{block, country, real_page, script_challenge, widget_challenge, Rig, NOW};
+use super::rig::{
+    block, country, policy_with, real_page, script_challenge, widget_challenge, Rig, NOW,
+};
 use crate::challenge::detect::{ChallengeEvidence, ChallengeKind, Detection};
 use crate::challenge::mitigation::{GiveUpReason, Mitigation};
 use crate::egress::pool::DEFAULT_QUARANTINE_AFTER;
@@ -527,6 +529,23 @@ async fn solving_a_page_that_is_not_a_challenge_changes_nothing() {
     assert_eq!(detection.kind, ChallengeKind::Clear);
     assert_eq!(mouse_events(&rig, "mousePressed"), 0);
 }
+
+#[tokio::test(start_paused = true)]
+async fn a_solved_challenge_is_waited_for_as_long_as_the_policys_verify_timeout() {
+    let rig = Rig::new(vec![real_page()]);
+
+    let set = rig
+        .builder()
+        .mitigation(policy_with(Duration::from_secs(7)))
+        .build()
+        .await
+        .expect("the scraper builds");
+
+    assert_eq!(set.clearance_wait(), Duration::from_secs(7));
+}
+
+/// How long `solve_challenge` takes on a challenge that never clears, with a policy whose solve
+/// options wait `verify` for a result.
 
 fn snapshot(kind: ChallengeKind) -> PageSnapshot {
     PageSnapshot {

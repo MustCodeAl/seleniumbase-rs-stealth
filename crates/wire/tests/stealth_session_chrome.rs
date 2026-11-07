@@ -40,9 +40,6 @@ use seleniumbase_rs_wire::stealth_session::{StealthSession, StealthSessionBuilde
 
 use site::{ChallengeSite, CLEARANCE, DEFAULT_TTL_SECS, REAL_MARKER};
 
-/// How long Chrome is given to run the challenge page's script.
-const SOLVE_WITHIN: Duration = Duration::from_secs(30);
-
 /// A builder wired to `site`, with Chrome headless.
 fn builder(site: &ChallengeSite, sink: &CollectingEventSink) -> StealthSessionBuilder {
     StealthSession::builder()
@@ -55,7 +52,6 @@ fn builder(site: &ChallengeSite, sink: &CollectingEventSink) -> StealthSessionBu
         .http_session_options(site.http_session_options())
         .mitm_options(site.mitm_options())
         .event_sink(Arc::new(sink.clone()))
-        .solve_timeout(SOLVE_WITHIN)
 }
 
 /// The modes the session went through, from its events.

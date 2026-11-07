@@ -27,7 +27,7 @@ use seleniumbase_rs_scrape::ledger::events::EventSink;
 use seleniumbase_rs_scrape::ledger::state::{InMemoryLedger, Ledger};
 use seleniumbase_rs_scrape::passport::identity::{Identity, WireMeasurementRef};
 use seleniumbase_rs_scrape::passport::policy::EscalationPolicy;
-use seleniumbase_rs_scrape::runtime::browser_scraper::{Launcher, DEFAULT_SOLVE_TIMEOUT};
+use seleniumbase_rs_scrape::runtime::browser_scraper::Launcher;
 use seleniumbase_rs_scrape::runtime::cdp::ProxyLocale;
 use seleniumbase_rs_scrape::runtime::tracing_sink::TracingEventSink;
 
@@ -62,7 +62,7 @@ pub struct StealthSessionBuilder {
     restore: Option<Identity>,
     http: HttpSessionOptions,
     mitm: MitmOptions,
-    solve_timeout: Duration,
+
     clock: Option<Clock>,
 }
 
@@ -98,7 +98,7 @@ impl StealthSessionBuilder {
             restore: None,
             http: HttpSessionOptions::new(),
             mitm: MitmOptions::default(),
-            solve_timeout: DEFAULT_SOLVE_TIMEOUT,
+
             clock: None,
         }
     }
@@ -256,13 +256,6 @@ impl StealthSessionBuilder {
         self
     }
 
-    /// How long a solved challenge is waited for. The default is [`DEFAULT_SOLVE_TIMEOUT`].
-    #[must_use]
-    pub fn solve_timeout(mut self, timeout: Duration) -> Self {
-        self.solve_timeout = timeout;
-        self
-    }
-
     /// The clock the session reads, in seconds since the Unix epoch. The default is the system
     /// clock.
     #[must_use]
@@ -351,7 +344,7 @@ impl StealthSessionBuilder {
                 .clock(Arc::clone(&clock))
                 .event_sink(Arc::clone(&sink)),
             mitm: self.mitm,
-            solve_timeout: self.solve_timeout,
+
             sink,
             clock,
         };

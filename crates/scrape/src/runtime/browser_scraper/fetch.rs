@@ -1,6 +1,6 @@
 //! The fetch loop of the browser scraper: load, detect, decide, act, and load again.
 
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use super::{BrowserFetch, BrowserScraper};
 use crate::challenge::detect::{ChallengeKind, Detection};
@@ -115,8 +115,8 @@ impl BrowserScraper {
     /// shows no result, up to three times; a widget that never clears is a challenge that stands,
     /// not an error. A script challenge needs no click: it is waited for. The wait ends when the
     /// vendor's clearance cookie holds a new value or, for a vendor without one, when the page
-    /// stops being a challenge, and is bounded by the solve timeout of the builder. That timeout does
-    /// not bound the solver, which has limits of its own.
+    /// stops being a challenge, and is bounded by the verify timeout of the policy's `solve` options,
+    /// which the solver also uses, for each press, beside its other limits.
     ///
     /// # Errors
     ///
@@ -134,14 +134,15 @@ impl BrowserScraper {
             cdp::human_warm_up(&self.page, self.persona.seed).await;
             cdp::solve_widget(&self.page, &self.wiring.policy.solve).await?;
         }
-        cdp::wait_for_clearance(
-            &self.page,
-            vendor,
-            stale.as_deref(),
-            self.wiring.solve_timeout,
-        )
-        .await?;
+        cdp::wait_for_clearance(&self.page, vendor, stale.as_deref(), self.clearance_wait())
+            .await?;
         Ok(self.read_current().await?.detection)
+    }
+
+    /// How long the browser is given to show a solved challenge: the verify timeout of the
+    /// policy's solve options, as core's `SolveOptions::verify_timeout_allowed` reads it.
+    pub(super) fn clearance_wait(&self) -> Duration {
+        self.wiring.policy.solve.verify_timeout_allowed()
     }
 
     /// The page now open, judged with the answer that led to it.

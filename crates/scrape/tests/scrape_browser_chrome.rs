@@ -21,6 +21,7 @@ use std::time::Duration;
 
 use seleniumbase_rs::sb_cdp::LaunchOptions;
 use seleniumbase_rs_scrape::challenge::detect::ChallengeKind;
+use seleniumbase_rs_scrape::challenge::mitigation::MitigationPolicy;
 use seleniumbase_rs_scrape::egress::geo::CountryCode;
 use seleniumbase_rs_scrape::ledger::events::{CollectingEventSink, ScrapeEvent};
 use seleniumbase_rs_scrape::runtime::browser_scraper::{BrowserScraper, BrowserScraperBuilder};
@@ -32,6 +33,15 @@ const IDLE_WINDOW: Duration = Duration::from_secs(40);
 
 /// How long a solve may take: the challenge page sets its cookie after half a second.
 const SOLVE_TIMEOUT: Duration = Duration::from_secs(20);
+
+/// The default mitigation policy, with its solve options waiting `SOLVE_TIMEOUT` for a result.
+fn patient_policy() -> MitigationPolicy {
+    let base = MitigationPolicy::default();
+    MitigationPolicy {
+        solve: base.solve.clone().verify_timeout(SOLVE_TIMEOUT),
+        ..base
+    }
+}
 
 /// The made-up host fetched through the proxy. The server answers for any host.
 const SHOP: &str = "http://shop.example.test/";
@@ -169,7 +179,7 @@ fn builder(sink: &CollectingEventSink) -> BrowserScraperBuilder {
     BrowserScraper::builder()
         .launch_options(headless())
         .event_sink(Arc::new(sink.clone()))
-        .solve_timeout(SOLVE_TIMEOUT)
+        .mitigation(patient_policy())
 }
 
 fn country(code: &str) -> CountryCode {

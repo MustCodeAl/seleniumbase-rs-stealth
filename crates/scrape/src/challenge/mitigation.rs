@@ -28,6 +28,11 @@ use seleniumbase_rs::utilities::retry::RetryPolicy;
 /// How many attempts at one URL the default policy makes before giving up.
 pub const DEFAULT_MAX_CHALLENGE_ATTEMPTS: u32 = 3;
 
+/// How long the default policy's solve options wait for a result, and the browser leg for the
+/// clearance after a solve: core's `SolveOptions::verify_timeout`, read back with
+/// `verify_timeout_allowed`.
+pub const DEFAULT_VERIFY_TIMEOUT: Duration = Duration::from_secs(30);
+
 /// Challenges in a row after which the default policy changes the egress.
 pub const DEFAULT_ROTATE_EGRESS_AFTER: u32 = 2;
 
@@ -133,6 +138,7 @@ impl Default for MitigationPolicy {
             max_challenge_attempts: DEFAULT_MAX_CHALLENGE_ATTEMPTS,
             backoff: RetryPolicy::network(),
             solve: SolveOptions::new()
+                .verify_timeout(DEFAULT_VERIFY_TIMEOUT)
                 .rotate_proxy_after(DEFAULT_ROTATE_EGRESS_AFTER)
                 .rotate_fingerprint_after(DEFAULT_ROTATE_PROFILE_AFTER),
 
@@ -259,6 +265,12 @@ mod tests {
             policy.solve.fingerprint_rotation_due(3) && !policy.solve.fingerprint_rotation_due(2)
         );
         assert_eq!(policy.block_cooldown_secs, 900);
+        assert_eq!(DEFAULT_VERIFY_TIMEOUT, Duration::from_secs(30));
+        assert_eq!(
+            policy.solve.verify_timeout_allowed(),
+            DEFAULT_VERIFY_TIMEOUT
+        );
+
         assert_eq!(policy.backoff, RetryPolicy::network());
         assert_eq!(
             policy.max_challenge_attempts,

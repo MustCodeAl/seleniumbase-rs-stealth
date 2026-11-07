@@ -16,6 +16,7 @@ use std::time::Duration;
 use seleniumbase_rs::sb_cdp::{Browser, LaunchOptions, MockCtrl};
 use seleniumbase_rs::SeleniumBaseError;
 use seleniumbase_rs_scrape::challenge::detect::ChallengeKind;
+use seleniumbase_rs_scrape::challenge::mitigation::MitigationPolicy;
 use seleniumbase_rs_scrape::egress::geo::CountryCode;
 use seleniumbase_rs_scrape::error::ScrapeError;
 use seleniumbase_rs_scrape::ledger::events::{CollectingEventSink, ScrapeEvent};
@@ -308,12 +309,21 @@ impl World {
             .event_sink(Arc::new(self.sink.clone()))
             .ledger(Arc::new(self.store.clone()))
             .clock(Arc::new(move || clock.load(Ordering::SeqCst)))
-            .solve_timeout(BRIEF_SOLVE)
+            .mitigation(brief_policy())
             .seed(7)
     }
 
     fn names(&self) -> Vec<&'static str> {
         self.sink.events().iter().map(ScrapeEvent::name).collect()
+    }
+}
+
+/// The default mitigation policy, with its solve options waiting `BRIEF_SOLVE` for a result.
+fn brief_policy() -> MitigationPolicy {
+    let base = MitigationPolicy::default();
+    MitigationPolicy {
+        solve: base.solve.clone().verify_timeout(BRIEF_SOLVE),
+        ..base
     }
 }
 

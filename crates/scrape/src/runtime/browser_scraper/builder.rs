@@ -24,9 +24,6 @@ use seleniumbase_rs::error::SeleniumBaseError;
 use seleniumbase_rs::evasion::fingerprint::Fingerprint;
 use seleniumbase_rs::sb_cdp::{Browser, LaunchOptions, SessionStore};
 
-/// How long a challenge is given to show as solved, unless the builder says otherwise.
-pub const DEFAULT_SOLVE_TIMEOUT: Duration = Duration::from_secs(30);
-
 /// Tells the scraper the time, in seconds since the Unix epoch. Tests replace it.
 pub type Clock = Arc<dyn Fn() -> u64 + Send + Sync>;
 
@@ -50,7 +47,7 @@ pub struct BrowserScraperBuilder {
     switch: Option<Box<dyn ProxySwitch>>,
     launcher: Option<Launcher>,
     sessions: Option<SessionStore>,
-    solve_timeout: Duration,
+
     clock: Option<Clock>,
 }
 
@@ -82,7 +79,7 @@ impl BrowserScraperBuilder {
             switch: None,
             launcher: None,
             sessions: None,
-            solve_timeout: DEFAULT_SOLVE_TIMEOUT,
+
             clock: None,
         }
     }
@@ -209,13 +206,6 @@ impl BrowserScraperBuilder {
         self
     }
 
-    /// How long a solved challenge is waited for. The default is [`DEFAULT_SOLVE_TIMEOUT`].
-    #[must_use]
-    pub fn solve_timeout(mut self, timeout: Duration) -> Self {
-        self.solve_timeout = timeout;
-        self
-    }
-
     /// The clock the scraper reads. The default is the system clock.
     #[must_use]
     pub fn clock(mut self, clock: Clock) -> Self {
@@ -291,7 +281,7 @@ impl BrowserScraperBuilder {
                 .limits
                 .map(|(calls, window)| SiteLimits::new(calls, window)),
             sessions: self.sessions.unwrap_or_default(),
-            solve_timeout: self.solve_timeout,
+
             clock: self.clock.unwrap_or_else(system_clock),
         };
         let start = Start {

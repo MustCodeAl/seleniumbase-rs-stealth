@@ -411,17 +411,12 @@ impl StealthSession {
             kind: detection.kind,
             since: Instant::now(),
         });
-        let (seed, timeout) = (self.persona.seed, self.wiring.solve_timeout);
+        let seed = self.persona.seed;
         let Leg::Browser(leg) = &self.leg else {
             return Ok(());
         };
-        leg.solve(
-            detection,
-            seed,
-            timeout,
-            &self.wiring.rules.mitigation.solve,
-        )
-        .await?;
+        leg.solve(detection, seed, &self.wiring.rules.mitigation.solve)
+            .await?;
         let identity = self.synced_identity().await?;
         let transition = self.wiring.rules.escalation.after_fetch(
             FetchKind::Browser,

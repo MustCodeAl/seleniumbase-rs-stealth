@@ -45,8 +45,7 @@ const CHALLENGE_HTML: &str = "<!doctype html><html><head><title>Just a moment...
     setTimeout(function () {\
         fetch('/__solve').then(function () { location.reload(); });\
     }, 500);</script></body></html>";
-/// How long Chrome is given to run the challenge page's script.
-const SOLVE_WITHIN: Duration = Duration::from_secs(30);
+
 /// How long a connection may sit without sending a request. Chrome opens spare connections.
 const IDLE_CONNECTION: Duration = Duration::from_secs(5);
 /// The most bytes of a request head the site reads.
@@ -183,7 +182,6 @@ async fn run() -> Result<(), Box<dyn Error>> {
     let mut scraper = BrowserScraper::builder()
         .launch_options(LaunchOptions::builder().headless(true).build()?)
         .event_sink(Arc::new(sink.clone()))
-        .solve_timeout(SOLVE_WITHIN)
         .build()
         .await?;
 

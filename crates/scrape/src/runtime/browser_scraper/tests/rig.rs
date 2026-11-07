@@ -10,6 +10,8 @@ use serde_json::json;
 
 use crate::egress::geo::CountryCode;
 
+use crate::challenge::mitigation::MitigationPolicy;
+
 use crate::ledger::events::{CollectingEventSink, ScrapeEvent};
 use crate::ledger::state::InMemoryLedger;
 use crate::runtime::browser_scraper::BrowserScraperBuilder;
@@ -162,7 +164,7 @@ impl Rig {
             .event_sink(Arc::new(self.sink.clone()))
             .ledger(Arc::new(self.store.clone()))
             .clock(Arc::new(move || clock.load(Ordering::SeqCst)))
-            .solve_timeout(BRIEF_SOLVE)
+            .mitigation(policy_with(BRIEF_SOLVE))
             .seed(SEED)
     }
 
@@ -174,6 +176,15 @@ impl Rig {
     /// The names of the events so far, oldest first.
     pub(super) fn event_names(&self) -> Vec<&'static str> {
         self.sink.events().iter().map(ScrapeEvent::name).collect()
+    }
+}
+
+/// The default mitigation policy, with its solve options waiting `verify` for a result.
+pub(super) fn policy_with(verify: Duration) -> MitigationPolicy {
+    let base = MitigationPolicy::default();
+    MitigationPolicy {
+        solve: base.solve.clone().verify_timeout(verify),
+        ..base
     }
 }
 

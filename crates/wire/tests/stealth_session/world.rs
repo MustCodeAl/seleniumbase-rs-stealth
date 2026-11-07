@@ -7,12 +7,14 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use seleniumbase_rs::evasion::fingerprint::{Fingerprint, OsType};
 use seleniumbase_rs_codec::{measurement, BrowserKind};
-use seleniumbase_rs_scrape::challenge::mitigation::FetchKind;
+use seleniumbase_rs_scrape::challenge::mitigation::{FetchKind, MitigationPolicy};
 use seleniumbase_rs_scrape::egress::geo::CountryCode;
 use seleniumbase_rs_scrape::ledger::events::{CollectingEventSink, ScrapeEvent};
 use seleniumbase_rs_scrape::ledger::state::InMemoryLedger;
 use seleniumbase_rs_scrape::passport::policy::Escalation;
-use seleniumbase_rs_wire::stealth_session::{StealthSession, StealthSessionBuilder};
+use seleniumbase_rs_wire::stealth_session::{
+    StealthSession, StealthSessionBuilder, DEFAULT_ATTEMPTS,
+};
 
 use crate::browser::ScriptedLauncher;
 use crate::site::ChallengeSite;
@@ -25,6 +27,27 @@ pub const BRIEF_SOLVE: Duration = Duration::from_millis(80);
 
 /// How long a solve is waited for in a test that expects it to work.
 const PATIENT_SOLVE: Duration = Duration::from_secs(20);
+
+/// The default mitigation policy, with its solve options waiting `verify` for a result. The
+/// attempts are the session's own default, so a test that sets none sees what a session does.
+fn policy_with(verify: Duration) -> MitigationPolicy {
+    let base = MitigationPolicy::default();
+    MitigationPolicy {
+        max_challenge_attempts: DEFAULT_ATTEMPTS,
+        solve: base.solve.clone().verify_timeout(verify),
+        ..base
+    }
+}
+
+/// The policy of a test that expects a solve to fail.
+pub fn brief_policy() -> MitigationPolicy {
+    policy_with(BRIEF_SOLVE)
+}
+
+/// The policy of a test that expects a solve to work.
+fn patient_policy() -> MitigationPolicy {
+    policy_with(PATIENT_SOLVE)
+}
 
 /// The Chrome major the measured TLS and HTTP/2 of macOS belong to.
 pub fn measured_major() -> u32 {
@@ -96,7 +119,7 @@ impl World {
             .http_session_options(self.site.http_session_options())
             .mitm_options(self.site.mitm_options())
             .fingerprint(fingerprint(SEED))
-            .solve_timeout(PATIENT_SOLVE)
+            .mitigation(patient_policy())
     }
 
     /// Moves the session's clock forward.

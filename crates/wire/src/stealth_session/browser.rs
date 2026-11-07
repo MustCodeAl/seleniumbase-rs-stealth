@@ -6,7 +6,6 @@
 //! what to do about what it found is the session's work.
 
 use std::fmt;
-use std::time::Duration;
 
 use serde_json::json;
 
@@ -109,7 +108,7 @@ impl BrowserLeg {
     }
 
     /// Solves the challenge `detection` describes and waits for the browser to show the
-    /// clearance, for at most `timeout`. Returns whether it showed in time.
+    /// clearance, for at most the verify timeout of `options`. Returns whether it showed in time.
     ///
     /// A challenge with a widget is attempted with [`cdp::solve_widget`], after the pointer has
     /// arrived on the page like a person's; a widget that never clears is a challenge that stands,
@@ -120,7 +119,6 @@ impl BrowserLeg {
         &self,
         detection: &Detection,
         seed: u64,
-        timeout: Duration,
         options: &SolveOptions,
     ) -> Result<bool, ScrapeError> {
         let vendor = detection.evidence.vendor;
@@ -130,6 +128,7 @@ impl BrowserLeg {
             cdp::human_warm_up(&self.page, seed).await;
             cdp::solve_widget(&self.page, options).await?;
         }
+        let timeout = options.verify_timeout_allowed();
         cdp::wait_for_clearance(&self.page, vendor, stale.as_deref(), timeout).await
     }
 

@@ -55,7 +55,6 @@
 
 use std::fmt;
 use std::sync::Arc;
-use std::time::Duration;
 
 use crate::challenge::detect::{ChallengeKind, Detection};
 use crate::challenge::mitigation::MitigationPolicy;
@@ -80,7 +79,7 @@ mod rotate;
 #[cfg(test)]
 mod tests;
 
-pub use builder::{BrowserScraperBuilder, Clock, DEFAULT_SOLVE_TIMEOUT};
+pub use builder::{BrowserScraperBuilder, Clock};
 pub use launcher::Launcher;
 
 /// The ports and settings that are fixed when the scraper is built.
@@ -94,7 +93,6 @@ struct Wiring {
     policy: MitigationPolicy,
     limits: Option<pacing::SiteLimits>,
     sessions: SessionStore,
-    solve_timeout: Duration,
     clock: Clock,
 }
 

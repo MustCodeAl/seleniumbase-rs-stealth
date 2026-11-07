@@ -29,15 +29,11 @@ use std::collections::BTreeSet;
 use std::error::Error;
 use std::process::ExitCode;
 use std::sync::Arc;
-use std::time::Duration;
 
 use seleniumbase_rs::sb_cdp::LaunchOptions;
 use seleniumbase_rs_scrape::{CollectingEventSink, ScrapeEvent};
 use seleniumbase_rs_wire::StealthSession;
 use stealth_support::shop::{Shop, REAL_MARKER};
-
-/// How long Chrome is given to run the challenge page's script.
-const SOLVE_WITHIN: Duration = Duration::from_secs(30);
 
 #[tokio::main]
 async fn main() -> ExitCode {
@@ -61,7 +57,6 @@ async fn run() -> Result<(), Box<dyn Error>> {
             .http_session_options(shop.http_session_options()?)
             .mitm_options(shop.mitm_options()?)
             .event_sink(Arc::new(sink.clone()))
-            .solve_timeout(SOLVE_WITHIN)
             .build(),
     )
     .await?;

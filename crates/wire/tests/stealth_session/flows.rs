@@ -349,7 +349,7 @@ async fn a_challenge_that_cannot_be_solved_gives_up_after_the_attempts_allowed()
     world.launcher.never_solve();
     let mut session = world
         .session()
-        .solve_timeout(crate::world::BRIEF_SOLVE)
+        .mitigation(crate::world::brief_policy())
         .build()
         .await
         .expect("a session");
@@ -422,7 +422,7 @@ async fn challenges_in_a_row_climb_the_ladder_from_solving_to_a_new_egress_to_a_
         ])
         .expect("two proxies")
         .max_challenge_attempts(6)
-        .solve_timeout(crate::world::BRIEF_SOLVE)
+        .mitigation(crate::world::brief_policy())
         .build()
         .await
         .expect("a session");
