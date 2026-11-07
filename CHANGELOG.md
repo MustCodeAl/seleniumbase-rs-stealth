@@ -43,6 +43,13 @@ Only `scrape` and `mimic` were affected; `codec` holds no fingerprint.
   - `ContextProxySwitch` is no longer public: without a `ProxySwitch`, the scraper takes core's
     path (`Browser::new_context_with` with `ContextOptions::proxy`, the context before dropped).
     `ProxySwitch` stays the seam for another way, such as the MITM upstream swap.
+  - `MitigationPolicy` holds core's `SolveOptions` (`solve`) in place of its
+    `rotate_proxy_after` and `rotate_fingerprint_after` fields: the browser legs solve a widget
+    with it (presses, rounds, cooldown, clearance cookie), and the decision table rotates when
+    `proxy_rotation_due` / `fingerprint_rotation_due` say so for the challenges in a row (the
+    defaults are unchanged: the proxy after 2, the fingerprint after 3). The policy is no longer
+    `Copy`, nor is `HttpRules`. Not done here: `solve_timeout` stays on both builders, because
+    core's `SolveOptions` has no public reading of its verify timeout yet.
 
 
 - **The launch options are built `LaunchOptions`, not builders.** The core crate keeps what

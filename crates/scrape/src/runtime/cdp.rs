@@ -367,8 +367,8 @@ pub async fn human_warm_up(page: &Page, seed: u64) {
 /// ([`Page::solve_captcha_with`]).
 ///
 /// The solver finds the widget, waits for it to stand still, presses it along a human pointer path
-/// and reads the page for a result. When the page could show a result and does not, it presses
-/// again, up to three times. A page with no widget is left alone.
+/// and reads the page for a result, with core's solver and `options` (the mitigation policy's
+/// `solve`: presses, rounds, cooldown, clearance cookie). A page with no widget is left alone.
 ///
 /// A widget that was pressed and never showed cleared is not an error here: it is one failed
 /// attempt, and judging it is the caller's work. [`wait_for_clearance`] looks at the browser, and
@@ -378,8 +378,8 @@ pub async fn human_warm_up(page: &Page, seed: u64) {
 /// # Errors
 ///
 /// Returns [`ScrapeError::Browser`] when the browser cannot be read or refuses the input.
-pub async fn solve_widget(page: &Page) -> Result<(), ScrapeError> {
-    match page.solve_captcha_with(&SolveOptions::default()).await {
+pub async fn solve_widget(page: &Page, options: &SolveOptions) -> Result<(), ScrapeError> {
+    match page.solve_captcha_with(options).await {
         Ok(Some(solved)) => tracing::debug!(%solved, "the CAPTCHA widget was attempted"),
         Ok(None) => tracing::debug!("the page shows no CAPTCHA widget"),
         Err(SeleniumBaseError::Captcha {

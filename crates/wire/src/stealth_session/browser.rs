@@ -13,7 +13,7 @@ use serde_json::json;
 use super::{StealthError, Wiring};
 use crate::client::WireFormatError;
 use crate::mitm::MitmProxy;
-use seleniumbase_rs::sb_cdp::{Browser, Page};
+use seleniumbase_rs::sb_cdp::{Browser, Page, SolveOptions};
 use seleniumbase_rs_scrape::challenge::detect::{ChallengeKind, Detection};
 use seleniumbase_rs_scrape::error::ScrapeError;
 use seleniumbase_rs_scrape::jar::store::CookieJar;
@@ -121,13 +121,14 @@ impl BrowserLeg {
         detection: &Detection,
         seed: u64,
         timeout: Duration,
+        options: &SolveOptions,
     ) -> Result<bool, ScrapeError> {
         let vendor = detection.evidence.vendor;
         let stale = cdp::clearance_value(&self.page, vendor).await?;
         let has_widget = detection.evidence.widget.is_some();
         if has_widget || detection.kind == ChallengeKind::Interactive {
             cdp::human_warm_up(&self.page, seed).await;
-            cdp::solve_widget(&self.page).await?;
+            cdp::solve_widget(&self.page, options).await?;
         }
         cdp::wait_for_clearance(&self.page, vendor, stale.as_deref(), timeout).await
     }

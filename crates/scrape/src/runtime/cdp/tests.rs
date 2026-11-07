@@ -730,7 +730,9 @@ async fn page_with_a_widget() -> (Page, MockCtrl, Site) {
 async fn a_widget_is_pressed_once_and_the_page_shows_it_cleared() {
     let (page, mock, site) = page_with_a_widget().await;
 
-    solve_widget(&page).await.expect("the widget is attempted");
+    solve_widget(&page, &SolveOptions::default())
+        .await
+        .expect("the widget is attempted");
 
     assert_eq!(presses(&mock), 1);
     assert!(site.is_cleared());
@@ -741,7 +743,9 @@ async fn a_page_with_no_widget_is_left_alone() {
     let (page, mock, site) = page_with_a_widget().await;
     site.show_widget(false);
 
-    solve_widget(&page).await.expect("nothing to attempt");
+    solve_widget(&page, &SolveOptions::default())
+        .await
+        .expect("nothing to attempt");
 
     assert_eq!(presses(&mock), 0);
     assert!(!site.is_cleared());
@@ -752,7 +756,7 @@ async fn a_widget_the_page_never_accepts_is_pressed_again_and_is_not_an_error() 
     let (page, mock, site) = page_with_a_widget().await;
     site.ignore_clicks();
 
-    solve_widget(&page)
+    solve_widget(&page, &SolveOptions::default())
         .await
         .expect("a widget that stands is a failed attempt, not an error");
 
@@ -765,7 +769,7 @@ async fn input_the_browser_refuses_is_an_error() {
     let (page, mock, _site) = page_with_a_widget().await;
     mock.fail("Input.dispatchMouseEvent", "no input");
 
-    let error = solve_widget(&page)
+    let error = solve_widget(&page, &SolveOptions::default())
         .await
         .expect_err("the browser refuses the input");
 

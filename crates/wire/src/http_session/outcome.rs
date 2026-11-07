@@ -50,7 +50,7 @@ impl Default for HttpAttempt {
 }
 
 /// The two policies that judge a reply.
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct HttpRules {
     /// What to do about a challenge.
     pub mitigation: MitigationPolicy,

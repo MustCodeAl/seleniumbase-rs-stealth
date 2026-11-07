@@ -132,7 +132,7 @@ impl BrowserScraper {
         let has_widget = before.detection.evidence.widget.is_some();
         if has_widget || before.detection.kind == ChallengeKind::Interactive {
             cdp::human_warm_up(&self.page, self.persona.seed).await;
-            cdp::solve_widget(&self.page).await?;
+            cdp::solve_widget(&self.page, &self.wiring.policy.solve).await?;
         }
         cdp::wait_for_clearance(
             &self.page,

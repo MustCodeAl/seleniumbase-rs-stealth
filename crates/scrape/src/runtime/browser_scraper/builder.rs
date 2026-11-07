@@ -39,7 +39,7 @@ pub struct BrowserScraperBuilder {
     egresses: Vec<ProxyRoute>,
     strategy: RotationStrategy,
     attempts: Option<u32>,
-    policy: MitigationPolicy,
+    policy: Box<MitigationPolicy>,
     store: Option<Arc<dyn Ledger>>,
     sink: Option<Arc<dyn EventSink>>,
     geo: Option<Arc<dyn GeoResolver>>,
@@ -71,7 +71,7 @@ impl BrowserScraperBuilder {
             egresses: Vec::new(),
             strategy: RotationStrategy::RoundRobin,
             attempts: None,
-            policy: MitigationPolicy::default(),
+            policy: Box::default(),
             store: None,
             sink: None,
             geo: None,
@@ -131,7 +131,7 @@ impl BrowserScraperBuilder {
     /// [`max_challenge_attempts`](Self::max_challenge_attempts) still apply on top.
     #[must_use]
     pub fn mitigation(mut self, policy: MitigationPolicy) -> Self {
-        self.policy = policy;
+        self.policy = Box::new(policy);
         self
     }
 
@@ -234,6 +234,13 @@ impl BrowserScraperBuilder {
     /// when the country of an proxy has no locale.
     #[tracing::instrument(skip_all)]
     pub async fn build(self) -> Result<BrowserScraper, ScrapeError> {
+        // Boxed: launching and reading the first page make a large future; the caller's stays
+        // small.
+        Box::pin(self.assemble()).await
+    }
+
+    /// The work of [`build`](Self::build).
+    async fn assemble(self) -> Result<BrowserScraper, ScrapeError> {
         let (wiring, start) = self.into_parts();
         let size = start.egresses.len();
         let pool = (size > 0).then(|| ProxyPool::new(start.egresses, start.strategy));
@@ -260,7 +267,7 @@ impl BrowserScraperBuilder {
 
     /// Fills the defaults and splits the builder into the fixed wiring and the start settings.
     fn into_parts(self) -> (Wiring, Start) {
-        let mut policy = self.policy;
+        let mut policy = *self.policy;
         if let Some(attempts) = self.attempts {
             policy.max_challenge_attempts = attempts;
         }

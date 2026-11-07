@@ -415,7 +415,13 @@ impl StealthSession {
         let Leg::Browser(leg) = &self.leg else {
             return Ok(());
         };
-        leg.solve(detection, seed, timeout).await?;
+        leg.solve(
+            detection,
+            seed,
+            timeout,
+            &self.wiring.rules.mitigation.solve,
+        )
+        .await?;
         let identity = self.synced_identity().await?;
         let transition = self.wiring.rules.escalation.after_fetch(
             FetchKind::Browser,

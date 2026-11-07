@@ -13,7 +13,8 @@
 //! | script or interactive challenge in [`FetchKind::Http`] | [`Mitigation::Escalate`] to the browser |
 //! | script or interactive challenge in [`FetchKind::Browser`] | [`Mitigation::Solve`], then rotate |
 //!
-//! The rotation ladder rises with `consecutive_challenges`: at `rotate_proxy_after` the egress
+//! The rotation ladder rises with `consecutive_challenges`: when the `solve` options say a proxy
+//! rotation is due (`rotate_proxy_after`) the egress
 //! changes (if it can), at `rotate_fingerprint_after` the browser profile changes.
 
 use std::time::Duration;
@@ -21,6 +22,7 @@ use std::time::Duration;
 use serde::{Deserialize, Serialize};
 
 use super::detect::{ChallengeKind, Detection};
+use seleniumbase_rs::sb_cdp::SolveOptions;
 use seleniumbase_rs::utilities::retry::RetryPolicy;
 
 /// How many attempts at one URL the default policy makes before giving up.
@@ -109,16 +111,18 @@ pub enum GiveUpReason {
 }
 
 /// The thresholds of the decision table.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct MitigationPolicy {
     /// Attempts at one URL before giving up. Zero is read as one.
     pub max_challenge_attempts: u32,
     /// The wait before a retry that has no better reason to wait.
     pub backoff: RetryPolicy,
-    /// Challenges in a row after which the egress changes.
-    pub rotate_proxy_after: u32,
-    /// Challenges in a row after which the browser profile changes.
-    pub rotate_fingerprint_after: u32,
+    /// How a challenge in the browser is solved, as core's `Page::solve_captcha_with` takes it
+    /// (rounds, cooldown, clearance cookie, ...), and the rotation thresholds. Core's solver only
+    /// carries `rotate_proxy_after` and `rotate_fingerprint_after`; this policy applies them to
+    /// the challenges in a row (`proxy_rotation_due`, `fingerprint_rotation_due`).
+    pub solve: SolveOptions,
+
     /// Seconds to leave a site alone after an outright block.
     pub block_cooldown_secs: u64,
 }
@@ -128,8 +132,10 @@ impl Default for MitigationPolicy {
         Self {
             max_challenge_attempts: DEFAULT_MAX_CHALLENGE_ATTEMPTS,
             backoff: RetryPolicy::network(),
-            rotate_proxy_after: DEFAULT_ROTATE_EGRESS_AFTER,
-            rotate_fingerprint_after: DEFAULT_ROTATE_PROFILE_AFTER,
+            solve: SolveOptions::new()
+                .rotate_proxy_after(DEFAULT_ROTATE_EGRESS_AFTER)
+                .rotate_fingerprint_after(DEFAULT_ROTATE_PROFILE_AFTER),
+
             block_cooldown_secs: DEFAULT_BLOCK_COOLDOWN_SECS,
         }
     }
@@ -180,9 +186,9 @@ impl MitigationPolicy {
         match context.fetch_kind {
             FetchKind::Http if context.can_escalate => Mitigation::Escalate,
             FetchKind::Http => {
-                if streak >= self.rotate_fingerprint_after {
+                if self.solve.fingerprint_rotation_due(streak) {
                     Mitigation::RotateFingerprint
-                } else if streak >= self.rotate_proxy_after {
+                } else if self.solve.proxy_rotation_due(streak) {
                     if context.can_rotate_proxy {
                         Mitigation::RotateProxy
                     } else {
@@ -195,9 +201,9 @@ impl MitigationPolicy {
                 }
             }
             FetchKind::Browser => {
-                if streak >= self.rotate_fingerprint_after {
+                if self.solve.fingerprint_rotation_due(streak) {
                     Mitigation::RotateFingerprint
-                } else if streak >= self.rotate_proxy_after && context.can_rotate_proxy {
+                } else if self.solve.proxy_rotation_due(streak) && context.can_rotate_proxy {
                     Mitigation::RotateProxy
                 } else {
                     Mitigation::Solve
@@ -248,8 +254,10 @@ mod tests {
     fn the_defaults_are_the_named_constants() {
         let policy = MitigationPolicy::default();
         assert_eq!(policy.max_challenge_attempts, 3);
-        assert_eq!(policy.rotate_proxy_after, 2);
-        assert_eq!(policy.rotate_fingerprint_after, 3);
+        assert!(policy.solve.proxy_rotation_due(2) && !policy.solve.proxy_rotation_due(1));
+        assert!(
+            policy.solve.fingerprint_rotation_due(3) && !policy.solve.fingerprint_rotation_due(2)
+        );
         assert_eq!(policy.block_cooldown_secs, 900);
         assert_eq!(policy.backoff, RetryPolicy::network());
         assert_eq!(
@@ -504,8 +512,10 @@ mod tests {
     #[test]
     fn the_thresholds_are_the_policys_own() {
         let policy = MitigationPolicy {
-            rotate_proxy_after: 1,
-            rotate_fingerprint_after: 5,
+            solve: SolveOptions::new()
+                .rotate_proxy_after(1)
+                .rotate_fingerprint_after(5),
+
             block_cooldown_secs: 10,
             ..MitigationPolicy::default()
         };

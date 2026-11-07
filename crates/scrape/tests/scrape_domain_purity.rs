@@ -30,7 +30,14 @@ const FORBIDDEN_CLOCK: &[&[&str]] = &[&["Instant", "now"], &["SystemTime", "now"
 
 /// The only `sb_cdp` items the domain layer may name. `sync` is allowed only as `sync::locked`.
 // `Session` is plain data (cookies and storage), which the identity holds (design decision 1).
-const ALLOWED_SB_CDP: &[&str] = &["Proxy", "Cookie", "SameSite", "Captcha", "Session"];
+const ALLOWED_SB_CDP: &[&str] = &[
+    "Proxy",
+    "Cookie",
+    "SameSite",
+    "Captcha",
+    "Session",
+    "SolveOptions",
+];
 const ALLOWED_SB_CDP_SYNC: &str = "locked";
 
 /// Roots and clock types whose renaming would hide a forbidden path.
