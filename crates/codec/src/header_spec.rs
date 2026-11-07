@@ -37,6 +37,60 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use seleniumbase_rs::evasion::fingerprint::{BrandVersion, ClientHints, Fingerprint, OsType};
+use seleniumbase_rs::evasion::randomize::chromium_hints;
+
+/// The token that carries the Chrome major version in a user agent.
+const CHROME_TOKEN: &str = "Chrome/";
+/// `Sec-CH-UA-Mobile` for a desktop browser.
+const NOT_MOBILE: &str = "?0";
+/// `Sec-CH-UA-Mobile` for a mobile browser.
+const MOBILE: &str = "?1";
+
+/// The Chrome major version a user agent claims, from its `Chrome/` token.
+#[must_use]
+pub fn chrome_major(user_agent: &str) -> Option<u32> {
+    let (_, rest) = user_agent.split_once(CHROME_TOKEN)?;
+    let digits: String = rest.chars().take_while(char::is_ascii_digit).collect();
+    digits.parse().ok()
+}
+
+/// A string as a structured header field writes it: in quotes, with `\` and `"` escaped.
+fn quote(text: &str) -> String {
+    let mut quoted = String::with_capacity(text.len() + 2);
+    quoted.push('"');
+    for character in text.chars() {
+        if character == '\\' || character == '"' {
+            quoted.push('\\');
+        }
+        quoted.push(character);
+    }
+    quoted.push('"');
+    quoted
+}
+
+/// The `Sec-CH-UA` value of a brand list: `"Brand";v="1", "Other";v="2"`.
+fn sec_ch_ua(brands: &[BrandVersion]) -> String {
+    brands
+        .iter()
+        .map(|entry| format!("{};v={}", quote(&entry.brand), quote(&entry.version)))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+/// What `Sec-CH-UA-Platform` names an operating system: Chrome on Windows says `Windows`, never
+/// `Win32`, and on macOS `macOS`. `None` for a system added to core after this table.
+fn hints_platform(os: OsType) -> Option<&'static str> {
+    match os {
+        OsType::Windows => Some("Windows"),
+        OsType::Macos => Some("macOS"),
+        OsType::Linux => Some("Linux"),
+        OsType::Android => Some("Android"),
+        OsType::Ios => Some("iOS"),
+        _ => None,
+    }
+}
+
 /// The most headers one list may hold.
 pub const MAX_HEADERS: usize = 128;
 /// The longest header name, in bytes.
@@ -265,6 +319,56 @@ impl ClientHeaders {
             }
         }
         has_user_agent.then_some(identity)
+    }
+
+    /// The identity a fingerprint claims: its user agent, its `Accept-Language` (the
+    /// `accept_languages` setting, else `languages`) and its client hints. `None` when the
+    /// fingerprint has no user agent.
+    ///
+    /// The client hints are the fingerprint's own when it sets them. Otherwise they are the
+    /// ones Chrome sends for the major its user agent claims, as core computes them
+    /// ([`chromium_hints`]), on the fingerprint's operating system. A fingerprint that turns
+    /// client hints off, or whose user agent names no Chrome, gets none. This is the default way
+    /// to fill them, so that an HTTP client claims what the browser tab claims; the other way,
+    /// the values a real browser sent, is [`ClientHeaders::from_captured`].
+    #[must_use]
+    pub fn from_fingerprint(fingerprint: &Fingerprint) -> Option<Self> {
+        let user_agent = fingerprint.user_agent().as_str()?;
+        let mut identity = Self::new(user_agent);
+        let language = fingerprint
+            .accept_languages()
+            .as_str()
+            .or(fingerprint.languages().as_str());
+        if let Some(language) = language {
+            identity = identity.with_accept_language(language);
+        }
+        if fingerprint.client_hints().is_off() {
+            return Some(identity);
+        }
+        if let Some(hints) = fingerprint.client_hints().value() {
+            return Some(identity.with_client_hints_from(hints));
+        }
+        let (Some(major), Some(platform)) = (
+            chrome_major(user_agent),
+            hints_platform(fingerprint.os_type()),
+        ) else {
+            return Some(identity);
+        };
+        let mut hints = chromium_hints(major);
+        platform.clone_into(&mut hints.platform);
+        hints.mobile = fingerprint.os_type().is_mobile();
+        Some(identity.with_client_hints_from(&hints))
+    }
+
+    /// Sets the three client-hint headers a browser sends on every request from core's
+    /// [`ClientHints`]: the brand list, whether it is mobile, and the platform.
+    #[must_use]
+    pub fn with_client_hints_from(self, hints: &ClientHints) -> Self {
+        self.with_client_hints(
+            sec_ch_ua(&hints.brands),
+            if hints.mobile { MOBILE } else { NOT_MOBILE },
+            quote(&hints.platform),
+        )
     }
 
     /// The override for the header `name`; the last one given wins.

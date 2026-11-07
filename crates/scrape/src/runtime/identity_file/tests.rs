@@ -371,7 +371,7 @@ fn a_file_that_ends_early_is_corrupt_and_says_so() {
 fn a_cookie_the_jar_would_refuse_makes_the_file_corrupt() {
     let (_dir, path, _identity) = saved();
     edit(&path, |value| {
-        value["cookies"]["cookies"][0]["path"] = serde_json::json!("no-leading-slash");
+        value["session"]["cookies"][0]["path"] = serde_json::json!("no-leading-slash");
     });
     let error = load_blocking(&path).expect_err("a tampered jar");
     assert!(
@@ -385,7 +385,7 @@ fn a_cookie_the_jar_would_refuse_makes_the_file_corrupt() {
 fn a_secure_prefix_without_secure_makes_the_file_corrupt() {
     let (_dir, path, _identity) = saved();
     edit(&path, |value| {
-        let cookie = &mut value["cookies"]["cookies"][0];
+        let cookie = &mut value["session"]["cookies"][0];
         cookie["name"] = serde_json::json!("__Secure-cf_clearance");
         cookie["secure"] = serde_json::json!(false);
     });
@@ -399,7 +399,7 @@ fn a_secure_prefix_without_secure_makes_the_file_corrupt() {
 fn a_duplicated_cookie_makes_the_file_corrupt() {
     let (_dir, path, _identity) = saved();
     edit(&path, |value| {
-        let cookies = value["cookies"]["cookies"]
+        let cookies = value["session"]["cookies"]
             .as_array_mut()
             .expect("an array");
         let again = cookies[0].clone();
@@ -415,7 +415,7 @@ fn a_duplicated_cookie_makes_the_file_corrupt() {
 fn a_type_error_does_not_echo_the_value_it_met() {
     let (_dir, path, _identity) = saved();
     edit(&path, |value| {
-        value["cookies"]["cookies"][0]["expires"] = serde_json::json!("SECRET-EXPIRES-TEXT");
+        value["session"]["cookies"][0]["expires"] = serde_json::json!("SECRET-EXPIRES-TEXT");
         value["created_at"] = serde_json::json!("SECRET-CREATED-TEXT");
     });
     let error = load_blocking(&path).expect_err("wrong types");
@@ -429,7 +429,7 @@ fn a_type_error_does_not_echo_the_value_it_met() {
 fn a_cookie_value_of_the_wrong_type_is_not_echoed() {
     let (_dir, path, _identity) = saved();
     edit(&path, |value| {
-        value["cookies"]["cookies"][0]["value"] = serde_json::json!(918_273_645);
+        value["session"]["cookies"][0]["value"] = serde_json::json!(918_273_645);
     });
     let error = load_blocking(&path).expect_err("wrong type");
     for text in [error.to_string(), format!("{error:?}")] {

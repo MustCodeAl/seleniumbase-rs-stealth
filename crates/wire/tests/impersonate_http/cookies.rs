@@ -160,8 +160,9 @@ async fn the_cookies_of_the_identity_are_sent_and_the_session_exports_the_new_on
     .await;
     let mut base = identity();
     let url = Url::parse(&site.url(HOST, "/")).expect("a url");
-    base.cookies
-        .receive(&url, "carried=OLD; Max-Age=3600", now());
+    let mut jar = base.cookie_jar(now());
+    jar.receive(&url, "carried=OLD; Max-Age=3600", now());
+    base.replace_cookies(&jar, now());
     let sink = Arc::new(CollectingEventSink::new());
     let options = site
         .options(&[HOST])
@@ -175,8 +176,12 @@ async fn the_cookies_of_the_identity_are_sent_and_the_session_exports_the_new_on
     let exported = session.export_identity(&base);
 
     assert_eq!(site.seen()[0].cookie(), Some("carried=OLD"));
-    assert_eq!(exported.cookies.len(), 2);
-    assert_eq!(base.cookies.len(), 1, "the base identity is not changed");
+    assert_eq!(exported.session.cookies().len(), 2);
+    assert_eq!(
+        base.session.cookies().len(),
+        1,
+        "the base identity is not changed"
+    );
     let events = sink.events();
     assert!(events.contains(&ScrapeEvent::IdentityRestored { cookies: 1 }));
     assert!(events.contains(&ScrapeEvent::IdentityExported { cookies: 2 }));

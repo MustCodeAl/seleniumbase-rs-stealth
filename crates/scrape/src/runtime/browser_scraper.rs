@@ -67,7 +67,7 @@ use crate::error::ScrapeError;
 use crate::ledger::events::{EventSink, ScrapeEvent};
 use crate::ledger::state::Ledger;
 use seleniumbase_rs::evasion::fingerprint::Fingerprint;
-use seleniumbase_rs::sb_cdp::{Browser, LaunchOptionsBuilder, Page, SessionStore};
+use seleniumbase_rs::sb_cdp::{Browser, LaunchOptions, Page, SessionStore};
 
 use super::cdp::{NavResponse, ProxyLocale};
 use super::proxy_switch::ProxySwitch;
@@ -85,7 +85,7 @@ pub use launcher::{BrowserLauncher, ChromeLauncher};
 
 /// The ports and settings that are fixed when the scraper is built.
 struct Wiring {
-    launch: LaunchOptionsBuilder,
+    launch: LaunchOptions,
     launcher: Arc<dyn BrowserLauncher>,
     switch: Box<dyn ProxySwitch>,
     store: Arc<dyn Ledger>,

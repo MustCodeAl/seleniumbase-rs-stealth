@@ -766,7 +766,7 @@ pub fn navigation(host: &str, port: u16, user_agent: &str, extra: &[&str]) -> St
 
 /// The user agent the measured profile carries.
 pub fn measured_user_agent() -> String {
-    profile().user_agent().to_owned()
+    profile().client_headers().user_agent.clone()
 }
 
 /// A wreq client playing the browser: through the proxy, trusting only the proxy's CA,

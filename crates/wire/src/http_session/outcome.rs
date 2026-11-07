@@ -197,7 +197,7 @@ impl HttpSession {
     pub fn export_identity(&self, base: &Identity) -> Identity {
         let exported = self.identity_at(base, self.now());
         self.emit(&ScrapeEvent::IdentityExported {
-            cookies: exported.cookies.len(),
+            cookies: exported.session.cookies().len(),
         });
         exported
     }
@@ -209,7 +209,7 @@ impl HttpSession {
     /// clearance at all. One the site removed early is gone from the jar and from the list.
     fn identity_at(&self, base: &Identity, now: u64) -> Identity {
         let mut identity = base.clone();
-        identity.cookies = self.inner().jar.snapshot();
+        identity.replace_cookies(&self.inner().jar.snapshot(), now);
         let earlier = std::mem::take(&mut identity.clearances);
         identity.refresh_clearances(now);
         for ended in earlier.into_iter().filter(|c| c.expires_at <= now) {

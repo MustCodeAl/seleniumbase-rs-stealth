@@ -19,6 +19,57 @@ Only `scrape` and `mimic` were affected; `codec` holds no fingerprint.
 
 ### Breaking
 
+- **`WireFormat` and its builder read the identity from core's types** (design note rows
+  "`ImpersonationProfile`", "`CustomProfileBuilder::*`", "Accept-Language from a language list"
+  and "`GeoInfo.coordinates`"):
+  - `WireFormat::user_agent()` and `WireFormat::accept_language()` are removed: they returned
+    the values of the identity, which `client_headers()` gives (`.user_agent`,
+    `.accept_language`).
+  - `WireFormatBuilder::user_agent`, `accept_language` and `client_hints` are removed.
+    `WireFormatBuilder::fingerprint(&Fingerprint)` takes the identity of a core fingerprint
+    (`ClientHeaders::from_fingerprint`; it fails with `WireFormatError::Fingerprint` for one
+    without a user agent), and `WireFormatBuilder::client_headers(ClientHeaders)` takes one
+    captured from a browser or written by hand, the other way.
+  - `HttpSession::from_page` builds the `Accept-Language` of the page's languages with core's
+    `Locale::accept_language_list` (the same rule; the wire crate's copy is gone).
+  - `GeoInfo::coordinates` is a core `Geolocation`, not a `(f64, f64)`.
+
+
+- **The launch options are built `LaunchOptions`, not builders.** The core crate keeps what
+  `LaunchOptions` was built from (`LaunchOptions::fingerprint()`) and makes it again with
+  `with_fingerprint`, `with_headless`, `with_proxy`, `with_args` and `with_url`, under one rule
+  (a value set on the options wins over the fingerprint's, in any order). So
+  `BrowserScraperBuilder::launch_options` and `StealthSessionBuilder::launch_options` take a
+  `LaunchOptions` (add `.build()?` to the chain you passed), the scraper and the session give
+  their fingerprint to a copy of it with `with_fingerprint` (a rotation replaces the previous
+  fingerprint and nothing else), and `MitmProxy::configure_launch` takes built `LaunchOptions`
+  and returns `Result<LaunchOptions, SeleniumBaseError>`: it reads a start page already set
+  with `LaunchOptions::url()` instead of building a copy, and a start page set after it is
+  `with_url`. Before and after:
+
+  ```rust
+  // Before
+  let options = mitm.configure_launch(LaunchOptions::builder().headless(true)).build()?;
+  // After
+  let options = mitm.configure_launch(LaunchOptions::builder().headless(true).build()?)?;
+  ```
+
+
+- **The stealth types build on core's** (design note decisions 1 and 8; built against
+  seleniumbase-rs PR #40 and on top of PR #6 here):
+  - `ClientHeaders::from_fingerprint(&Fingerprint)` (codec) is the identity a fingerprint claims:
+    its user agent, languages and client hints. The hints are the fingerprint's own when it sets
+    them, otherwise the ones its Chrome major sends, as core computes them (`chromium_hints`).
+    The captured values stay the other way (`ClientHeaders::from_captured`, measured profiles).
+    `ClientHeaders::with_client_hints_from(&ClientHints)` and `header_spec::chrome_major` are new.
+  - `WireFormat::from_fingerprint` uses it: a fingerprint without its own hints now sends the
+    computed ones, not the captured ones. `WireFormat::with_locale` is removed; localize the
+    fingerprint (`LocaleExt::localize`) before building the profile.
+  - `Identity` holds its cookies (and local storage) as a core `Session` (`identity.session`), in
+    place of the `cookies` jar. `Identity::cookie_jar(now)` gives an HTTP cookie jar and
+    `Identity::replace_cookies(&jar, now)` keeps one. The identity file layout is version 2
+    (`IDENTITY_SCHEMA`); a version 1 file is refused.
+
 - **The stealth API is named after seleniumbase-rs, not after the project it was ported
   from** (design note `docs/design/stealth_names.md`, PR #4). The features stay; the names
   and shapes that were copied with them change. No shims.

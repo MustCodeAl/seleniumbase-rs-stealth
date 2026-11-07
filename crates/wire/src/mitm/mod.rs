@@ -151,7 +151,7 @@
 //! let profile = WireFormat::measured(BrowserKind::Chrome)?;
 //! let mitm = MitmProxy::start(profile, None, MitmOptions::default(), Arc::new(NoopEventSink))
 //!     .await?;
-//! let options = mitm.configure_launch(LaunchOptions::builder()).build()?;
+//! let options = mitm.configure_launch(LaunchOptions::builder().build()?)?;
 //! let browser = Browser::launch(options).await?;
 //! let page = browser.new_page_at("https://example.com/").await?;
 //! # drop(page);
@@ -193,7 +193,8 @@ use super::client::{WireFormat, WireFormatError};
 use super::tls_server::{self, EphemeralCa, TlsServerError, ALPN_HTTP1, DEFAULT_HANDSHAKE_TIMEOUT};
 use crate::sync::locked;
 use seleniumbase_rs::common::shutdown::{cleanup_within, spawn_cleanup, timeout_from_env};
-use seleniumbase_rs::sb_cdp::{LaunchOptionsBuilder, Proxy};
+use seleniumbase_rs::sb_cdp::{LaunchOptions, Proxy};
+use seleniumbase_rs::SeleniumBaseError;
 use seleniumbase_rs_scrape::egress::redact::{RedactedUrl, Secret};
 use seleniumbase_rs_scrape::egress::route::{ProxyKey, ProxyRoute};
 use seleniumbase_rs_scrape::ledger::events::{EventSink, ScrapeEvent};
@@ -805,26 +806,26 @@ impl MitmProxy {
     /// [`MitmProxy::prime_url`] as the start page, so that the browser holds the proxy's
     /// credentials before any WebSocket.
     ///
-    /// A start page already set on `builder` is kept; an `http://` or `https://` one takes the
+    /// A start page already set on `options` is kept; an `http://` or `https://` one takes the
     /// credentials as well, as any page through the proxy does, but an `about:` or `data:` one does
-    /// not. A start page set after this call replaces the priming page.
-    #[must_use]
-    pub fn configure_launch(&self, builder: LaunchOptionsBuilder) -> LaunchOptionsBuilder {
-        // The builder has no getter, so its start page is read from a copy of what it builds.
-        let has_start_page = builder
-            .clone()
-            .build()
-            .is_ok_and(|options| options.url().is_some());
-        let builder = self
-            .launch_args()
-            .into_iter()
-            .fold(builder.proxy(self.inner.spec.expose()), |builder, arg| {
-                builder.arg(arg)
-            });
-        if has_start_page {
-            builder
-        } else {
-            builder.url(self.prime_url())
+    /// not. A start page set after this call, with [`LaunchOptions::with_url`], replaces the
+    /// priming page.
+    ///
+    /// # Errors
+    ///
+    /// Returns the error of making `options` again with the proxy: a browser that is attached to
+    /// (a `cdp_url`) cannot be given a proxy.
+    pub fn configure_launch(
+        &self,
+        options: LaunchOptions,
+    ) -> Result<LaunchOptions, SeleniumBaseError> {
+        let prime = options.url().is_none().then(|| self.prime_url());
+        let options = options
+            .with_proxy(self.inner.spec.expose())?
+            .with_args(self.launch_args())?;
+        match prime {
+            Some(url) => options.with_url(url),
+            None => Ok(options),
         }
     }
 

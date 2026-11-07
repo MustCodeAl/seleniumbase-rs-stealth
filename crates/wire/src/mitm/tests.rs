@@ -373,8 +373,12 @@ async fn the_launch_line_has_the_proxy_and_switches_but_never_the_token() {
         .map(|(_, token)| token.to_owned())
         .expect("a token in the spec");
     let options = mitm
-        .configure_launch(LaunchOptions::builder().headless(true))
-        .build()
+        .configure_launch(
+            LaunchOptions::builder()
+                .headless(true)
+                .build()
+                .expect("valid launch options"),
+        )
         .expect("valid launch options");
     let args = options.browser_args(Path::new("/tmp/sb-mitm-unit"));
 
@@ -448,17 +452,19 @@ async fn the_launch_opens_the_priming_page_unless_it_has_a_start_page_already() 
     let mitm = started().await;
 
     let primed = mitm
-        .configure_launch(LaunchOptions::builder())
-        .build()
+        .configure_launch(LaunchOptions::default())
         .expect("valid launch options");
     let kept = mitm
-        .configure_launch(LaunchOptions::builder().url("https://example.com/"))
-        .build()
+        .configure_launch(
+            LaunchOptions::builder()
+                .url("https://example.com/")
+                .build()
+                .expect("valid launch options"),
+        )
         .expect("valid launch options");
     let replaced = mitm
-        .configure_launch(LaunchOptions::builder())
-        .url("https://example.org/")
-        .build()
+        .configure_launch(LaunchOptions::default())
+        .and_then(|options| options.with_url("https://example.org/"))
         .expect("valid launch options");
 
     assert_eq!(primed.url(), Some(mitm.prime_url().as_str()));

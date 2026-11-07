@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::h2_frames::{encode_frame, frame_type, read_preface, CLIENT_PREFACE};
+use seleniumbase_rs::evasion::fingerprint::Spoof;
 
 /// Synthetic captures in the shape of a browser's: the names are real, the values are made up.
 const DOCUMENT: [(&str, &str); 14] = [
@@ -652,4 +653,91 @@ fn random_header_lists_are_either_refused_or_valid_and_render_cleanly() {
             assert!(rendered.len() <= list.len());
         }
     }
+}
+
+/// A Chrome 155 fingerprint on `os` that leaves its client hints to the browser.
+fn chrome_155(os: OsType) -> Fingerprint {
+    Fingerprint::randomized_with_major(os, 5, 155)
+        .to_builder()
+        .client_hints(Spoof::Natural)
+        .build()
+        .expect("builds")
+}
+
+#[test]
+fn a_fingerprint_without_its_own_hints_gets_the_ones_its_chrome_major_sends() {
+    let fingerprint = chrome_155(OsType::Windows);
+    let identity = ClientHeaders::from_fingerprint(&fingerprint).expect("a user agent");
+    assert_eq!(
+        Some(identity.user_agent.as_str()),
+        fingerprint.user_agent().as_str()
+    );
+    assert_eq!(
+        identity.sec_ch_ua,
+        Some(sec_ch_ua(&chromium_hints(155).brands))
+    );
+    assert_eq!(identity.sec_ch_ua_mobile.as_deref(), Some("?0"));
+    assert_eq!(identity.sec_ch_ua_platform.as_deref(), Some("\"Windows\""));
+    let mac = ClientHeaders::from_fingerprint(&chrome_155(OsType::Macos)).expect("a user agent");
+    assert_eq!(mac.sec_ch_ua_platform.as_deref(), Some("\"macOS\""));
+}
+
+#[test]
+fn a_fingerprint_with_its_own_hints_keeps_them_and_one_that_turns_them_off_sends_none() {
+    let fingerprint = Fingerprint::randomized_with_major(OsType::Macos, 11, 155);
+    let hints = fingerprint.client_hints().value().expect("Chrome hints");
+    let identity = ClientHeaders::from_fingerprint(&fingerprint).expect("a user agent");
+    assert_eq!(identity.sec_ch_ua, Some(sec_ch_ua(&hints.brands)));
+    assert_eq!(
+        identity.accept_language.as_deref(),
+        fingerprint
+            .accept_languages()
+            .as_str()
+            .or(fingerprint.languages().as_str())
+    );
+
+    let off = fingerprint
+        .to_builder()
+        .client_hints(Spoof::Off)
+        .build()
+        .expect("builds");
+    let identity = ClientHeaders::from_fingerprint(&off).expect("a user agent");
+    assert_eq!(
+        (
+            identity.sec_ch_ua,
+            identity.sec_ch_ua_mobile,
+            identity.sec_ch_ua_platform
+        ),
+        (None, None, None)
+    );
+}
+
+#[test]
+fn hints_from_core_are_written_as_structured_header_strings() {
+    let brands = [
+        BrandVersion::new("Google Chrome", "155"),
+        BrandVersion::new("Not(A:Brand", "24"),
+    ];
+    assert_eq!(
+        sec_ch_ua(&brands),
+        "\"Google Chrome\";v=\"155\", \"Not(A:Brand\";v=\"24\""
+    );
+    assert_eq!(quote("a\"b\\c"), "\"a\\\"b\\\\c\"");
+}
+
+#[test]
+fn a_user_agent_names_its_chrome_major() {
+    assert_eq!(
+        chrome_major("Mozilla/5.0 (X11) AppleWebKit/537.36 Chrome/155.0.0.0 Safari/537.36"),
+        Some(155)
+    );
+    assert_eq!(chrome_major("Mozilla/5.0 Firefox/130.0"), None);
+    assert_eq!(chrome_major("Chrome/"), None);
+}
+
+#[test]
+fn a_fingerprint_without_a_user_agent_claims_no_identity() {
+    let bare = Fingerprint::builder().build().expect("builds");
+    assert!(bare.user_agent().as_str().is_none());
+    assert!(ClientHeaders::from_fingerprint(&bare).is_none());
 }

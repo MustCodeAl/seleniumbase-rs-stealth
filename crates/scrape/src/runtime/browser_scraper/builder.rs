@@ -20,7 +20,7 @@ use crate::runtime::cdp::ProxyLocale;
 use crate::runtime::proxy_switch::{ContextProxySwitch, ProxySwitch};
 use crate::runtime::tracing_sink::TracingEventSink;
 use seleniumbase_rs::evasion::fingerprint::Fingerprint;
-use seleniumbase_rs::sb_cdp::{LaunchOptionsBuilder, SessionStore};
+use seleniumbase_rs::sb_cdp::{LaunchOptions, SessionStore};
 
 /// How long a challenge is given to show as solved, unless the builder says otherwise.
 pub const DEFAULT_SOLVE_TIMEOUT: Duration = Duration::from_secs(30);
@@ -34,7 +34,7 @@ pub type Clock = Arc<dyn Fn() -> u64 + Send + Sync>;
 /// in memory, events written to `tracing`, three attempts per fetch, and a profile drawn from a
 /// random seed.
 pub struct BrowserScraperBuilder {
-    launch: LaunchOptionsBuilder,
+    launch: LaunchOptions,
     egresses: Vec<ProxyRoute>,
     strategy: RotationStrategy,
     attempts: Option<u32>,
@@ -66,7 +66,7 @@ impl fmt::Debug for BrowserScraperBuilder {
 impl BrowserScraperBuilder {
     pub(super) fn new() -> Self {
         Self {
-            launch: LaunchOptionsBuilder::default(),
+            launch: LaunchOptions::default(),
             egresses: Vec::new(),
             strategy: RotationStrategy::RoundRobin,
             attempts: None,
@@ -85,10 +85,10 @@ impl BrowserScraperBuilder {
         }
     }
 
-    /// The launch options of the browser. The fingerprint of the scraper is applied after them, so
+    /// The launch options of the browser, as built. The scraper adds its fingerprint to a copy of them, so
     /// a setting made here (a user agent, say) wins over the fingerprint's.
     #[must_use]
-    pub fn launch_options(mut self, launch: LaunchOptionsBuilder) -> Self {
+    pub fn launch_options(mut self, launch: LaunchOptions) -> Self {
         self.launch = launch;
         self
     }
@@ -292,8 +292,11 @@ async fn start_browser(
     mut persona: Persona,
     proxy: Egress,
 ) -> Result<BrowserScraper, ScrapeError> {
-    let options = wiring.launch.clone().fingerprint(&persona.fingerprint);
-    let browser = wiring.launcher.launch(options.build()?).await?;
+    let options = wiring
+        .launch
+        .clone()
+        .with_fingerprint(&persona.fingerprint)?;
+    let browser = wiring.launcher.launch(options).await?;
     let page = match wiring.open_page(&browser, proxy.current.as_ref()).await {
         Ok(page) => page,
         Err(error) => {
@@ -350,7 +353,7 @@ async fn start_persona(
 
 /// Starts a headless browser to read the version of Chrome, and closes it.
 async fn probe_major(wiring: &Wiring) -> Result<Option<u32>, ScrapeError> {
-    let options = wiring.launch.clone().headless(true).build()?;
+    let options = wiring.launch.clone().with_headless(true)?;
     let probe = wiring.launcher.launch(options).await?;
     let major = browser_major(&probe).await;
     if let Err(error) = probe.close().await {

@@ -103,10 +103,10 @@ impl BrowserScraper {
             self.current_key(),
             now,
         )?;
-        identity.cookies = cdp::export_cookies(&self.page, now).await?;
+        identity.replace_cookies(&cdp::export_cookies(&self.page, now).await?, now);
         identity.refresh_clearances(now);
         self.emit(&ScrapeEvent::IdentityExported {
-            cookies: identity.cookies.len(),
+            cookies: identity.session.cookies().len(),
         });
         Ok(identity)
     }
@@ -134,9 +134,10 @@ impl BrowserScraper {
                 .await?;
             self.persona.seed = identity.fingerprint.seed();
         }
-        cdp::import_cookies(&self.page, &identity.cookies, self.now()).await?;
+        let now = self.now();
+        cdp::import_cookies(&self.page, &identity.cookie_jar(now), now).await?;
         self.emit(&ScrapeEvent::IdentityRestored {
-            cookies: identity.cookies.len(),
+            cookies: identity.session.cookies().len(),
         });
         Ok(())
     }
@@ -196,8 +197,8 @@ impl BrowserScraper {
         fingerprint: Fingerprint,
         current: Option<Current>,
     ) -> Result<(), ScrapeError> {
-        let options = self.wiring.launch.clone().fingerprint(&fingerprint);
-        let browser = self.wiring.launcher.launch(options.build()?).await?;
+        let options = self.wiring.launch.clone().with_fingerprint(&fingerprint)?;
+        let browser = self.wiring.launcher.launch(options).await?;
         let page = match self.wiring.open_page(&browser, current.as_ref()).await {
             Ok(page) => page,
             Err(error) => {

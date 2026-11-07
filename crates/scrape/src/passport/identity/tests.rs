@@ -41,7 +41,11 @@ fn a_new_identity_is_empty_and_current() {
     let fresh = identity();
     assert_eq!(fresh.schema, IDENTITY_SCHEMA);
     assert_eq!(fresh.created_at, NOW);
-    assert!(fresh.cookies.is_empty() && fresh.clearances.is_empty() && fresh.accept_ch.is_empty());
+    assert!(
+        fresh.session.cookies().is_empty()
+            && fresh.clearances.is_empty()
+            && fresh.accept_ch.is_empty()
+    );
     assert_eq!(fresh.proxy, Some(proxy("p1.example")));
     assert_eq!(fresh.wire_measurement, wire_measurement());
 }
@@ -171,7 +175,7 @@ fn an_identity_written_without_the_optional_parts_reads_with_defaults() {
 #[test]
 fn a_tampered_jar_does_not_deserialize() {
     let mut value = serde_json::to_value(identity_with_clearance()).expect("serializes");
-    value["cookies"]["cookies"][0]["path"] = serde_json::json!("no-leading-slash");
+    value["session"]["cookies"][0]["path"] = serde_json::json!("no-leading-slash");
     let result: Result<Identity, _> = serde_json::from_value(value);
     assert!(result.is_err(), "a cookie the jar refuses must not be read");
 }
@@ -267,7 +271,11 @@ fn only_clearance_cookies_count_and_the_record_holds_no_value() {
     assert_eq!(made.clearances[0].vendor, ProtectionVendor::DataDome);
     assert_eq!(made.clearances[0].cookie, "datadome");
     assert!(!format!("{:?}", made.clearances).contains("SECRET-DD"));
-    assert_eq!(made.cookies.len(), 2, "the ordinary cookie is stored too");
+    assert_eq!(
+        made.session.cookies().len(),
+        2,
+        "the ordinary cookie is stored too"
+    );
 }
 
 #[test]
@@ -474,4 +482,52 @@ fn error_messages_are_readable() {
     assert!(IdentityError::Schema(9).to_string().contains('9'));
     let text = IdentityError::Incoherent(vec!["a".to_owned(), "b".to_owned()]).to_string();
     assert!(text.contains("a; b"), "{text}");
+}
+
+#[test]
+fn the_cookies_are_a_core_session_and_survive_a_file() {
+    let identity = identity_with_clearance();
+    let clearance = identity
+        .session
+        .cookies()
+        .iter()
+        .find(|cookie| cookie.name == "cf_clearance")
+        .expect("the clearance cookie is in the session");
+    assert_eq!(clearance.domain.trim_start_matches('.'), "example.com");
+    assert!(clearance.secure && clearance.http_only);
+
+    let json = serde_json::to_value(&identity).expect("serializes");
+    assert_eq!(json["schema"], 2);
+    assert!(json.get("cookies").is_none(), "{json}");
+    assert_eq!(json["session"]["cookies"][0]["name"], "cf_clearance");
+    let back: Identity = serde_json::from_value(json).expect("deserializes");
+    assert_eq!(back, identity);
+    assert_eq!(back.cookie_jar(NOW).len(), 1);
+}
+
+#[test]
+fn replacing_the_cookies_keeps_the_local_storage() {
+    let mut identity = identity();
+    let storage = BTreeMap::from([("cart".to_owned(), "3".to_owned())]);
+    identity.session =
+        Session::default().with_local_storage("https://example.com", storage.clone());
+    let jar = identity_with_clearance().cookie_jar(NOW);
+
+    identity.replace_cookies(&jar, NOW);
+
+    assert_eq!(identity.session.cookies().len(), 1);
+    assert_eq!(identity.session.origin(), Some("https://example.com"));
+    assert_eq!(identity.session.local_storage(), &storage);
+    let back: Identity =
+        serde_json::from_str(&serde_json::to_string(&identity).expect("serializes"))
+            .expect("reads");
+    assert_eq!(back.session.local_storage(), &storage);
+}
+
+#[test]
+fn an_identity_of_the_first_layout_is_refused() {
+    let mut json = serde_json::to_value(identity()).expect("serializes");
+    json["schema"] = serde_json::json!(1);
+    let old: Identity = serde_json::from_value(json).expect("the fields still read");
+    assert!(matches!(old.validate(), Err(IdentityError::Schema(1))));
 }

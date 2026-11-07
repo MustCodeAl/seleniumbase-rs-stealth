@@ -47,11 +47,17 @@ async fn the_request_carries_the_identity_of_the_profile_and_no_cookie() {
 
     let seen = &site.seen()[0];
     let profile = session.wire_format();
-    assert_eq!(seen.header("user-agent"), Some(profile.user_agent()));
+    assert_eq!(
+        seen.header("user-agent"),
+        Some(profile.client_headers().user_agent.as_str())
+    );
     assert!(seen
         .header("sec-ch-ua")
         .is_some_and(|hints| hints.contains("Chrome")));
-    assert_eq!(seen.header("accept-language"), profile.accept_language());
+    assert_eq!(
+        seen.header("accept-language"),
+        profile.client_headers().accept_language.as_deref()
+    );
     assert!(seen.cookie().is_none());
     let document = profile
         .headers_for(

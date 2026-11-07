@@ -63,8 +63,9 @@ async fn open() -> (Browser, Page) {
 async fn announce_as_measured(page: &Page) -> String {
     let agent = WireFormat::measured(BrowserKind::Chrome)
         .expect("measured")
-        .user_agent()
-        .to_owned();
+        .client_headers()
+        .user_agent
+        .clone();
     page.execute(
         "Emulation.setUserAgentOverride",
         json!({ "userAgent": agent, "acceptLanguage": LANGUAGES, "platform": "MacIntel" }),

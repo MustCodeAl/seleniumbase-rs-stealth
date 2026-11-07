@@ -48,14 +48,14 @@ mod identity;
 use thiserror::Error;
 use wreq::{Emulation, Group, RequestBuilder};
 
-use self::identity::{identity_for, user_agent_major, DEFAULT_LOCALE_TAG};
+use self::identity::{identity_for, DEFAULT_LOCALE_TAG};
 use super::convert::{self, ConvertError};
 use seleniumbase_rs::evasion::fingerprint::{BrowserType, Fingerprint, OsType};
 use seleniumbase_rs_codec::akamai::AkamaiError;
 use seleniumbase_rs_codec::client_hello::ext_id;
 use seleniumbase_rs_codec::h2_spec::{H2Spec, H2SpecError};
 use seleniumbase_rs_codec::header_spec::{
-    ClientHeaders, HeaderSpec, HeaderSpecError, RequestShape,
+    chrome_major, ClientHeaders, HeaderSpec, HeaderSpecError, RequestShape,
 };
 use seleniumbase_rs_codec::ja3::{Ja3Error, PeetprintError};
 use seleniumbase_rs_codec::ja4::Ja4Error;
@@ -264,6 +264,12 @@ impl WireFormat {
     /// A profile for the identity of a fingerprint, riding the measured TLS and HTTP/2 of its
     /// operating system.
     ///
+    /// The headers carry the fingerprint's identity ([`ClientHeaders::from_fingerprint`]): its
+    /// user agent, its languages, and its client hints, which are its own when it sets them and
+    /// otherwise the ones its Chrome major sends, as core computes them. A measured profile
+    /// ([`WireFormat::measured`], [`WireFormat::for_system`]) sends the captured hints instead.
+    /// To change the language, localize the fingerprint first (`LocaleExt::localize`).
+    ///
     /// # Errors
     ///
     /// Returns [`WireFormatError::Measurement`] with `NotMeasured` for a system with no capture,
@@ -278,11 +284,9 @@ impl WireFormat {
             ));
         }
         let entry = measurement::get(BrowserKind::Chrome, fingerprint.os_type())?;
-        let user_agent = fingerprint
-            .user_agent()
-            .as_str()
+        let mut identity = ClientHeaders::from_fingerprint(fingerprint)
             .ok_or(WireFormatError::Fingerprint("it has no user agent"))?;
-        let claimed = user_agent_major(user_agent).ok_or(WireFormatError::Fingerprint(
+        let claimed = chrome_major(&identity.user_agent).ok_or(WireFormatError::Fingerprint(
             "its user agent names no Chrome version",
         ))?;
         if claimed != entry.major {
@@ -292,24 +296,11 @@ impl WireFormat {
             });
         }
         let mut profile = Self::from_measured(entry)?;
-        let language = fingerprint
-            .accept_languages()
-            .as_str()
-            .or(fingerprint.languages().as_str());
-        let hints = fingerprint
-            .client_hints()
-            .value()
-            .or(entry.client_hints.as_ref());
-        let language = language.or(profile.identity.accept_language.as_deref());
-        profile.identity = identity_for(user_agent, language, hints);
+        if identity.accept_language.is_none() {
+            identity.accept_language = profile.identity.accept_language.take();
+        }
+        profile.identity = identity;
         Ok(profile)
-    }
-
-    /// The same profile with the `Accept-Language` of a locale.
-    #[must_use]
-    pub fn with_locale(mut self, locale: &Locale) -> Self {
-        self.identity.accept_language = Some(locale.accept_language());
-        self
     }
 
     /// A builder that layers custom inputs over a measured base.
@@ -355,18 +346,6 @@ impl WireFormat {
         self.major
     }
 
-    /// The `User-Agent` a request carries.
-    #[must_use]
-    pub fn user_agent(&self) -> &str {
-        &self.identity.user_agent
-    }
-
-    /// The `Accept-Language` a request carries, when it has one.
-    #[must_use]
-    pub fn accept_language(&self) -> Option<&str> {
-        self.identity.accept_language.as_deref()
-    }
-
     /// The TLS spec the client sends.
     #[must_use]
     pub fn tls_spec(&self) -> &TlsSpec {
@@ -385,7 +364,8 @@ impl WireFormat {
         &self.headers
     }
 
-    /// The values of the identity placeholders (a cookie is never part of it).
+    /// The values of the identity placeholders (a cookie is never part of it): the `User-Agent`
+    /// and `Accept-Language` a request carries, and its client hints.
     #[must_use]
     pub fn client_headers(&self) -> &ClientHeaders {
         &self.identity

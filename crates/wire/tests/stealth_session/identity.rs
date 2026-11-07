@@ -192,7 +192,7 @@ async fn rotating_the_profile_over_http_draws_a_new_one_and_drops_what_the_old_o
     let after = session.identity();
     assert_ne!(after.fingerprint, before.fingerprint);
     assert_ne!(session.seed(), seed);
-    assert!(after.cookies.is_empty() && after.clearances.is_empty());
+    assert!(after.session.cookies().is_empty() && after.clearances.is_empty());
     assert_eq!(
         after.wire_measurement, before.wire_measurement,
         "the same measured Chrome"
@@ -281,7 +281,7 @@ async fn rotating_the_profile_in_the_browser_starts_a_new_chrome_behind_the_same
     let (old, new) = (world.launcher.nth(0), world.launcher.nth(1));
     assert_eq!(old.proxy_server(), new.proxy_server());
     assert!(!old.browser.is_connected() && new.browser.is_connected());
-    assert!(session.identity().cookies.is_empty());
+    assert_eq!(session.identity().session.cookies(), []);
     session.close().await.expect("closes");
 }
 
@@ -302,7 +302,7 @@ async fn rotating_the_egress_over_http_moves_the_identity_and_the_language() {
         &language,
         "the country's language"
     );
-    assert!(session.identity().cookies.is_empty());
+    assert_eq!(session.identity().session.cookies(), []);
     assert_eq!(
         rotations(&world),
         [(Some(from.to_string()), Some(to.to_string()))],

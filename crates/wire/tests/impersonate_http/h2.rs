@@ -18,7 +18,9 @@ async fn an_http2_origin_gets_the_http2_headers_and_the_reply_says_so() {
     let site = H2Site::start(BODY).await;
     let mut base = identity();
     let url = Url::parse(&site.url(HOST, "/")).expect("a url");
-    base.cookies.receive(&url, "carried=1; Max-Age=3600", now());
+    let mut jar = base.cookie_jar(now());
+    jar.receive(&url, "carried=1; Max-Age=3600", now());
+    base.replace_cookies(&jar, now());
     let sink = Arc::new(CollectingEventSink::new());
     let options = site.options(&[HOST]).event_sink(sink);
     let session = HttpSession::from_identity(&base, None, options).expect("a session");
@@ -40,7 +42,10 @@ async fn an_http2_origin_gets_the_http2_headers_and_the_reply_says_so() {
             .map(|field| field.value.as_str())
     };
     let profile = session.wire_format();
-    assert_eq!(sent("user-agent"), Some(profile.user_agent()));
+    assert_eq!(
+        sent("user-agent"),
+        Some(profile.client_headers().user_agent.as_str())
+    );
     assert_eq!(sent("cookie"), Some("carried=1"));
     assert_eq!(sent(":path"), Some("/page"));
     let expected = profile

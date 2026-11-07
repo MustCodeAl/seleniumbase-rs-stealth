@@ -14,7 +14,6 @@
 //! leave from this machine's own address; it is refused with [`HttpError::BrowserProxy`] unless it
 //! is given the egress the proxy really leaves through, or told that the proxy leaves directly.
 
-use std::fmt::Write as _;
 use std::net::IpAddr;
 
 use serde_json::{json, Value};
@@ -26,6 +25,7 @@ use super::HttpSession;
 use crate::client::{WireFormat, WireFormatError};
 use seleniumbase_rs::error::SeleniumBaseError;
 use seleniumbase_rs::evasion::fingerprint::OsType;
+use seleniumbase_rs::evasion::randomize::Locale;
 use seleniumbase_rs::sb_cdp::{Page, Proxy};
 use seleniumbase_rs_codec::measurement;
 use seleniumbase_rs_codec::BrowserKind;
@@ -52,8 +52,6 @@ const NOT_CHROME: [&str; 8] = [
 const CHROME_TOKEN: &str = "Chrome/";
 /// The token a headless Chrome puts in its user agent in place of `Chrome`.
 const HEADLESS_TOKEN: &str = "HeadlessChrome";
-/// How many languages `Accept-Language` lists, as Chrome writes it.
-const MAX_LANGUAGES: usize = 10;
 
 /// What the page reported about itself.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -91,30 +89,6 @@ pub(super) fn os_of(user_agent: &str) -> Result<OsType, WireFormatError> {
     }
 }
 
-/// An `Accept-Language` value built the way Chrome builds it from its language list: the first
-/// language plain, then `q=0.9`, `q=0.8`, and so on down to `q=0.1`.
-pub(super) fn accept_language(languages: &[String]) -> Option<String> {
-    let mut seen: Vec<&str> = Vec::new();
-    for language in languages {
-        let language = language.trim();
-        if !language.is_empty() && !seen.contains(&language) {
-            seen.push(language);
-        }
-    }
-    let mut header = String::new();
-    for (index, language) in seen.iter().take(MAX_LANGUAGES).enumerate() {
-        if index > 0 {
-            header.push(',');
-        }
-        header.push_str(language);
-        if index > 0 {
-            // At most nine entries follow the first, so this is 0.9 down to 0.1.
-            let _written = write!(header, ";q=0.{}", 10 - index.min(9));
-        }
-    }
-    (!header.is_empty()).then_some(header)
-}
-
 /// The profile for what a page reported.
 ///
 /// # Errors
@@ -146,13 +120,18 @@ pub(super) fn profile_of(probe: &Probe) -> Result<WireFormat, HttpError> {
             return Err(HttpError::VersionMismatch { browser, measured });
         }
     }
-    let mut builder = WireFormat::builder()
-        .base_on(BrowserKind::Chrome, os)
-        .user_agent(user_agent);
-    if let Some(language) = accept_language(&probe.languages) {
-        builder = builder.accept_language(language);
+    // The page's own user agent and languages, over the measured client hints of its system.
+    let mut identity = WireFormat::for_system(BrowserKind::Chrome, os)?
+        .client_headers()
+        .clone();
+    user_agent.clone_into(&mut identity.user_agent);
+    if let Some(language) = Locale::accept_language_list(&probe.languages) {
+        identity.accept_language = Some(language);
     }
-    Ok(builder.build()?)
+    Ok(WireFormat::builder()
+        .base_on(BrowserKind::Chrome, os)
+        .client_headers(identity)
+        .build()?)
 }
 
 /// Chrome's bypass patterns as a `no_proxy` list. `<-loopback>` and `<local>` are Chrome keywords
@@ -554,24 +533,27 @@ mod tests {
     fn accept_language_is_built_the_way_chrome_builds_it() {
         let list = |items: &[&str]| items.iter().map(|s| (*s).to_owned()).collect::<Vec<_>>();
         assert_eq!(
-            accept_language(&list(&["en-US", "en"])).as_deref(),
+            Locale::accept_language_list(&list(&["en-US", "en"])).as_deref(),
             Some("en-US,en;q=0.9")
         );
         assert_eq!(
-            accept_language(&list(&["de-DE", "de", "en-US", "en"])).as_deref(),
+            Locale::accept_language_list(&list(&["de-DE", "de", "en-US", "en"])).as_deref(),
             Some("de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7")
         );
-        assert_eq!(accept_language(&list(&["fr"])).as_deref(), Some("fr"));
-        assert_eq!(accept_language(&list(&[" ", ""])), None);
-        assert_eq!(accept_language(&[]), None);
         assert_eq!(
-            accept_language(&list(&["en", "en", " en "])).as_deref(),
+            Locale::accept_language_list(&list(&["fr"])).as_deref(),
+            Some("fr")
+        );
+        assert_eq!(Locale::accept_language_list(&list(&[" ", ""])), None);
+        assert_eq!(Locale::accept_language_list::<String>(&[]), None);
+        assert_eq!(
+            Locale::accept_language_list(&list(&["en", "en", " en "])).as_deref(),
             Some("en"),
             "repeats collapse"
         );
         let many: Vec<String> = (0..30).map(|i| format!("l{i}")).collect();
-        let header = accept_language(&many).expect("a header");
-        assert_eq!(header.matches(',').count(), MAX_LANGUAGES - 1);
+        let header = Locale::accept_language_list(&many).expect("a header");
+        assert_eq!(header.matches(',').count(), 9, "ten languages at most");
         assert!(header.ends_with("q=0.1"), "{header}");
     }
 
@@ -586,8 +568,11 @@ mod tests {
             ..probe_with(&agent)
         })
         .expect("a profile");
-        assert_eq!(profile.user_agent(), agent);
-        assert_eq!(profile.accept_language(), Some("de-DE,de;q=0.9"));
+        assert_eq!(profile.client_headers().user_agent, agent);
+        assert_eq!(
+            profile.client_headers().accept_language.as_deref(),
+            Some("de-DE,de;q=0.9")
+        );
         assert_eq!(profile.major(), measured);
     }
 

@@ -46,7 +46,12 @@ const SOLVE_WITHIN: Duration = Duration::from_secs(30);
 /// A builder wired to `site`, with Chrome headless.
 fn builder(site: &ChallengeSite, sink: &CollectingEventSink) -> StealthSessionBuilder {
     StealthSession::builder()
-        .launch_options(LaunchOptions::builder().headless(true))
+        .launch_options(
+            LaunchOptions::builder()
+                .headless(true)
+                .build()
+                .expect("valid launch options"),
+        )
         .http_session_options(site.http_session_options())
         .mitm_options(site.mitm_options())
         .event_sink(Arc::new(sink.clone()))
@@ -160,7 +165,7 @@ fn assert_origin_saw_one_browser(site: &ChallengeSite) {
 async fn assert_clearance_moved(session: &StealthSession, site: &ChallengeSite) {
     let identity = session.export_identity().await.expect("an identity");
     let names: Vec<_> = identity
-        .cookies
+        .session
         .cookies()
         .iter()
         .map(|c| c.name.as_str())
@@ -175,7 +180,7 @@ async fn assert_clearance_moved(session: &StealthSession, site: &ChallengeSite) 
         "about {DEFAULT_TTL_SECS} s of clearance, not {left}"
     );
     assert!(identity
-        .cookies
+        .session
         .cookies()
         .iter()
         .any(|c| c.value == site.token()));

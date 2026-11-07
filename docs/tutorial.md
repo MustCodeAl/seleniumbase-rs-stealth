@@ -293,8 +293,12 @@ let response = request.send().await?;
 
 Other ways to get a profile: `WireFormat::for_system(kind, os)`,
 `WireFormat::from_fingerprint(&fp)` (a Chromium identity that claims
-the measured major), `WireFormat::random(seed)`, and
-`.with_locale(&locale)` to change the `Accept-Language`.
+the measured major) and `WireFormat::random(seed)`. A profile from a fingerprint
+sends that fingerprint's user agent, languages and client hints: its own hints when
+it sets them, otherwise the ones its Chrome major sends, as seleniumbase-rs computes
+them (`ClientHeaders::from_fingerprint`). A measured profile sends the hints the
+measured browser sent. To change the `Accept-Language`, localize the fingerprint
+(`locale.localize(&fp)?`) before building the profile.
 
 ## Custom inputs
 
@@ -305,15 +309,21 @@ the base: a JA3 has no signature algorithms, an Akamai string has no HEADERS
 priority, a header list has no TLS.
 
 ```rust
+use seleniumbase_rs_stealth::evasion::fingerprint::{Fingerprint, OsType};
 use seleniumbase_rs_stealth::wire::client::WireFormat;
 
 # fn demo() -> Result<(), Box<dyn std::error::Error>> {
+// The identity is a core fingerprint's: here one with its own User-Agent and languages.
+let fingerprint = Fingerprint::randomized_with_major(OsType::Macos, 7, 155)
+    .to_builder()
+    .user_agent("Mozilla/5.0 (custom)")
+    .accept_languages("de-DE,de;q=0.9")
+    .build()?;
 let profile = WireFormat::builder()
     .akamai("1:65536;2:0;4:6291456;6:262144|15663105|0|m,a,s,p")?
-    .user_agent("Mozilla/5.0 (custom)")
-    .accept_language("de-DE,de;q=0.9")
+    .fingerprint(&fingerprint)?
     .build()?;
-assert_eq!(profile.user_agent(), "Mozilla/5.0 (custom)");
+assert_eq!(profile.client_headers().user_agent, "Mozilla/5.0 (custom)");
 # Ok(())
 # }
 ```
@@ -327,7 +337,8 @@ assert_eq!(profile.user_agent(), "Mozilla/5.0 (custom)");
 | `signature_algorithms(&[u16])` | The signature algorithms alone. |
 | `grease(bool)`, `permute_extensions(bool)` | GREASE (RFC 8701) and Chrome-style extension shuffling. Call `grease` before `ja3`: a spec that lists padding needs GREASE off. |
 | `akamai(&str)` | HTTP/2 SETTINGS and their order, the connection window, PRIORITY frames and the pseudo-header order. The HEADERS priority fields stay the base's. |
-| `user_agent`, `accept_language`, `client_hints` | The identity headers. |
+| `fingerprint(&Fingerprint)` | The identity headers (`User-Agent`, `Accept-Language`, client hints) of a core fingerprint: its own client hints, or the ones its Chrome major sends. |
+| `client_headers(ClientHeaders)` | The identity headers as captured from a browser (`ClientHeaders::from_captured`) or written by hand. |
 | `header`, `without_header`, `header_order`, `priority`, `headers` | Header names, values, order and the HTTP/2 `priority` value per `Sec-Fetch-Dest`, per request shape. |
 
 The inputs that need the base to be judged (`ja3`, `ja4_r`, `ja4_ro`,
@@ -936,7 +947,7 @@ use seleniumbase_rs_stealth::codec::BrowserKind;
 let profile = WireFormat::measured(BrowserKind::Chrome)?;
 let mitm =
     MitmProxy::start(profile, None, MitmOptions::default(), Arc::new(NoopEventSink)).await?;
-let options = mitm.configure_launch(LaunchOptions::builder()).build()?;
+let options = mitm.configure_launch(LaunchOptions::builder().build()?)?;
 let browser = Browser::launch(options).await?;
 let page = browser.new_page_at("https://example.com/").await?;
 # drop(page);
@@ -982,7 +993,8 @@ An absolute-form `http://` request is checked the same way and forwarded without
 
 ### What Chrome must be told
 
-`mitm.configure_launch(builder)` sets the proxy, makes the proxy's priming page
+`mitm.configure_launch(options)` takes built `LaunchOptions`, returns them made
+again (a `Result`) with the proxy set, makes the proxy's priming page
 the start page (see [the priming page](#the-priming-page)) and adds
 `mitm.launch_args()`: the `--ignore-certificate-errors-spki-list` switch with the
 leaf pin only (never
@@ -1099,7 +1111,8 @@ given it only ever sees the `404`. `configure_launch` makes the priming page the
 start page, so `Browser::launch` loads it in the first tab before it returns, and
 a WebSocket may then be a new tab's first request. A start page you set before
 `configure_launch` is kept (an `http(s)://` one takes the credentials just as
-well; an `about:` or `data:` one does not), and one set after it replaces the
+well; an `about:` or `data:` one does not), and one set after it with
+`LaunchOptions::with_url` replaces the
 priming page.
 
 A browser context keeps a cache of its own, and one created after the launch
@@ -1261,7 +1274,7 @@ HTTP preferred, and a profile drawn from a random seed.
 
 | Setting | What it does |
 |---|---|
-| `launch_options(builder)`, `launcher(..)` | How the browser starts. A setting made in the options (a user agent, say) wins over the fingerprint's, and the proxy is always the MITM proxy's. |
+| `launch_options(options)`, `launcher(..)` | How the browser starts. `options` is a built `LaunchOptions`; the session makes a copy of it with its fingerprint (`LaunchOptions::with_fingerprint`). A setting made in the options (a user agent, say) wins over the fingerprint's, and the proxy is always the MITM proxy's. |
 | `geo_proxies([(spec, country)])`, `proxy_strategy(..)` | The egress pool and how it picks, as for `BrowserScraper`. Both legs leave through the same egress. |
 | `max_challenge_attempts(n)`, `mitigation(policy)` | Loads per fetch (zero reads as one) and the whole mitigation policy. |
 | `policy(EscalationPolicy)` | The mode it prefers, whether HTTP needs a clearance, the clearance margin, whether a solve sends it back to HTTP. |

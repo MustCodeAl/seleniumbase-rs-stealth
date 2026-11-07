@@ -182,7 +182,8 @@ impl HttpSession {
                 os: profile.os(),
             })
             .map_err(emulation_error)?;
-        let session = Self::assemble(profile, identity.cookies.clone(), egress, options)?;
+        let jar = identity.cookie_jar((options.clock)());
+        let session = Self::assemble(profile, jar, egress, options)?;
         session.emit(&ScrapeEvent::IdentityRestored {
             cookies: session.inner.jar.len(),
         });

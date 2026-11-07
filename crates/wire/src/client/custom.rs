@@ -1,11 +1,10 @@
 //! The builder that layers caller-supplied inputs over a measured base.
 
-use super::identity::with_hints;
 use super::{WireFormat, WireFormatError};
 use crate::convert;
-use seleniumbase_rs::evasion::fingerprint::{ClientHints, OsType};
+use seleniumbase_rs::evasion::fingerprint::{Fingerprint, OsType};
 use seleniumbase_rs_codec::akamai::Akamai;
-use seleniumbase_rs_codec::header_spec::{HeaderSource, HeaderSpec, RequestShape};
+use seleniumbase_rs_codec::header_spec::{ClientHeaders, HeaderSource, HeaderSpec, RequestShape};
 use seleniumbase_rs_codec::ja3::{Ja3, Peetprint};
 use seleniumbase_rs_codec::ja4::{Ja4Order, Ja4Raw};
 use seleniumbase_rs_codec::tls_spec::{TlsSpec, TlsSpecError};
@@ -53,9 +52,9 @@ enum HeaderEdit {
 /// # fn demo() -> Result<(), Box<dyn std::error::Error>> {
 /// let profile = WireFormat::builder()
 ///     .akamai("1:65536;2:0;4:6291456;6:262144|15663105|0|m,a,s,p")?
-///     .user_agent("Mozilla/5.0 (custom)")
+///     .permute_extensions(false)?
 ///     .build()?;
-/// assert_eq!(profile.user_agent(), "Mozilla/5.0 (custom)");
+/// assert!(profile.source().starts_with("custom over"));
 /// # Ok(())
 /// # }
 /// # demo().unwrap();
@@ -68,12 +67,9 @@ pub struct WireFormatBuilder {
     os: Option<OsType>,
     /// The base with the TLS and HTTP/2 overlays applied; resolved on first use.
     profile: Option<WireFormat>,
-    /// A `User-Agent` that replaces the base's.
-    user_agent: Option<String>,
-    /// An `Accept-Language` that replaces the base's.
-    accept_language: Option<String>,
-    /// Client hints that replace the base's.
-    client_hints: Option<ClientHints>,
+    /// The identity of a core fingerprint, which replaces the base's.
+    client_headers: Option<ClientHeaders>,
+
     /// Header changes, in order.
     header_edits: Vec<HeaderEdit>,
 }
@@ -92,9 +88,8 @@ impl WireFormatBuilder {
             kind: BrowserKind::Chrome,
             os: None,
             profile: None,
-            user_agent: None,
-            accept_language: None,
-            client_hints: None,
+            client_headers: None,
+
             header_edits: Vec::new(),
         }
     }
@@ -247,24 +242,28 @@ impl WireFormatBuilder {
         Ok(self)
     }
 
-    /// Sets the `User-Agent`.
-    #[must_use]
-    pub fn user_agent(mut self, user_agent: impl Into<String>) -> Self {
-        self.user_agent = Some(user_agent.into());
-        self
+    /// Sends the identity of a core fingerprint: its `User-Agent`, its `Accept-Language` and
+    /// its client hints ([`ClientHeaders::from_fingerprint`]: the fingerprint's own hints when
+    /// it sets them, otherwise the ones its Chrome major sends). A custom identity is a
+    /// fingerprint with those values; the TLS, HTTP/2 and header order stay the base's.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`WireFormatError::Fingerprint`] when the fingerprint has no user agent.
+    pub fn fingerprint(mut self, fingerprint: &Fingerprint) -> Result<Self, WireFormatError> {
+        let identity = ClientHeaders::from_fingerprint(fingerprint).ok_or(
+            WireFormatError::Fingerprint("the fingerprint has no user agent"),
+        )?;
+        self.client_headers = Some(identity);
+        Ok(self)
     }
 
-    /// Sets the `Accept-Language`.
+    /// Sends `headers` as the identity: values captured from a browser
+    /// ([`ClientHeaders::from_captured`]) or written by hand, the other way beside
+    /// [`fingerprint`](Self::fingerprint). The TLS, HTTP/2 and header order stay the base's.
     #[must_use]
-    pub fn accept_language(mut self, accept_language: impl Into<String>) -> Self {
-        self.accept_language = Some(accept_language.into());
-        self
-    }
-
-    /// Sets the client hints (`Sec-CH-UA`, `Sec-CH-UA-Mobile`, `Sec-CH-UA-Platform`).
-    #[must_use]
-    pub fn client_hints(mut self, hints: ClientHints) -> Self {
-        self.client_hints = Some(hints);
+    pub fn client_headers(mut self, headers: ClientHeaders) -> Self {
+        self.client_headers = Some(headers);
         self
     }
 
@@ -345,15 +344,10 @@ impl WireFormatBuilder {
             headers = apply_edit(headers, edit)?;
         }
         profile.headers = headers;
-        if let Some(hints) = &self.client_hints {
-            profile.identity = with_hints(profile.identity, hints);
+        if let Some(identity) = self.client_headers {
+            profile.identity = identity;
         }
-        if let Some(language) = self.accept_language {
-            profile.identity.accept_language = Some(language);
-        }
-        if let Some(user_agent) = self.user_agent {
-            profile.identity.user_agent = user_agent;
-        }
+
         profile.validate()?;
         Ok(profile)
     }

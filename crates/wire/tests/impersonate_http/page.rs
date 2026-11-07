@@ -22,8 +22,9 @@ const HOST: &str = "shop.test";
 fn measured_agent() -> String {
     WireFormat::measured(BrowserKind::Chrome)
         .expect("measured")
-        .user_agent()
-        .to_owned()
+        .client_headers()
+        .user_agent
+        .clone()
 }
 
 /// A mocked browser whose page reports `agent`, `languages` and `product`, and holds `cookies`.
