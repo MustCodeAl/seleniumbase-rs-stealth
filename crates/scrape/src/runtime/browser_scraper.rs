@@ -81,12 +81,12 @@ mod rotate;
 mod tests;
 
 pub use builder::{BrowserScraperBuilder, Clock, DEFAULT_SOLVE_TIMEOUT};
-pub use launcher::{BrowserLauncher, ChromeLauncher};
+pub use launcher::Launcher;
 
 /// The ports and settings that are fixed when the scraper is built.
 struct Wiring {
     launch: LaunchOptions,
-    launcher: Arc<dyn BrowserLauncher>,
+    launcher: Launcher,
     switch: Box<dyn ProxySwitch>,
     store: Arc<dyn Ledger>,
     sink: Arc<dyn EventSink>,

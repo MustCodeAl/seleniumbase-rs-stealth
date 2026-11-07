@@ -6,10 +6,10 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
+use seleniumbase_rs::sb_cdp::ContextOptions;
 use seleniumbase_rs::sb_cdp::{Browser, MockCtrl, Page};
 use seleniumbase_rs_codec::BrowserKind;
 use seleniumbase_rs_scrape::passport::identity::IdentityError;
-use seleniumbase_rs_scrape::runtime::proxy_switch::{ContextProxySwitch, ProxySwitch};
 use seleniumbase_rs_wire::client::WireFormat;
 use seleniumbase_rs_wire::http_session::{HttpError, HttpSession, HttpSessionOptions};
 use serde_json::{json, Value};
@@ -220,10 +220,11 @@ async fn the_proxy_of_the_pages_context_is_taken_when_no_egress_is_given() {
         Ok(json!({ "result": { "value": report.clone() } }))
     });
     let proxy = egress("http://alice:s3cret@proxy.example:8080");
-    let page = ContextProxySwitch::new()
-        .switch(&browser, Some(&proxy))
+    let context = browser
+        .new_context_with(ContextOptions::new().proxy(proxy.proxy().clone()))
         .await
-        .expect("a tab behind the proxy");
+        .expect("a context behind the proxy");
+    let page = context.new_page().await.expect("a tab behind the proxy");
 
     let adopted = HttpSession::from_page(&page, None, HttpSessionOptions::new())
         .await

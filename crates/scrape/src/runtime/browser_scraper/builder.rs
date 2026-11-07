@@ -6,7 +6,7 @@ use std::hash::{BuildHasher, Hasher};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use super::launcher::{browser_major, host_os, persona_for, BrowserLauncher, ChromeLauncher};
+use super::launcher::{browser_major, host_os, persona_for, Launcher};
 use super::pacing::SiteLimits;
 use super::{BrowserScraper, Current, Egress, Persona, Wiring};
 use crate::challenge::mitigation::MitigationPolicy;
@@ -19,8 +19,9 @@ use crate::ledger::state::{InMemoryLedger, Ledger};
 use crate::runtime::cdp::ProxyLocale;
 use crate::runtime::proxy_switch::{ContextProxySwitch, ProxySwitch};
 use crate::runtime::tracing_sink::TracingEventSink;
+use seleniumbase_rs::error::SeleniumBaseError;
 use seleniumbase_rs::evasion::fingerprint::Fingerprint;
-use seleniumbase_rs::sb_cdp::{LaunchOptions, SessionStore};
+use seleniumbase_rs::sb_cdp::{Browser, LaunchOptions, SessionStore};
 
 /// How long a challenge is given to show as solved, unless the builder says otherwise.
 pub const DEFAULT_SOLVE_TIMEOUT: Duration = Duration::from_secs(30);
@@ -46,7 +47,7 @@ pub struct BrowserScraperBuilder {
     seed: Option<u64>,
     fingerprint: Option<Fingerprint>,
     switch: Option<Box<dyn ProxySwitch>>,
-    launcher: Option<Arc<dyn BrowserLauncher>>,
+    launcher: Option<Launcher>,
     sessions: Option<SessionStore>,
     solve_timeout: Duration,
     clock: Option<Clock>,
@@ -185,10 +186,16 @@ impl BrowserScraperBuilder {
         self
     }
 
-    /// How a browser is started. The default starts Chrome.
+    /// Starts the browser with `launch`, a closure from the launch options to a browser (as core's
+    /// `BrowserPool::with_launcher` takes), instead of core's `Browser::launch`. It is called when
+    /// the scraper is built and again when it rotates its fingerprint.
     #[must_use]
-    pub fn launcher(mut self, launcher: Arc<dyn BrowserLauncher>) -> Self {
-        self.launcher = Some(launcher);
+    pub fn launcher<F, Fut>(mut self, launch: F) -> Self
+    where
+        F: Fn(LaunchOptions) -> Fut + Send + Sync + 'static,
+        Fut: Future<Output = Result<Browser, SeleniumBaseError>> + Send + 'static,
+    {
+        self.launcher = Some(Launcher::new(launch));
         self
     }
 
@@ -259,7 +266,7 @@ impl BrowserScraperBuilder {
         }
         let wiring = Wiring {
             launch: self.launch,
-            launcher: self.launcher.unwrap_or_else(|| Arc::new(ChromeLauncher)),
+            launcher: self.launcher.unwrap_or_default(),
             switch: self
                 .switch
                 .unwrap_or_else(|| Box::new(ContextProxySwitch::new())),

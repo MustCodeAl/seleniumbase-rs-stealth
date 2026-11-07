@@ -10,11 +10,9 @@
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
-use async_trait::async_trait;
 use seleniumbase_rs::error::SeleniumBaseError;
 use seleniumbase_rs::sb_cdp::{Browser, LaunchOptions, MockCtrl};
-use seleniumbase_rs_scrape::error::ScrapeError;
-use seleniumbase_rs_scrape::runtime::browser_scraper::BrowserLauncher;
+
 use serde_json::{json, Value};
 
 use crate::site::{CHALLENGE_HTML, CLEARANCE, DEFAULT_TTL_SECS, HOST, REAL_HTML};
@@ -150,9 +148,9 @@ impl ScriptedLauncher {
     }
 }
 
-#[async_trait]
-impl BrowserLauncher for ScriptedLauncher {
-    async fn launch(&self, options: LaunchOptions) -> Result<Browser, ScrapeError> {
+impl ScriptedLauncher {
+    /// Hands out the next scripted browser, or fails while `failing` lasts.
+    pub fn launch(&self, options: LaunchOptions) -> Result<Browser, SeleniumBaseError> {
         let alive = locked(&self.launched)
             .iter()
             .filter(|launched| launched.browser.is_connected())
@@ -164,9 +162,9 @@ impl BrowserLauncher for ScriptedLauncher {
                 left.checked_sub(1)
             });
         if failing.is_ok() {
-            return Err(ScrapeError::Browser(SeleniumBaseError::stealth(
+            return Err(SeleniumBaseError::stealth(
                 "the scripted Chrome cannot start",
-            )));
+            ));
         }
         let (browser, mock) = Browser::new_mocked();
         let product = locked(&self.product).clone();

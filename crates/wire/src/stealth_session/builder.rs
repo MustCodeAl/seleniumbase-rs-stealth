@@ -12,8 +12,9 @@ use super::transition::open_leg;
 use super::{Clock, Egress, StealthError, StealthSession, Wiring};
 use crate::http_session::{HttpRules, HttpSessionOptions};
 use crate::mitm::MitmOptions;
+use seleniumbase_rs::error::SeleniumBaseError;
 use seleniumbase_rs::evasion::fingerprint::{Fingerprint, OsType};
-use seleniumbase_rs::sb_cdp::LaunchOptions;
+use seleniumbase_rs::sb_cdp::{Browser, LaunchOptions};
 use seleniumbase_rs_codec::{measurement, BrowserKind};
 use seleniumbase_rs_scrape::challenge::mitigation::{
     MitigationPolicy, DEFAULT_MAX_CHALLENGE_ATTEMPTS,
@@ -25,9 +26,7 @@ use seleniumbase_rs_scrape::ledger::events::EventSink;
 use seleniumbase_rs_scrape::ledger::state::{InMemoryLedger, Ledger};
 use seleniumbase_rs_scrape::passport::identity::{Identity, WireMeasurementRef};
 use seleniumbase_rs_scrape::passport::policy::EscalationPolicy;
-use seleniumbase_rs_scrape::runtime::browser_scraper::{
-    BrowserLauncher, ChromeLauncher, DEFAULT_SOLVE_TIMEOUT,
-};
+use seleniumbase_rs_scrape::runtime::browser_scraper::{Launcher, DEFAULT_SOLVE_TIMEOUT};
 use seleniumbase_rs_scrape::runtime::cdp::ProxyLocale;
 use seleniumbase_rs_scrape::runtime::tracing_sink::TracingEventSink;
 
@@ -47,7 +46,7 @@ pub const MITM_SHUTDOWN_GRACE: Duration = Duration::from_secs(5);
 /// attempts per fetch, and a profile drawn from a random seed.
 pub struct StealthSessionBuilder {
     launch: LaunchOptions,
-    launcher: Option<Arc<dyn BrowserLauncher>>,
+    launcher: Option<Launcher>,
     egresses: Vec<ProxyRoute>,
     strategy: RotationStrategy,
     attempts: Option<u32>,
@@ -112,10 +111,15 @@ impl StealthSessionBuilder {
         self
     }
 
-    /// How a browser is started. The default starts Chrome.
+    /// Starts the browser with `launch`, a closure from the launch options to a browser (as core's
+    /// `BrowserPool::with_launcher` takes), instead of core's `Browser::launch`.
     #[must_use]
-    pub fn launcher(mut self, launcher: Arc<dyn BrowserLauncher>) -> Self {
-        self.launcher = Some(launcher);
+    pub fn launcher<F, Fut>(mut self, launch: F) -> Self
+    where
+        F: Fn(LaunchOptions) -> Fut + Send + Sync + 'static,
+        Fut: Future<Output = Result<Browser, SeleniumBaseError>> + Send + 'static,
+    {
+        self.launcher = Some(Launcher::new(launch));
         self
     }
 
@@ -327,7 +331,7 @@ impl StealthSessionBuilder {
         let sink = self.sink.unwrap_or_else(|| Arc::new(TracingEventSink));
         let wiring = Wiring {
             launch: self.launch,
-            launcher: self.launcher.unwrap_or_else(|| Arc::new(ChromeLauncher)),
+            launcher: self.launcher.unwrap_or_default(),
             store: self
                 .store
                 .unwrap_or_else(|| Arc::new(InMemoryLedger::new())),

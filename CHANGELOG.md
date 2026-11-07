@@ -34,6 +34,16 @@ Only `scrape` and `mimic` were affected; `codec` holds no fingerprint.
     `Locale::accept_language_list` (the same rule; the wire crate's copy is gone).
   - `GeoInfo::coordinates` is a core `Geolocation`, not a `(f64, f64)`.
 
+- **The scrape runtime builds on core's patterns** (design note rows "`BrowserLauncher`,
+  `ChromeLauncher`" and "`EgressSwitch`, `ContextProxySwitch`"):
+  - The `BrowserLauncher` trait and `ChromeLauncher` are gone. `BrowserScraperBuilder::launcher`
+    and `StealthSessionBuilder::launcher` take a launch closure, from the `LaunchOptions` to a
+    `Browser`, as core's `BrowserPool::with_launcher` does; the default is core's
+    `Browser::launch`. `Launcher` is the cloneable form both builders keep.
+  - `ContextProxySwitch` is no longer public: without a `ProxySwitch`, the scraper takes core's
+    path (`Browser::new_context_with` with `ContextOptions::proxy`, the context before dropped).
+    `ProxySwitch` stays the seam for another way, such as the MITM upstream swap.
+
 
 - **The launch options are built `LaunchOptions`, not builders.** The core crate keeps what
   `LaunchOptions` was built from (`LaunchOptions::fingerprint()`) and makes it again with

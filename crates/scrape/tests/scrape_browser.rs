@@ -13,7 +13,6 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 
-use async_trait::async_trait;
 use seleniumbase_rs::sb_cdp::{Browser, LaunchOptions, MockCtrl};
 use seleniumbase_rs::SeleniumBaseError;
 use seleniumbase_rs_scrape::challenge::detect::ChallengeKind;
@@ -21,9 +20,7 @@ use seleniumbase_rs_scrape::egress::geo::CountryCode;
 use seleniumbase_rs_scrape::error::ScrapeError;
 use seleniumbase_rs_scrape::ledger::events::{CollectingEventSink, ScrapeEvent};
 use seleniumbase_rs_scrape::ledger::state::{InMemoryLedger, Ledger};
-use seleniumbase_rs_scrape::runtime::browser_scraper::{
-    BrowserLauncher, BrowserScraper, BrowserScraperBuilder,
-};
+use seleniumbase_rs_scrape::runtime::browser_scraper::{BrowserScraper, BrowserScraperBuilder};
 use serde_json::{json, Value};
 
 /// How long a browser sits unused in the idle test: a week, far past any idle timeout a browser
@@ -256,9 +253,8 @@ impl Launcher {
     }
 }
 
-#[async_trait]
-impl BrowserLauncher for Launcher {
-    async fn launch(&self, _options: LaunchOptions) -> Result<Browser, ScrapeError> {
+impl Launcher {
+    fn launch(&self) -> Browser {
         let (browser, mock) = Browser::new_mocked();
         mock.reply(
             "Browser.getVersion",
@@ -271,7 +267,7 @@ impl BrowserLauncher for Launcher {
         });
         self.site.attach(&mock);
         lock(&self.launched).push((browser.clone(), mock));
-        Ok(browser)
+        browser
     }
 }
 
@@ -302,7 +298,13 @@ impl World {
     fn builder(&self) -> BrowserScraperBuilder {
         let clock = Arc::clone(&self.clock);
         BrowserScraper::builder()
-            .launcher(Arc::<Launcher>::clone(&self.launcher))
+            .launcher({
+                let launcher = Arc::clone(&self.launcher);
+                move |_options: LaunchOptions| {
+                    let launcher = Arc::clone(&launcher);
+                    async move { Ok::<_, SeleniumBaseError>(launcher.launch()) }
+                }
+            })
             .event_sink(Arc::new(self.sink.clone()))
             .ledger(Arc::new(self.store.clone()))
             .clock(Arc::new(move || clock.load(Ordering::SeqCst)))

@@ -1,9 +1,14 @@
-//! The browser launcher port, and what the scraper reads from the browser it launched.
+//! The launch closure, and what the scraper reads from the browser it launched.
 
-use async_trait::async_trait;
+use std::fmt;
+
+use std::pin::Pin;
+use std::sync::Arc;
+
 use serde_json::json;
 
 use crate::error::ScrapeError;
+use seleniumbase_rs::error::SeleniumBaseError;
 use seleniumbase_rs::evasion::fingerprint::{Fingerprint, OsType};
 use seleniumbase_rs::sb_cdp::{Browser, LaunchOptions};
 
@@ -13,29 +18,50 @@ const VERSION_COMMAND: &str = "Browser.getVersion";
 /// The prefix of the `Chrome/155.0.0.0` token of a user agent or product string.
 const CHROME_TOKEN: &str = "Chrome/";
 
-/// Starts a browser for a [`BrowserScraper`](super::BrowserScraper).
+/// Starts a browser for a [`BrowserScraper`](super::BrowserScraper) or a stealth session: a
+/// launch closure, as core's `BrowserPool::with_launcher` takes.
 ///
-/// The scraper starts a browser when it is built and again when it rotates its profile. The shipped
-/// launcher, [`ChromeLauncher`], starts Chrome; another implementation can start a different build,
+/// The scraper starts a browser when it is built and again when it rotates its fingerprint. The
+/// default is core's [`Browser::launch`]; another closure can start a different build,
 /// reuse a browser, or hand out a scripted one in a test.
-#[async_trait]
-pub trait BrowserLauncher: Send + Sync {
+#[derive(Clone)]
+pub struct Launcher(Arc<LaunchFn>);
+
+/// The closure a [`Launcher`] holds, its future boxed.
+type LaunchFn = dyn Fn(LaunchOptions) -> Pin<Box<dyn Future<Output = Result<Browser, SeleniumBaseError>> + Send>>
+    + Send
+    + Sync;
+
+impl Launcher {
+    /// A launcher that calls `launch`, a closure from the launch options to a browser.
+    pub fn new<F, Fut>(launch: F) -> Self
+    where
+        F: Fn(LaunchOptions) -> Fut + Send + Sync + 'static,
+        Fut: Future<Output = Result<Browser, SeleniumBaseError>> + Send + 'static,
+    {
+        Self(Arc::new(move |options| Box::pin(launch(options))))
+    }
+
     /// Starts a browser with `options`.
     ///
     /// # Errors
     ///
     /// Returns [`ScrapeError::Browser`] when no browser can be started or controlled.
-    async fn launch(&self, options: LaunchOptions) -> Result<Browser, ScrapeError>;
+    pub async fn launch(&self, options: LaunchOptions) -> Result<Browser, ScrapeError> {
+        Ok((self.0)(options).await?)
+    }
 }
 
-/// Starts Chrome (or the browser the launch options name) with [`Browser::launch`].
-#[derive(Clone, Copy, Debug, Default)]
-pub struct ChromeLauncher;
+impl Default for Launcher {
+    /// Core's [`Browser::launch`].
+    fn default() -> Self {
+        Self::new(|options: LaunchOptions| async move { Browser::launch(options).await })
+    }
+}
 
-#[async_trait]
-impl BrowserLauncher for ChromeLauncher {
-    async fn launch(&self, options: LaunchOptions) -> Result<Browser, ScrapeError> {
-        Ok(Browser::launch(options).await?)
+impl fmt::Debug for Launcher {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("Launcher")
     }
 }
 

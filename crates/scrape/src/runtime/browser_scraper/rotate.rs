@@ -15,8 +15,8 @@ use seleniumbase_rs_codec::BrowserKind;
 impl BrowserScraper {
     /// Leaves through another proxy of the pool.
     ///
-    /// A new browser context is opened behind the new proxy (see
-    /// [`ContextProxySwitch`](super::super::proxy_switch::ContextProxySwitch)) and the one before is
+    /// A new browser context is opened behind the new proxy (core's `Browser::new_context_with`,
+    /// unless a [`ProxySwitch`](super::super::proxy_switch::ProxySwitch) was given) and the one before is
     /// dropped with its cookies: a clearance belongs to the address that earned it. The profile, the
     /// seed and what is known of each site stay.
     ///

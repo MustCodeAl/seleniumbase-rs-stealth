@@ -103,12 +103,12 @@ use seleniumbase_rs_scrape::egress::route::{ProxyKey, ProxyRoute};
 use seleniumbase_rs_scrape::ledger::events::{EventSink, ScrapeEvent};
 use seleniumbase_rs_scrape::ledger::state::Ledger;
 use seleniumbase_rs_scrape::passport::identity::Identity;
-use seleniumbase_rs_scrape::runtime::browser_scraper::BrowserLauncher;
+use seleniumbase_rs_scrape::runtime::browser_scraper::Launcher;
 
 /// The ports and settings that are fixed when the session is built.
 struct Wiring {
     launch: LaunchOptions,
-    launcher: Arc<dyn BrowserLauncher>,
+    launcher: Launcher,
     store: Arc<dyn Ledger>,
     sink: Arc<dyn EventSink>,
     geo: Arc<dyn GeoResolver>,

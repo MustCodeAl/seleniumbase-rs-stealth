@@ -5,14 +5,14 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use async_trait::async_trait;
+use seleniumbase_rs::error::SeleniumBaseError;
 use serde_json::json;
 
 use crate::egress::geo::CountryCode;
-use crate::error::ScrapeError;
+
 use crate::ledger::events::{CollectingEventSink, ScrapeEvent};
 use crate::ledger::state::InMemoryLedger;
-use crate::runtime::browser_scraper::{BrowserLauncher, BrowserScraperBuilder};
+use crate::runtime::browser_scraper::BrowserScraperBuilder;
 use crate::runtime::cdp::testkit::{Served, Site};
 use crate::sync::locked;
 use seleniumbase_rs::sb_cdp::{Browser, LaunchOptions, MockCtrl};
@@ -90,9 +90,9 @@ impl TestLauncher {
     }
 }
 
-#[async_trait]
-impl BrowserLauncher for TestLauncher {
-    async fn launch(&self, options: LaunchOptions) -> Result<Browser, ScrapeError> {
+impl TestLauncher {
+    /// Hands out the next mocked browser.
+    fn launch(&self, options: LaunchOptions) -> Browser {
         let (browser, mock) = Browser::new_mocked();
         mock.reply("Browser.getVersion", json!({ "product": self.product }));
         script_contexts(&mock);
@@ -106,7 +106,7 @@ impl BrowserLauncher for TestLauncher {
             mock,
             options,
         });
-        Ok(browser)
+        browser
     }
 }
 
@@ -155,7 +155,10 @@ impl Rig {
         let clock = Arc::clone(&self.clock);
         let launcher = Arc::clone(&self.launcher);
         crate::runtime::browser_scraper::BrowserScraper::builder()
-            .launcher(launcher)
+            .launcher(move |options| {
+                let launcher = Arc::clone(&launcher);
+                async move { Ok::<_, SeleniumBaseError>(launcher.launch(options)) }
+            })
             .event_sink(Arc::new(self.sink.clone()))
             .ledger(Arc::new(self.store.clone()))
             .clock(Arc::new(move || clock.load(Ordering::SeqCst)))

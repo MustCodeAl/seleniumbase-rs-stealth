@@ -1,4 +1,4 @@
-//! The egress switch trait and its `ContextProxySwitch` implementation, which changes egress by opening a new browser context.
+//! The proxy switch seam, and the scraper's default, core's path: a new browser context.
 //!
 //! A browser context has its own cookies, storage and cache, and can have its own proxy, so a new
 //! context behind a new proxy is a clean visitor from a new address without starting another
@@ -20,7 +20,9 @@ mod tests;
 /// Changes where a browser's traffic leaves from.
 ///
 /// An implementation gives back a tab that goes through the new egress and has none of the state
-/// of the old one. The shipped implementation is [`ContextProxySwitch`].
+/// of the old one. Without one, the scraper takes core's path: a new browser context with the
+/// proxy (`Browser::new_context_with`, `ContextOptions::proxy`), the one before dropped. An
+/// implementation is for another way, such as swapping the upstream of a MITM proxy.
 #[async_trait]
 pub trait ProxySwitch: Send + Sync {
     /// Opens a tab in `browser` that leaves through `egress`, or directly when `egress` is `None`.
@@ -42,14 +44,14 @@ pub trait ProxySwitch: Send + Sync {
 /// The new context is made first, so a failure leaves the old one in place. A proxy with a user
 /// name and password is answered for the tabs of its context only. The browser is not restarted.
 #[derive(Default)]
-pub struct ContextProxySwitch {
+pub(crate) struct ContextProxySwitch {
     current: Mutex<Option<BrowserContext>>,
 }
 
 impl ContextProxySwitch {
     /// A switch that has opened no context yet.
     #[must_use]
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self::default()
     }
 }

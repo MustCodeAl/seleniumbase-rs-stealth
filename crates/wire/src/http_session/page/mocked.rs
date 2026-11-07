@@ -10,8 +10,8 @@ use std::sync::Arc;
 use url::Url;
 
 use super::*;
+use seleniumbase_rs::sb_cdp::ContextOptions;
 use seleniumbase_rs::sb_cdp::{Browser, MockCtrl};
-use seleniumbase_rs_scrape::runtime::proxy_switch::{ContextProxySwitch, ProxySwitch};
 
 const HOST: &str = "shop.test";
 
@@ -235,10 +235,11 @@ async fn the_proxy_of_the_pages_context_is_taken_or_must_match() {
         Ok(json!({ "result": { "value": report.clone() } }))
     });
     let proxy = ProxyRoute::parse("http://alice:s3cret@proxy.example:8080", None).expect("a spec");
-    let page = ContextProxySwitch::new()
-        .switch(&browser, Some(&proxy))
+    let context = browser
+        .new_context_with(ContextOptions::new().proxy(proxy.proxy().clone()))
         .await
-        .expect("a tab behind the proxy");
+        .expect("a context behind the proxy");
+    let page = context.new_page().await.expect("a tab behind the proxy");
 
     let adopted = HttpSession::from_page(&page, None, HttpSessionOptions::new())
         .await

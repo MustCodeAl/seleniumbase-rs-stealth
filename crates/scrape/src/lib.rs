@@ -37,9 +37,7 @@ pub use ledger::events::{CollectingEventSink, EventSink, NoopEventSink, ScrapeEv
 pub use ledger::state::{InMemoryLedger, Ledger, SiteRecord};
 pub use passport::identity::{Identity, IdentityError, WireMeasurementRef};
 pub use passport::policy::{Escalation, EscalationPolicy};
-pub use runtime::browser_scraper::{
-    BrowserFetch, BrowserLauncher, BrowserScraper, BrowserScraperBuilder, ChromeLauncher,
-};
+pub use runtime::browser_scraper::{BrowserFetch, BrowserScraper, BrowserScraperBuilder, Launcher};
 pub use runtime::json_store::JsonLedger;
-pub use runtime::proxy_switch::{ContextProxySwitch, ProxySwitch};
+pub use runtime::proxy_switch::ProxySwitch;
 pub use runtime::tracing_sink::TracingEventSink;

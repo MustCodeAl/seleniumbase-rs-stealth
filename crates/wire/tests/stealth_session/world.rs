@@ -86,7 +86,10 @@ impl World {
         let clock = Arc::clone(&self.clock);
         let launcher = Arc::clone(&self.launcher);
         StealthSession::builder()
-            .launcher(launcher)
+            .launcher(move |options| {
+                let launcher = Arc::clone(&launcher);
+                async move { launcher.launch(options) }
+            })
             .event_sink(Arc::new(self.sink.clone()))
             .ledger(Arc::new(self.store.clone()))
             .clock(Arc::new(move || clock.load(Ordering::SeqCst)))
