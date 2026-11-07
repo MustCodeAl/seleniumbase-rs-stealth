@@ -309,15 +309,21 @@ the base: a JA3 has no signature algorithms, an Akamai string has no HEADERS
 priority, a header list has no TLS.
 
 ```rust
+use seleniumbase_rs_stealth::evasion::fingerprint::{Fingerprint, OsType};
 use seleniumbase_rs_stealth::wire::client::WireFormat;
 
 # fn demo() -> Result<(), Box<dyn std::error::Error>> {
+// The identity is a core fingerprint's: here one with its own User-Agent and languages.
+let fingerprint = Fingerprint::randomized_with_major(OsType::Macos, 7, 155)
+    .to_builder()
+    .user_agent("Mozilla/5.0 (custom)")
+    .accept_languages("de-DE,de;q=0.9")
+    .build()?;
 let profile = WireFormat::builder()
     .akamai("1:65536;2:0;4:6291456;6:262144|15663105|0|m,a,s,p")?
-    .user_agent("Mozilla/5.0 (custom)")
-    .accept_language("de-DE,de;q=0.9")
+    .fingerprint(&fingerprint)?
     .build()?;
-assert_eq!(profile.user_agent(), "Mozilla/5.0 (custom)");
+assert_eq!(profile.client_headers().user_agent, "Mozilla/5.0 (custom)");
 # Ok(())
 # }
 ```
@@ -331,7 +337,8 @@ assert_eq!(profile.user_agent(), "Mozilla/5.0 (custom)");
 | `signature_algorithms(&[u16])` | The signature algorithms alone. |
 | `grease(bool)`, `permute_extensions(bool)` | GREASE (RFC 8701) and Chrome-style extension shuffling. Call `grease` before `ja3`: a spec that lists padding needs GREASE off. |
 | `akamai(&str)` | HTTP/2 SETTINGS and their order, the connection window, PRIORITY frames and the pseudo-header order. The HEADERS priority fields stay the base's. |
-| `user_agent`, `accept_language`, `client_hints` | The identity headers. |
+| `fingerprint(&Fingerprint)` | The identity headers (`User-Agent`, `Accept-Language`, client hints) of a core fingerprint: its own client hints, or the ones its Chrome major sends. |
+| `client_headers(ClientHeaders)` | The identity headers as captured from a browser (`ClientHeaders::from_captured`) or written by hand. |
 | `header`, `without_header`, `header_order`, `priority`, `headers` | Header names, values, order and the HTTP/2 `priority` value per `Sec-Fetch-Dest`, per request shape. |
 
 The inputs that need the base to be judged (`ja3`, `ja4_r`, `ja4_ro`,

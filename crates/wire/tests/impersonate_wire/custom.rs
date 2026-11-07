@@ -9,7 +9,7 @@ use seleniumbase_rs::evasion::fingerprint::{BrandVersion, ClientHints};
 use seleniumbase_rs_codec::akamai::Akamai;
 use seleniumbase_rs_codec::client_hello::{ext_id, ClientHello};
 use seleniumbase_rs_codec::h2_spec::H2SpecError;
-use seleniumbase_rs_codec::header_spec::{HeaderSource, RequestShape};
+use seleniumbase_rs_codec::header_spec::{ClientHeaders, HeaderSource, RequestShape};
 use seleniumbase_rs_codec::ja3::peetprint::PeetprintSlot;
 use seleniumbase_rs_codec::ja3::{Ja3, Peetprint};
 use seleniumbase_rs_codec::ja4::{Ja4, Ja4Order, Ja4Raw};
@@ -526,8 +526,11 @@ async fn a_custom_header_set_arrives_in_its_order_with_its_values() {
         .without_header(RequestShape::Document, "Sec-Fetch-User")
         .header_order(RequestShape::Document, ["User-Agent", "Accept"])
         .priority("document", "u=2")
-        .user_agent("Probe/9")
-        .accept_language("de-DE,de;q=0.9")
+        .client_headers(ClientHeaders {
+            user_agent: "Probe/9".to_owned(),
+            accept_language: Some("de-DE,de;q=0.9".to_owned()),
+            ..measured_identity()
+        })
         .build()
         .expect("builds");
 
@@ -560,6 +563,14 @@ async fn a_custom_header_set_arrives_in_its_order_with_its_values() {
     assert_eq!(value("x-probe"), Some("one"));
 }
 
+/// The measured Chrome's identity: its user agent, language and client hints.
+fn measured_identity() -> ClientHeaders {
+    WireFormat::measured(BrowserKind::Chrome)
+        .expect("measured")
+        .client_headers()
+        .clone()
+}
+
 #[tokio::test]
 async fn custom_client_hints_arrive_as_the_three_hint_headers() {
     let hints = ClientHints {
@@ -572,7 +583,7 @@ async fn custom_client_hints_arrive_as_the_three_hint_headers() {
         ..ClientHints::default()
     };
     let profile = WireFormat::builder()
-        .client_hints(hints)
+        .client_headers(measured_identity().with_client_hints_from(&hints))
         .build()
         .expect("builds");
     let served = send(&profile).await;

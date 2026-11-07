@@ -120,7 +120,10 @@ async fn launch_any(options: LaunchOptions) -> Browser {
     );
     browser.close().await.expect("Chrome closes");
     let own = options
-        .with_args([format!("--user-agent={}", profile().user_agent())])
+        .with_args([format!(
+            "--user-agent={}",
+            profile().client_headers().user_agent
+        )])
         .expect("valid launch options");
     start(own).await
 }

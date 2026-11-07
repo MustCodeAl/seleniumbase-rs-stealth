@@ -19,6 +19,22 @@ Only `scrape` and `mimic` were affected; `codec` holds no fingerprint.
 
 ### Breaking
 
+- **`WireFormat` and its builder read the identity from core's types** (design note rows
+  "`ImpersonationProfile`", "`CustomProfileBuilder::*`", "Accept-Language from a language list"
+  and "`GeoInfo.coordinates`"):
+  - `WireFormat::user_agent()` and `WireFormat::accept_language()` are removed: they returned
+    the values of the identity, which `client_headers()` gives (`.user_agent`,
+    `.accept_language`).
+  - `WireFormatBuilder::user_agent`, `accept_language` and `client_hints` are removed.
+    `WireFormatBuilder::fingerprint(&Fingerprint)` takes the identity of a core fingerprint
+    (`ClientHeaders::from_fingerprint`; it fails with `WireFormatError::Fingerprint` for one
+    without a user agent), and `WireFormatBuilder::client_headers(ClientHeaders)` takes one
+    captured from a browser or written by hand, the other way.
+  - `HttpSession::from_page` builds the `Accept-Language` of the page's languages with core's
+    `Locale::accept_language_list` (the same rule; the wire crate's copy is gone).
+  - `GeoInfo::coordinates` is a core `Geolocation`, not a `(f64, f64)`.
+
+
 - **The launch options are built `LaunchOptions`, not builders.** The core crate keeps what
   `LaunchOptions` was built from (`LaunchOptions::fingerprint()`) and makes it again with
   `with_fingerprint`, `with_headless`, `with_proxy`, `with_args` and `with_url`, under one rule

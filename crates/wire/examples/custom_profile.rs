@@ -46,7 +46,7 @@ fn run() -> Result<(), Box<dyn Error>> {
     let base = WireFormat::for_system(BrowserKind::Chrome, os)?;
     let ja3 = base.tls_spec().ja3().to_string();
     println!("the measured base: {}", base.source());
-    println!("  user agent  {}", base.user_agent());
+    println!("  user agent  {}", base.client_headers().user_agent);
     println!("  JA4         {}", base.tls_spec().ja4());
     println!("  JA3         {ja3}");
     println!("  HTTP/2      {}", base.h2_spec().akamai());

@@ -210,7 +210,7 @@ fn the_session_speaks_with_the_identitys_user_agent_and_languages() {
         HttpSession::from_identity(&base, None, HttpSessionOptions::new()).expect("a session");
 
     assert_eq!(
-        Some(session.wire_format().user_agent()),
+        Some(session.wire_format().client_headers().user_agent.as_str()),
         base.fingerprint.user_agent().as_str()
     );
     assert_eq!(session.wire_format().major(), measured_major());

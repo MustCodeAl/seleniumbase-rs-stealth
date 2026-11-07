@@ -18,8 +18,9 @@ const HOST: &str = "shop.test";
 fn measured_agent() -> String {
     WireFormat::measured(BrowserKind::Chrome)
         .expect("measured")
-        .user_agent()
-        .to_owned()
+        .client_headers()
+        .user_agent
+        .clone()
 }
 
 fn product() -> String {
@@ -76,9 +77,13 @@ async fn a_page_hands_over_its_cookies_its_agent_and_its_languages() {
         .await
         .expect("a session");
 
-    assert_eq!(session.wire_format().user_agent(), agent);
+    assert_eq!(session.wire_format().client_headers().user_agent, agent);
     assert_eq!(
-        session.wire_format().accept_language(),
+        session
+            .wire_format()
+            .client_headers()
+            .accept_language
+            .as_deref(),
         Some("de-DE,de;q=0.9")
     );
     assert_eq!(session.cookie_count(), 2);

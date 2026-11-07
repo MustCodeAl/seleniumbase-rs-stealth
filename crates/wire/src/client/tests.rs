@@ -3,7 +3,7 @@
 
 use super::{WireFormat, WireFormatError, WireProtocol};
 use crate::convert::ConvertError;
-use seleniumbase_rs::evasion::fingerprint::{BrandVersion, Fingerprint, OsType, Spoof};
+use seleniumbase_rs::evasion::fingerprint::{Fingerprint, OsType, Spoof};
 use seleniumbase_rs_codec::client_hello::ext_id;
 use seleniumbase_rs_codec::h2_spec::H2SpecError;
 use seleniumbase_rs_codec::header_spec::{ClientHeaders, HeaderSource, RequestShape};
@@ -63,7 +63,7 @@ fn the_measured_profile_keeps_its_gaps_and_sends_a_reproducible_spec() {
     assert_eq!(profile.validate(), Ok(()));
     assert_eq!(profile.dropped_settings(), []);
     let measured = measurement::get(BrowserKind::Chrome, OsType::Macos).expect("measured");
-    assert_eq!(profile.user_agent(), measured.user_agent);
+    assert_eq!(profile.client_headers().user_agent, measured.user_agent);
     assert_eq!(profile.tls_spec().grease, measured.tls.grease);
     assert_eq!(
         profile.h2_spec(),
@@ -237,7 +237,7 @@ fn a_cookie_without_a_slot_goes_after_accept_language() {
 fn a_random_profile_rides_the_measured_chrome_and_claims_its_version() {
     let profile = WireFormat::random(7).expect("builds");
     assert_eq!(profile.major(), 155);
-    assert!(profile.user_agent().contains("Chrome/155."));
+    assert!(profile.client_headers().user_agent.contains("Chrome/155."));
     assert_eq!(profile.tls_spec(), chrome().tls_spec());
     assert_eq!(profile, WireFormat::random(7).expect("builds"));
 }
@@ -501,14 +501,28 @@ fn http2_settings_wreq_cannot_send_are_refused_by_name() {
 }
 
 #[test]
-fn identity_inputs_replace_the_bases() {
-    let profile = WireFormat::builder()
+fn a_fingerprint_given_to_the_builder_replaces_the_bases_identity() {
+    let fingerprint = Fingerprint::randomized_with_major(OsType::Macos, 11, 155)
+        .to_builder()
         .user_agent("Custom/1.0")
-        .accept_language("fr-FR,fr;q=0.8")
+        .accept_languages("fr-FR,fr;q=0.8")
         .build()
         .expect("builds");
-    assert_eq!(profile.user_agent(), "Custom/1.0");
-    assert_eq!(profile.accept_language(), Some("fr-FR,fr;q=0.8"));
+    let profile = WireFormat::builder()
+        .fingerprint(&fingerprint)
+        .expect("a user agent")
+        .build()
+        .expect("builds");
+    assert_eq!(profile.client_headers().user_agent, "Custom/1.0");
+    assert_eq!(
+        profile.client_headers().accept_language.as_deref(),
+        Some("fr-FR,fr;q=0.8")
+    );
+    assert_eq!(
+        profile.tls_spec(),
+        chrome().tls_spec(),
+        "the TLS stays the base's"
+    );
     let rendered = profile
         .headers_for(RequestShape::Document, None, WireProtocol::Http1)
         .expect("renders");

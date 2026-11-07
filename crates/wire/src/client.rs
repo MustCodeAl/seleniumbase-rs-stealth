@@ -346,19 +346,6 @@ impl WireFormat {
         self.major
     }
 
-    /// The `User-Agent` a request carries: the fingerprint's, or the measured browser's for a
-    /// measured profile.
-    #[must_use]
-    pub fn user_agent(&self) -> &str {
-        &self.identity.user_agent
-    }
-
-    /// The `Accept-Language` a request carries, when it has one.
-    #[must_use]
-    pub fn accept_language(&self) -> Option<&str> {
-        self.identity.accept_language.as_deref()
-    }
-
     /// The TLS spec the client sends.
     #[must_use]
     pub fn tls_spec(&self) -> &TlsSpec {
@@ -377,7 +364,8 @@ impl WireFormat {
         &self.headers
     }
 
-    /// The values of the identity placeholders (a cookie is never part of it).
+    /// The values of the identity placeholders (a cookie is never part of it): the `User-Agent`
+    /// and `Accept-Language` a request carries, and its client hints.
     #[must_use]
     pub fn client_headers(&self) -> &ClientHeaders {
         &self.identity

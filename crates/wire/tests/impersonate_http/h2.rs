@@ -42,7 +42,10 @@ async fn an_http2_origin_gets_the_http2_headers_and_the_reply_says_so() {
             .map(|field| field.value.as_str())
     };
     let profile = session.wire_format();
-    assert_eq!(sent("user-agent"), Some(profile.user_agent()));
+    assert_eq!(
+        sent("user-agent"),
+        Some(profile.client_headers().user_agent.as_str())
+    );
     assert_eq!(sent("cookie"), Some("carried=1"));
     assert_eq!(sent(":path"), Some("/page"));
     let expected = profile
