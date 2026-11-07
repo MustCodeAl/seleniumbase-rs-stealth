@@ -103,6 +103,16 @@ Only `scrape` and `mimic` were affected; `codec` holds no fingerprint.
 
 ### Changed
 
+- Docs: the user docs of these crates live on the core site (`docs/stealth` in seleniumbase-rs),
+  which builds only the core's `docs/`; this repository's `docs/` holds design and contributor
+  notes. `README.md` and a new `CLAUDE.md` say so, and both have a Scope section: these crates
+  cover only what the core lacks, are built on the core's types and names, and keep another
+  algorithm for the same job as another way of doing it. `docs/http3.md` is now also the core
+  site's HTTP/3 page; `docs/http3.md`, `docs/tutorial.md` and `docs/examples.md` each name their
+  site page. The README's site links point to live routes, not to redirects.
+- `docs/contributing/boringssl.md` and `scripts/boringssl-prebuilt.sh` name the facade feature
+  `wire` (`--features seleniumbase-rs-stealth/wire`), not the removed `mimic`.
+
 - A fingerprint that denies geolocation (`Spoof::Off`) keeps denying it when it is moved
   to a locale. The old code left the popup mode alone, so a blocked popup kept denying
   the request; the position is not written now, so the denial stays.

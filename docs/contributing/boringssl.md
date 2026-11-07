@@ -1,6 +1,6 @@
 # Faster BoringSSL builds
 
-The `mimic` crate's TLS goes through btls (`=0.5.6`), whose build script, `btls-sys`, compiles
+The `wire` crate's TLS goes through btls (`=0.5.6`), whose build script, `btls-sys`, compiles
 BoringSSL with cmake: about 280 C and C++ files. A checkout or worktree with a fresh `target`
 compiles all of them again. This note says what the compilation cache does with them, and how to
 build them once and link the result.
@@ -50,7 +50,7 @@ and builds once into `~/.cache/seleniumbase-rs-stealth/boringssl-btls-sys-<versi
 ```bash
 sh scripts/boringssl-prebuilt.sh
 BORING_BSSL_PATH="$HOME/.cache/seleniumbase-rs-stealth/boringssl-btls-sys-0.5.6" \
-    cargo test --workspace --features seleniumbase-rs-stealth/mimic
+    cargo test --workspace --features seleniumbase-rs-stealth/wire
 ```
 
 Rules for it:

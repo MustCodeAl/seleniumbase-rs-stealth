@@ -3,9 +3,17 @@
 The experimental stealth layer of [seleniumbase-rs](https://github.com/MustCodeAl/seleniumbase-rs),
 the Rust port of SeleniumBase, packaged with a unified root facade crate (`seleniumbase-rs-stealth`) and three workspace crates of their own.
 
-Documentation: <https://mustcodeal-seleniumbase-rs.docs7.io>. Start with the
-[stealth pages](https://mustcodeal-seleniumbase-rs.docs7.io/stealth/overview) and the
-[fingerprint tutorial](https://mustcodeal-seleniumbase-rs.docs7.io/tutorials/fingerprint_stealth).
+Documentation: <https://mustcodeal-seleniumbase-rs.docs7.io>. Start with
+[Stealthy scraping](https://mustcodeal-seleniumbase-rs.docs7.io/scraping/stealthy/overview),
+[Advanced stealth](https://mustcodeal-seleniumbase-rs.docs7.io/stealth/advanced/overview) and the
+[Stealth](https://mustcodeal-seleniumbase-rs.docs7.io/stealth/introduction) pages.
+
+> [!IMPORTANT]
+> The user docs of the stealth crates live on the core site, under `docs/stealth` (and the
+> stealthy `docs/scraping` pages) in the
+> [seleniumbase-rs](https://github.com/MustCodeAl/seleniumbase-rs) repository: the site builds
+> only that repository's `docs/`. This repository's `docs/` holds design and contributor notes;
+> a page there is not on the site.
 
 | Crate | What it is |
 |---|---|
@@ -27,6 +35,23 @@ or against another Chrome major version, the impersonation refuses to run (`NotM
 everywhere; `scrape` does no TLS spoofing.
 
 Everything was tested against local servers and a local Chrome, never against live services.
+
+## Scope
+
+These crates are APIs "to control advanced stealthy things that made sense with seleniumbase and
+bridge the features that were missing from seleniumbase that were in stealthscraper-rs", in the
+maintainers' words. So:
+
+- **They cover only what the core lacks.** A job seleniumbase-rs already does is not done again
+  here.
+- **They are built on the core's types and names**: the core's `Fingerprint`, `StealthPolicy`,
+  `ProxyList`, `SolveOptions`, `SessionStore` and so on. A stealth type takes a core type where
+  one fits (the scrape crate's `Identity` carries a core `Fingerprint`) and the core's words
+  where it names the same thing.
+- **Another way of doing a job stays.** When a crate here does a job the core also does, with
+  another algorithm or strategy that can give different results, it is kept as another way of
+  doing it, not removed.
+
 
 ## Features
 
@@ -298,12 +323,14 @@ The first build of `wire` compiles BoringSSL (about 1 GB of target directory). T
 start a real Chrome are the `*_chrome.rs` files and are `#[ignore]`d; run them one binary at a time
 with `-- --ignored --test-threads=1`.
 
-[docs/examples.md](docs/examples.md) lists the examples, what each needs, and how to run them.
+[Runnable examples](https://mustcodeal-seleniumbase-rs.docs7.io/scraping/advanced-stealthy/examples)
+lists the examples, what each needs, and how to run them.
 
 ## Related
 
 - [seleniumbase-rs](https://github.com/MustCodeAl/seleniumbase-rs): the core crate, its CDP engine
-  and the stealth tutorial, now in this repository: [docs/tutorial.md](docs/tutorial.md).
+  and the docs site, which holds the user docs of these crates (`docs/stealth`). The long-form
+  stealth tutorial this repository keeps, [docs/tutorial.md](docs/tutorial.md), is not on the site.
 - [SeleniumBase](https://github.com/seleniumbase/SeleniumBase): the Python original.
 
 ## License
