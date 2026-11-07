@@ -28,7 +28,7 @@ pub use challenge::mitigation::{
     AttemptContext, FetchKind, GiveUpReason, Mitigation, MitigationPolicy,
 };
 pub use egress::geo::{CountryCode, GeoResolver, LocaleExt, StaticGeoResolver};
-pub use egress::pool::{ProxyPool, RotationStrategy};
+pub use egress::pool::ProxyPool;
 pub use egress::redact::{RedactedUrl, Secret};
 pub use egress::route::{ProxyKey, ProxyRoute};
 pub use error::ScrapeError;

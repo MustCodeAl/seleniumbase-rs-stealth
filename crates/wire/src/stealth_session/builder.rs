@@ -12,6 +12,7 @@ use super::transition::open_leg;
 use super::{Clock, Egress, StealthError, StealthSession, Wiring};
 use crate::http_session::{HttpRules, HttpSessionOptions};
 use crate::mitm::MitmOptions;
+use seleniumbase_rs::config::proxy_list::RotationStrategy;
 use seleniumbase_rs::error::SeleniumBaseError;
 use seleniumbase_rs::evasion::fingerprint::{Fingerprint, OsType};
 use seleniumbase_rs::sb_cdp::{Browser, LaunchOptions};
@@ -20,7 +21,7 @@ use seleniumbase_rs_scrape::challenge::mitigation::{
     MitigationPolicy, DEFAULT_MAX_CHALLENGE_ATTEMPTS,
 };
 use seleniumbase_rs_scrape::egress::geo::{CountryCode, GeoResolver, StaticGeoResolver};
-use seleniumbase_rs_scrape::egress::pool::{ProxyPool, RotationStrategy};
+use seleniumbase_rs_scrape::egress::pool::ProxyPool;
 use seleniumbase_rs_scrape::egress::route::ProxyRoute;
 use seleniumbase_rs_scrape::ledger::events::EventSink;
 use seleniumbase_rs_scrape::ledger::state::{InMemoryLedger, Ledger};
@@ -48,7 +49,7 @@ pub struct StealthSessionBuilder {
     launch: LaunchOptions,
     launcher: Option<Launcher>,
     egresses: Vec<ProxyRoute>,
-    strategy: RotationStrategy,
+    rotation: RotationStrategy,
     attempts: Option<u32>,
     mitigation: Option<MitigationPolicy>,
     policy: EscalationPolicy,
@@ -70,7 +71,7 @@ impl fmt::Debug for StealthSessionBuilder {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("StealthSessionBuilder")
             .field("egresses", &self.egresses.len())
-            .field("strategy", &self.strategy)
+            .field("rotation", &self.rotation)
             .field("policy", &self.policy)
             .field("seed", &self.seed)
             .field("restore", &self.restore.is_some())
@@ -84,7 +85,7 @@ impl StealthSessionBuilder {
             launch: LaunchOptions::default(),
             launcher: None,
             egresses: Vec::new(),
-            strategy: RotationStrategy::RoundRobin,
+            rotation: RotationStrategy::RoundRobin,
             attempts: None,
             mitigation: None,
             policy: EscalationPolicy::default(),
@@ -142,10 +143,11 @@ impl StealthSessionBuilder {
         Ok(self)
     }
 
-    /// How the pool picks an egress when one is needed: at the start and at each rotation.
+    /// How the pool picks a proxy when one is needed, at the start and at each rotation: core's
+    /// [`RotationStrategy`], round robin unless set here.
     #[must_use]
-    pub fn proxy_strategy(mut self, strategy: RotationStrategy) -> Self {
-        self.strategy = strategy;
+    pub fn proxy_rotation(mut self, rotation: RotationStrategy) -> Self {
+        self.rotation = rotation;
         self
     }
 
@@ -285,7 +287,8 @@ impl StealthSessionBuilder {
         let (wiring, start) = self.into_parts();
         let now = (wiring.clock)();
         let pool = (!start.egresses.is_empty())
-            .then(|| ProxyPool::new(start.egresses.clone(), start.strategy));
+            .then(|| ProxyPool::from_routes(start.egresses.clone(), start.rotation))
+            .transpose()?;
         let current = first_egress(&start, pool.as_ref(), now)?;
         let identity = start_identity(&wiring, &start, current.as_ref(), now).await?;
         let mode = wiring.rules.escalation.prefer;
@@ -354,7 +357,7 @@ impl StealthSessionBuilder {
         };
         let start = Start {
             egresses: self.egresses,
-            strategy: self.strategy,
+            rotation: self.rotation,
             fingerprint: self.fingerprint,
             restore: self.restore,
             seed: self.seed.unwrap_or_else(random_seed),
@@ -366,7 +369,7 @@ impl StealthSessionBuilder {
 /// The settings that only matter while the session starts.
 struct Start {
     egresses: Vec<ProxyRoute>,
-    strategy: RotationStrategy,
+    rotation: RotationStrategy,
     fingerprint: Option<Fingerprint>,
     restore: Option<Identity>,
     seed: u64,

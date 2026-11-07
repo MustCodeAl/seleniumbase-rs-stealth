@@ -5,13 +5,13 @@ use std::time::Instant;
 use super::{BrowserFetch, BrowserScraper};
 use crate::challenge::detect::{ChallengeKind, Detection};
 use crate::challenge::mitigation::{AttemptContext, FetchKind, GiveUpReason, Mitigation};
-use crate::egress::pool::ProxyOutcome;
 use crate::egress::redact::RedactedUrl;
 use crate::error::ScrapeError;
 use crate::jar::store::site_of;
 use crate::ledger::events::ScrapeEvent;
 use crate::ledger::state::SiteRecord;
 use crate::runtime::cdp::{self, NavResponse, PageSnapshot};
+use seleniumbase_rs::config::proxy_list::ProxyOutcome;
 use seleniumbase_rs::utils::urls::normalize_page_url;
 
 /// Why a URL is refused without echoing it.

@@ -15,12 +15,11 @@ use syn::{ItemExternCrate, ItemUse, Macro, MetaList, UseTree};
 /// Top-level crates that the domain layer may not name.
 const FORBIDDEN_CRATES: &[&str] = &["tokio"];
 
-/// Standard-library paths that perform I/O or read the clock.
+/// Standard-library paths that perform I/O. Reading the clock is `FORBIDDEN_CLOCK`'s rule; naming `SystemTime` is allowed, because the proxy pool turns the Unix seconds its caller gives it into the time core's `ProxyList` takes.
 const FORBIDDEN_STD: &[&[&str]] = &[
     &["std", "fs"],
     &["std", "net"],
     &["std", "process"],
-    &["std", "time", "SystemTime"],
     &["std", "time", "*"],
     &["std", "*"],
 ];
@@ -361,7 +360,6 @@ const EXPECTED: &[&str] = &[
     "names `std::fs`",
     "names `std::net`",
     "names `std::process`",
-    "names `std::time::SystemTime`",
     "names `Instant::now`",
     "names `SystemTime::now`",
     "crate::sb_cdp::Browser",

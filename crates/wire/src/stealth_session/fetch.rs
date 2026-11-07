@@ -6,12 +6,12 @@ use std::time::Instant;
 
 use super::{Leg, StealthError, StealthSession};
 use crate::http_session::{HttpAttempt, HttpFetch, HttpResponse, HttpSession};
+use seleniumbase_rs::config::proxy_list::ProxyOutcome;
 use seleniumbase_rs::utils::urls::normalize_page_url;
 use seleniumbase_rs_scrape::challenge::detect::{ChallengeKind, Detection};
 use seleniumbase_rs_scrape::challenge::mitigation::{
     AttemptContext, FetchKind, GiveUpReason, Mitigation,
 };
-use seleniumbase_rs_scrape::egress::pool::ProxyOutcome;
 use seleniumbase_rs_scrape::egress::redact::RedactedUrl;
 use seleniumbase_rs_scrape::egress::route::ProxyKey;
 use seleniumbase_rs_scrape::error::ScrapeError;

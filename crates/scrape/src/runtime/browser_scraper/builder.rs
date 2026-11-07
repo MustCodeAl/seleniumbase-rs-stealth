@@ -11,7 +11,7 @@ use super::pacing::SiteLimits;
 use super::{BrowserScraper, Current, Egress, Persona, Wiring};
 use crate::challenge::mitigation::MitigationPolicy;
 use crate::egress::geo::{CountryCode, GeoResolver, StaticGeoResolver};
-use crate::egress::pool::{ProxyPool, RotationStrategy};
+use crate::egress::pool::ProxyPool;
 use crate::egress::route::ProxyRoute;
 use crate::error::ScrapeError;
 use crate::ledger::events::EventSink;
@@ -19,6 +19,7 @@ use crate::ledger::state::{InMemoryLedger, Ledger};
 use crate::runtime::cdp::ProxyLocale;
 use crate::runtime::proxy_switch::{ContextProxySwitch, ProxySwitch};
 use crate::runtime::tracing_sink::TracingEventSink;
+use seleniumbase_rs::config::proxy_list::RotationStrategy;
 use seleniumbase_rs::error::SeleniumBaseError;
 use seleniumbase_rs::evasion::fingerprint::Fingerprint;
 use seleniumbase_rs::sb_cdp::{Browser, LaunchOptions, SessionStore};
@@ -37,7 +38,7 @@ pub type Clock = Arc<dyn Fn() -> u64 + Send + Sync>;
 pub struct BrowserScraperBuilder {
     launch: LaunchOptions,
     egresses: Vec<ProxyRoute>,
-    strategy: RotationStrategy,
+    rotation: RotationStrategy,
     attempts: Option<u32>,
     policy: Box<MitigationPolicy>,
     store: Option<Arc<dyn Ledger>>,
@@ -58,7 +59,7 @@ impl fmt::Debug for BrowserScraperBuilder {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("BrowserScraperBuilder")
             .field("egresses", &self.egresses.len())
-            .field("strategy", &self.strategy)
+            .field("rotation", &self.rotation)
             .field("seed", &self.seed)
             .finish_non_exhaustive()
     }
@@ -69,7 +70,7 @@ impl BrowserScraperBuilder {
         Self {
             launch: LaunchOptions::default(),
             egresses: Vec::new(),
-            strategy: RotationStrategy::RoundRobin,
+            rotation: RotationStrategy::RoundRobin,
             attempts: None,
             policy: Box::default(),
             store: None,
@@ -113,10 +114,11 @@ impl BrowserScraperBuilder {
         Ok(self)
     }
 
-    /// How the pool picks an proxy when one is needed: at the start and at each rotation.
+    /// How the pool picks a proxy when one is needed, at the start and at each rotation: core's
+    /// [`RotationStrategy`], round robin unless set here.
     #[must_use]
-    pub fn proxy_strategy(mut self, strategy: RotationStrategy) -> Self {
-        self.strategy = strategy;
+    pub fn proxy_rotation(mut self, rotation: RotationStrategy) -> Self {
+        self.rotation = rotation;
         self
     }
 
@@ -243,7 +245,9 @@ impl BrowserScraperBuilder {
     async fn assemble(self) -> Result<BrowserScraper, ScrapeError> {
         let (wiring, start) = self.into_parts();
         let size = start.egresses.len();
-        let pool = (size > 0).then(|| ProxyPool::new(start.egresses, start.strategy));
+        let pool = (size > 0)
+            .then(|| ProxyPool::from_routes(start.egresses, start.rotation))
+            .transpose()?;
         let first = pool
             .as_ref()
             .and_then(|pool| pool.pick(None, (wiring.clock)()));
@@ -292,7 +296,7 @@ impl BrowserScraperBuilder {
         };
         let start = Start {
             egresses: self.egresses,
-            strategy: self.strategy,
+            rotation: self.rotation,
             fingerprint: self.fingerprint,
             seed: self.seed.unwrap_or_else(random_seed),
         };
@@ -336,7 +340,7 @@ async fn start_browser(
 /// The settings that only matter while the scraper starts.
 struct Start {
     egresses: Vec<ProxyRoute>,
-    strategy: RotationStrategy,
+    rotation: RotationStrategy,
     fingerprint: Option<Fingerprint>,
     seed: u64,
 }
