@@ -194,8 +194,8 @@ pub struct GeoInfo {
     pub country: CountryCode,
     /// The IANA time zone, when known.
     pub timezone: Option<String>,
-    /// Latitude and longitude, when known.
-    pub coordinates: Option<(f64, f64)>,
+    /// The position (core's [`Geolocation`]), when known.
+    pub coordinates: Option<Geolocation>,
 }
 
 /// Resolves the country, time zone and position of an egress. The shipped implementation,
@@ -225,7 +225,7 @@ impl GeoResolver for StaticGeoResolver {
         Ok(GeoInfo {
             country,
             timezone: Some(locale.timezone.to_owned()),
-            coordinates: Some((locale.latitude, locale.longitude)),
+            coordinates: Some(Geolocation::new(locale.latitude, locale.longitude)),
         })
     }
 }
@@ -448,7 +448,7 @@ mod tests {
         let info = resolve(&egress).expect("resolves");
         assert_eq!(info.country, de);
         assert_eq!(info.timezone.as_deref(), Some("Europe/Berlin"));
-        assert_eq!(info.coordinates, Some((52.52, 13.405)));
+        assert_eq!(info.coordinates, Some(Geolocation::new(52.52, 13.405)));
     }
 
     #[test]
