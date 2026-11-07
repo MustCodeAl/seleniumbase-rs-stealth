@@ -175,7 +175,7 @@ fn an_identity_written_without_the_optional_parts_reads_with_defaults() {
 #[test]
 fn a_tampered_jar_does_not_deserialize() {
     let mut value = serde_json::to_value(identity_with_clearance()).expect("serializes");
-    value["cookies"]["cookies"][0]["path"] = serde_json::json!("no-leading-slash");
+    value["session"]["cookies"][0]["path"] = serde_json::json!("no-leading-slash");
     let result: Result<Identity, _> = serde_json::from_value(value);
     assert!(result.is_err(), "a cookie the jar refuses must not be read");
 }

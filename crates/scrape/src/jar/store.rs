@@ -358,6 +358,26 @@ impl CookieJar {
         jar
     }
 
+    /// Checks a browser's cookies against every rule the jar keeps, as
+    /// [`from_cdp`](Self::from_cdp) would store them: each one valid, no two with the same name,
+    /// domain and path, and the bounds kept. Unlike `from_cdp`, which leaves out a cookie it
+    /// refuses, it fails. It reads no clock; an identity file is checked this way when it is read
+    /// back.
+    ///
+    /// # Errors
+    ///
+    /// Returns the [`JarError`] of the first cookie that breaks a rule.
+    pub fn check_cdp(cookies: &[Cookie]) -> Result<(), JarError> {
+        let stored = cookies
+            .iter()
+            .enumerate()
+            .map(|(index, cookie)| {
+                cdp::from_cdp(cookie, 0).map_err(|reason| JarError::Invalid { index, reason })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        check_file(&stored)
+    }
+
     /// The unexpired cookies as CDP cookies, in the form `Network.getAllCookies` reports: a domain
     /// cookie's domain gets a leading dot, a host-only cookie's has none, and a session cookie has
     /// no expiry. Whether `Network.setCookies` keeps a host-only cookie host-only depends on how the

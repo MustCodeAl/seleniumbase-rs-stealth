@@ -281,7 +281,7 @@ async fn rotating_the_profile_in_the_browser_starts_a_new_chrome_behind_the_same
     let (old, new) = (world.launcher.nth(0), world.launcher.nth(1));
     assert_eq!(old.proxy_server(), new.proxy_server());
     assert!(!old.browser.is_connected() && new.browser.is_connected());
-    assert!(session.identity().session.cookies().is_empty());
+    assert_eq!(session.identity().session.cookies(), []);
     session.close().await.expect("closes");
 }
 
@@ -302,7 +302,7 @@ async fn rotating_the_egress_over_http_moves_the_identity_and_the_language() {
         &language,
         "the country's language"
     );
-    assert!(session.identity().session.cookies().is_empty());
+    assert_eq!(session.identity().session.cookies(), []);
     assert_eq!(
         rotations(&world),
         [(Some(from.to_string()), Some(to.to_string()))],

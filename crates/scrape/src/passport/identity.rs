@@ -249,9 +249,9 @@ fn same_egress(left: Option<&ProxyKey>, right: Option<&ProxyKey>) -> bool {
 mod session_json {
     use std::collections::BTreeMap;
 
-    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+    use serde::{de::Error as _, Deserialize, Deserializer, Serialize, Serializer};
 
-    use super::{Cookie, Session};
+    use super::{Cookie, CookieJar, Session};
 
     #[derive(Serialize, Deserialize)]
     #[serde(deny_unknown_fields)]
@@ -275,6 +275,8 @@ mod session_json {
 
     pub(super) fn deserialize<'de, D: Deserializer<'de>>(input: D) -> Result<Session, D::Error> {
         let stored = Stored::deserialize(input)?;
+        // Core's cookies carry no rules of their own: hold them to the jar's, as the jar file did.
+        CookieJar::check_cdp(&stored.cookies).map_err(D::Error::custom)?;
         let session = Session::new(stored.cookies);
         Ok(match stored.origin {
             Some(origin) => session.with_local_storage(origin, stored.local_storage),
