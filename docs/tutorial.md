@@ -1,5 +1,12 @@
 # Stealth Scraping: Wire Fingerprints, Identities and the Browser Scraper
 
+> [!IMPORTANT]
+> This page is not on the docs site. The user docs of the stealth crates live on the
+> core site, under `docs/stealth` in the seleniumbase-rs repository: start at
+> [Stealthy scraping](https://mustcodeal-seleniumbase-rs.docs7.io/scraping/stealthy/overview)
+> and [Advanced stealth](https://mustcodeal-seleniumbase-rs.docs7.io/stealth/advanced/overview).
+> A change users should read goes to those pages.
+
 > [!NOTE]
 > Use the unified `seleniumbase-rs-stealth` facade. It re-exports the core API,
 > including `sb_cdp`, `evasion` and `fingerprint`, plus default `codec` and
@@ -8,7 +15,7 @@
 
 A site can tell a client apart before any page script runs: by the TLS
 `ClientHello`, by the HTTP/2 connection start, and by the order and spelling of
-the request headers. [Fingerprint & Stealth Profiles](https://mustcodeal-seleniumbase-rs.docs7.io/tutorials/fingerprint_stealth)
+the request headers. [Stealth](https://mustcodeal-seleniumbase-rs.docs7.io/stealth/introduction)
 covers what a page can read from inside the browser. This page covers the
 other side, the wire, and the pieces that keep an identity, its cookies and its
 exit address together while a scraper works through a site's defences.
