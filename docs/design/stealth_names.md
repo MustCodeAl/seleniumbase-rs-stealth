@@ -3,6 +3,14 @@
 Status: phase 1 note, sixth round, with the user's answers to every decision. Phase 2 is
 under way (stealth PR #6 and a core PR).
 
+Done in phase 2, part 2 (branch `lane/stealth-scrape`, the CHANGELOG has the public names):
+`ProxyPool` holds a core `ProxyList` and delegates to its caller-clocked forms
+(`pick_at`, `pick_where_at`, `report_at`); stealth's own `RotationStrategy`, `ProxyOutcome`,
+`MAX_STICKY_SITES` and quarantine are gone for core's. `solve_timeout` and
+`DEFAULT_SOLVE_TIMEOUT` are gone: `MitigationPolicy.solve.verify_timeout_allowed()` is read.
+`BrowserKind` is gone: core's `browser::config::Browser` names the browser, and the measured
+JSON files are unchanged (`"kind": "Chrome"`, which core's `Browser` is spelled as).
+
 ## What the stealth crate is for
 
 In the user's words:

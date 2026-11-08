@@ -48,8 +48,51 @@ Only `scrape` and `mimic` were affected; `codec` holds no fingerprint.
     with it (presses, rounds, cooldown, clearance cookie), and the decision table rotates when
     `proxy_rotation_due` / `fingerprint_rotation_due` say so for the challenges in a row (the
     defaults are unchanged: the proxy after 2, the fingerprint after 3). The policy is no longer
-    `Copy`, nor is `HttpRules`. Not done here: `solve_timeout` stays on both builders, because
-    core's `SolveOptions` has no public reading of its verify timeout yet.
+    `Copy`, nor is `HttpRules`.
+
+- **`ProxyPool` builds on core's `ProxyList`** (design note row "`ProxyPool`, `RotationStrategy`"):
+  - The pool no longer rotates, counts failures, quarantines or remembers sticky sites itself.
+    It holds a core `ProxyList` (`config::proxy_list`) and the routes in the order of its
+    entries, and delegates to core's caller-clocked forms (`pick_at`, `pick_where_at`,
+    `report_at`), turning the Unix seconds its caller gives it into the `SystemTime` core takes.
+    What it adds is the exit country (`pick_in`) and the `ProxyRoute` it returns.
+  - `RotationStrategy`, `ProxyOutcome` and `MAX_STICKY_SITES` are gone from this crate: core's
+    `RotationStrategy` (`Random` now takes an `Option<u64>` seed) and `ProxyOutcome` are used
+    directly, and the crate root no longer re-exports `RotationStrategy`.
+  - `ProxyPool::new` is `ProxyPool::from_routes`, which is fallible (core's list refuses a host
+    such as a socks host with a `%`), beside the new `ProxyPool::from_list(ProxyList)` and
+    `ProxyPool::from_geo_proxies`. `ProxyPool::quarantine` is `with_quarantine(after_failures,
+    Duration)`, as core's. A pool of a core list keeps the list's rotation and quarantine; a pool
+    of routes starts with the old default (`DEFAULT_QUARANTINE_AFTER` failures, then
+    `DEFAULT_QUARANTINE_SECS`: three failures, ten minutes).
+  - `BrowserScraperBuilder::proxy_strategy` and `StealthSessionBuilder::proxy_strategy` are
+    `proxy_rotation`.
+
+- **`solve_timeout` goes** (design note row "`solve_timeout` (both builders)"):
+  `BrowserScraperBuilder::solve_timeout`, `StealthSessionBuilder::solve_timeout` and
+  `DEFAULT_SOLVE_TIMEOUT` are removed. Both set what core's `SolveOptions::verify_timeout` sets,
+  how long to wait for the result of a solve, and the wait for the clearance after a solve now
+  reads `MitigationPolicy.solve.verify_timeout_allowed()`, so one setting bounds the solver's
+  check after a press and the wait for the clearance. `MitigationPolicy::default()` sets the
+  verify timeout to `DEFAULT_VERIFY_TIMEOUT` (`challenge::mitigation`, thirty seconds, where
+  core's own default is five), so the default is unchanged in effect. To change it, give the
+  builder a policy: `.mitigation(MitigationPolicy { solve: SolveOptions::new()
+  .verify_timeout(..), ..MitigationPolicy::default() })`.
+
+- **`BrowserKind` goes; core's `browser::config::Browser` names the browser** (design note row
+  "codec `BrowserKind`"): the enum `seleniumbase_rs_codec::BrowserKind` (and the facade's
+  `codec::BrowserKind`) is removed, and every item that took or held it takes core's `Browser`:
+  `WireMeasurement::kind`, `WireMeasurementError::NotMeasured::kind` and
+  `VersionNotMeasured::kind`, `measurement::get`, `get_version`, `newest`, `newest_on` and
+  `measured_systems`, `WireFormat::measured` and `for_system`, `WireFormatBuilder::base_on`,
+  `WireMeasurementRef::kind` and `runtime::capture::record::EntryId::kind`.
+  - Only Chrome is measured. `measurement::for_kind` returns `Option<&WireMeasurement>`
+    (`None` for a browser with no capture) in place of a panic on a variant without one, and a
+    measured file whose `kind` is another browser is refused as inconsistent.
+  - The data is unchanged: the measured JSON files still say `"kind": "Chrome"` (core's
+    `Browser` is spelled the same way), a test loads every embedded file and keeps that
+    spelling, and the identity file still writes the browser as `chrome` and still refuses
+    `Chrome` or an unknown name.
 
 
 - **The launch options are built `LaunchOptions`, not builders.** The core crate keeps what

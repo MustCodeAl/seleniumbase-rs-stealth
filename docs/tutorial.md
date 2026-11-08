@@ -109,11 +109,11 @@ client hints, and where it came from:
 
 ```rust
 use seleniumbase_rs_stealth::evasion::fingerprint::OsType;
+use seleniumbase_rs_stealth::browser::config::Browser;
 use seleniumbase_rs_stealth::codec::measurement::{self, WireMeasurementError};
-use seleniumbase_rs_stealth::codec::BrowserKind;
 
 # fn demo() -> Result<(), WireMeasurementError> {
-let chrome = measurement::get(BrowserKind::Chrome, OsType::Macos)?;
+let chrome = measurement::get(Browser::Chrome, OsType::Macos)?;
 assert_eq!(chrome.major, 155);
 println!("{} captured on {}", chrome.provenance.browser, chrome.provenance.captured_on);
 // The JA4 of the measured hello. The capture recorded t13d1517h2_8daaf6152771_cb7bf5808d99
@@ -121,7 +121,7 @@ println!("{} captured on {}", chrome.provenance.browser, chrome.provenance.captu
 println!("{}", chrome.tls.ja4());
 
 // A system nobody measured is an error, never a nearby guess.
-let windows = measurement::get(BrowserKind::Chrome, OsType::Windows);
+let windows = measurement::get(Browser::Chrome, OsType::Windows);
 assert!(matches!(windows, Err(WireMeasurementError::NotMeasured { .. })));
 # Ok(())
 # }
@@ -139,7 +139,7 @@ the crate has no way to know which of the two differ. Windows, Linux, Android,
 iOS and Safari stay refused until someone runs the capture tools on that system
 and commits the result. The same rule shows up higher up:
 
-- `WireFormat::for_system(BrowserKind::Chrome, OsType::Windows)` and
+- `WireFormat::for_system(Browser::Chrome, OsType::Windows)` and
   `WireFormat::from_fingerprint` of a Windows `Fingerprint` return
   `WireFormatError::Measurement(WireMeasurementError::NotMeasured { .. })`.
 - `WireFormat::from_fingerprint` of a fingerprint whose user agent
@@ -259,11 +259,11 @@ The `wire` crate turns a measured profile into a wreq client:
 use seleniumbase_rs_stealth::wire::client::{
     WireFormat, WireProtocol,
 };
+use seleniumbase_rs_stealth::browser::config::Browser;
 use seleniumbase_rs_stealth::codec::header_spec::RequestShape;
-use seleniumbase_rs_stealth::codec::BrowserKind;
 
 # async fn demo() -> Result<(), Box<dyn std::error::Error>> {
-let profile = WireFormat::measured(BrowserKind::Chrome)?;
+let profile = WireFormat::measured(Browser::Chrome)?;
 let client = profile.client_builder()?.build()?;
 
 let request = client.get("https://example.com/");
@@ -445,11 +445,11 @@ those cookies were earned through.
 use seleniumbase_rs_stealth::scrape::passport::identity::{WireMeasurementRef, Identity};
 use seleniumbase_rs_stealth::scrape::runtime::identity_file;
 use seleniumbase_rs_stealth::evasion::fingerprint::{Fingerprint, OsType};
-use seleniumbase_rs_stealth::codec::BrowserKind;
+use seleniumbase_rs_stealth::browser::config::Browser;
 
 # async fn demo(now: u64) -> Result<(), Box<dyn std::error::Error>> {
 let fingerprint = Fingerprint::randomized_with_major(OsType::Macos, 7, 155);
-let emulation = WireMeasurementRef { kind: BrowserKind::Chrome, major: 155, os: OsType::Macos };
+let emulation = WireMeasurementRef { kind: Browser::Chrome, major: 155, os: OsType::Macos };
 let identity = Identity::new(fingerprint, emulation, None, now)?;
 
 identity_file::save("identity.json", &identity).await?;
@@ -613,8 +613,12 @@ instead. The country decides the language and the time zone the browser presents
 while it leaves through that proxy, from a built-in locale table (the
 `StaticGeoResolver`; no IP lookup service ships).
 
-`proxy_strategy` picks how the pool chooses: `RoundRobin` (the default),
-`Random { seed }`, `LeastFailures` or `StickyPerSite`. An egress with three
+`proxy_rotation` picks how the pool chooses, with core's `RotationStrategy`
+(`seleniumbase_rs::config::proxy_list`): `RoundRobin` (the default),
+`Random { seed: Option<u64> }`, `LeastFailures` or `StickyPerSite`. The pool is a
+core `ProxyList` plus the exit country of each route, and the list does the
+choosing and the counting; `ProxyPool::from_list` takes one you built, and
+`with_quarantine(after_failures, rest)` sets its quarantine. An egress with three
 failures in a row is out of rotation for ten minutes by default.
 
 - `rotate_proxy()` opens a new browser context behind the new proxy and drops
@@ -941,10 +945,10 @@ use std::time::Duration;
 use seleniumbase_rs_stealth::wire::{WireFormat, MitmOptions, MitmProxy};
 use seleniumbase_rs_stealth::sb_cdp::{Browser, LaunchOptions};
 use seleniumbase_rs_stealth::scrape::NoopEventSink;
-use seleniumbase_rs_stealth::codec::BrowserKind;
+use seleniumbase_rs_stealth::browser::config::Browser as BrowserName;
 
 # async fn demo() -> Result<(), Box<dyn std::error::Error>> {
-let profile = WireFormat::measured(BrowserKind::Chrome)?;
+let profile = WireFormat::measured(BrowserName::Chrome)?;
 let mitm =
     MitmProxy::start(profile, None, MitmOptions::default(), Arc::new(NoopEventSink)).await?;
 let options = mitm.configure_launch(LaunchOptions::builder().build()?)?;
@@ -1275,14 +1279,14 @@ HTTP preferred, and a profile drawn from a random seed.
 | Setting | What it does |
 |---|---|
 | `launch_options(options)`, `launcher(..)` | How the browser starts. `options` is a built `LaunchOptions`; the session makes a copy of it with its fingerprint (`LaunchOptions::with_fingerprint`). A setting made in the options (a user agent, say) wins over the fingerprint's, and the proxy is always the MITM proxy's. |
-| `geo_proxies([(spec, country)])`, `proxy_strategy(..)` | The egress pool and how it picks, as for `BrowserScraper`. Both legs leave through the same egress. |
+| `geo_proxies([(spec, country)])`, `proxy_rotation(..)` | The egress pool and how it picks, as for `BrowserScraper`. Both legs leave through the same egress. |
 | `max_challenge_attempts(n)`, `mitigation(policy)` | Loads per fetch (zero reads as one) and the whole mitigation policy. |
 | `policy(EscalationPolicy)` | The mode it prefers, whether HTTP needs a clearance, the clearance margin, whether a solve sends it back to HTTP. |
 | `ledger(..)`, `event_sink(..)`, `geo_resolver(..)`, `rate_limit(calls, window)` | As for `BrowserScraper`. The HTTP leg and the proxy report to the same sink. |
 | `seed(..)`, `fingerprint(..)` | The first profile. A fingerprint must claim the measured Chrome. |
 | `restore(identity)` | Starts from a saved identity: its fingerprint, cookies and clearances. It must belong to one of the proxies added, or to the direct connection when there is none. |
 | `http_session_options(HttpSessionOptions)`, `mitm_options(MitmOptions)` | The limits of each leg. The session's clock and event sink replace the ones in the HTTP options. |
-| `solve_timeout(..)`, `clock(..)` | How long a solve is waited for, and the clock. |
+| `clock(..)` | The clock. How long a solve is waited for is the `verify_timeout` of the mitigation policy's `SolveOptions` (thirty seconds by default). |
 
 `build()` fails with `StealthError::WireFormat` when this machine's system has no
 measured Chrome or the profile claims another version, `StealthError::Scrape` for

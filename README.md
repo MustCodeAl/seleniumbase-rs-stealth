@@ -158,9 +158,9 @@ There is no connection to a solving service.
 
 ### Proxy pool, rotation and locale from the proxy's country
 
-`ProxyPool` holds `(proxy, country)` pairs and picks by `RotationStrategy`
-(`RoundRobin`, `Random`, `LeastFailures`, `StickyPerSite`), quarantining a proxy
-after repeated failures. Changing egress opens a new browser context behind the
+`ProxyPool` holds `(proxy, country)` pairs on top of core's `ProxyList` and picks by
+core's `RotationStrategy` (`RoundRobin`, `Random`, `LeastFailures`, `StickyPerSite`),
+quarantining a proxy after repeated failures. Changing egress opens a new browser context behind the
 new proxy (core's `Browser::new_context_with`) and drops the old one with its cookies, so the
 browser is not relaunched. That holds when the new proxy is in a country whose
 language and time zone the profile already presents; for another country the
