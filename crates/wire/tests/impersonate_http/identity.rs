@@ -1,8 +1,8 @@
 //! An identity going into a session: the egress it belongs to, the Chrome version it claims, and
 //! the systems that were never measured.
 
+use seleniumbase_rs::browser::config::Browser;
 use seleniumbase_rs::evasion::fingerprint::OsType;
-use seleniumbase_rs_codec::BrowserKind;
 use seleniumbase_rs_scrape::passport::identity::{IdentityError, WireMeasurementRef};
 use seleniumbase_rs_wire::client::WireFormatError;
 use seleniumbase_rs_wire::http_session::{HttpError, HttpSession, HttpSessionOptions};
@@ -13,7 +13,7 @@ const SPEC: &str = "http://alice:s3cret@127.0.0.1:9";
 
 fn emulation(major: u32, os: OsType) -> WireMeasurementRef {
     WireMeasurementRef {
-        kind: BrowserKind::Chrome,
+        kind: Browser::Chrome,
         major,
         os,
     }

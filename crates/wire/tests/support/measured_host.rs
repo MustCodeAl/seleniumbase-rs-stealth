@@ -12,9 +12,9 @@
 //! Rust has no run-time skip, so a skipped test passes. Its note goes to standard error, which the
 //! test harness shows for a passing test only with `-- --nocapture`.
 
+use seleniumbase_rs::browser::config::Browser;
 use seleniumbase_rs::evasion::fingerprint::OsType;
 use seleniumbase_rs_codec::measurement;
-use seleniumbase_rs_codec::BrowserKind;
 
 /// The operating system this machine runs, as the persona of a real browser on it.
 fn host_os() -> OsType {
@@ -30,7 +30,7 @@ fn host_os() -> OsType {
 /// Whether `test` can run on this machine. When it cannot, prints why and returns `false`; the
 /// test then returns.
 pub fn measured_or_skip(test: &str) -> bool {
-    match measurement::get(BrowserKind::Chrome, host_os()) {
+    match measurement::get(Browser::Chrome, host_os()) {
         Ok(_) => true,
         Err(error) => {
             eprintln!(

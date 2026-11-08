@@ -50,6 +50,7 @@ use wreq::{Emulation, Group, RequestBuilder};
 
 use self::identity::{identity_for, DEFAULT_LOCALE_TAG};
 use super::convert::{self, ConvertError};
+use seleniumbase_rs::browser::config::Browser;
 use seleniumbase_rs::evasion::fingerprint::{BrowserType, Fingerprint, OsType};
 use seleniumbase_rs_codec::akamai::AkamaiError;
 use seleniumbase_rs_codec::client_hello::ext_id;
@@ -63,7 +64,6 @@ use seleniumbase_rs_codec::measurement::{
     self, KnownGap, WireMeasurement as Measured, WireMeasurementError,
 };
 use seleniumbase_rs_codec::tls_spec::{TlsSpec, TlsSpecError};
-use seleniumbase_rs_codec::BrowserKind;
 use seleniumbase_rs_scrape::egress::geo::{Locale, LocaleExt};
 
 pub use self::custom::WireFormatBuilder;
@@ -160,7 +160,7 @@ pub struct WireFormat {
     /// Where the profile comes from, such as `chrome-155-macos`.
     source: String,
     /// The browser.
-    kind: BrowserKind,
+    kind: Browser,
     /// The operating system the browser was measured on.
     os: OsType,
     /// The major version that was measured.
@@ -186,7 +186,7 @@ impl WireFormat {
     ///
     /// Returns [`WireFormatError::Measurement`] when the embedded tables are broken or hold no
     /// entry for `kind`, and the errors of [`WireFormat::from_measured`].
-    pub fn measured(kind: BrowserKind) -> Result<Self, WireFormatError> {
+    pub fn measured(kind: Browser) -> Result<Self, WireFormatError> {
         let table = measurement::try_all().map_err(Clone::clone)?;
         let entry = measurement::newest(table, kind).ok_or(WireFormatError::Incomplete {
             what: "measurement for this browser",
@@ -200,7 +200,7 @@ impl WireFormat {
     ///
     /// Returns [`WireFormatError::Measurement`] with `NotMeasured` when the pair has no capture,
     /// and the errors of [`WireFormat::from_measured`].
-    pub fn for_system(kind: BrowserKind, os: OsType) -> Result<Self, WireFormatError> {
+    pub fn for_system(kind: Browser, os: OsType) -> Result<Self, WireFormatError> {
         Self::from_measured(measurement::get(kind, os)?)
     }
 
@@ -283,7 +283,7 @@ impl WireFormat {
                 "only Chromium identities have a measured TLS and HTTP/2",
             ));
         }
-        let entry = measurement::get(BrowserKind::Chrome, fingerprint.os_type())?;
+        let entry = measurement::get(Browser::Chrome, fingerprint.os_type())?;
         let mut identity = ClientHeaders::from_fingerprint(fingerprint)
             .ok_or(WireFormatError::Fingerprint("it has no user agent"))?;
         let claimed = chrome_major(&identity.user_agent).ok_or(WireFormatError::Fingerprint(
@@ -330,7 +330,7 @@ impl WireFormat {
 
     /// The browser.
     #[must_use]
-    pub fn kind(&self) -> BrowserKind {
+    pub fn kind(&self) -> Browser {
         self.kind
     }
 

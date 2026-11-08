@@ -16,10 +16,10 @@ mod measured_host;
 use std::fs;
 use std::path::Path;
 
+use seleniumbase_rs::browser::config::Browser;
 use seleniumbase_rs::evasion::fingerprint::OsType;
 use seleniumbase_rs_codec::akamai::{Akamai, PseudoHeader};
 use seleniumbase_rs_codec::measurement::{self, WireMeasurement};
-use seleniumbase_rs_codec::BrowserKind;
 use seleniumbase_rs_scrape::runtime::capture::args::ToolArgs;
 use seleniumbase_rs_wire::capture_h2::{derive, measure_and_write, MeasuredDoc, Passes, PROBES};
 
@@ -35,7 +35,7 @@ async fn chrome_http2_and_headers_have_the_chrome_shape_and_the_json_round_trips
     ) {
         return;
     }
-    let committed = measurement::get(BrowserKind::Chrome, OsType::Macos).expect("measured");
+    let committed = measurement::get(Browser::Chrome, OsType::Macos).expect("measured");
     let dir = tempfile::tempdir().expect("a temporary directory");
     let name = format!("{}.json", committed.file_stem());
     fs::copy(

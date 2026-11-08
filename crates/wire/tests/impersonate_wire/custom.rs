@@ -5,6 +5,7 @@
 //! crate's parsers; what comes back must be the input, exactly. Each refused input must name its
 //! reason and must never reach a client.
 
+use seleniumbase_rs::browser::config::Browser;
 use seleniumbase_rs::evasion::fingerprint::{BrandVersion, ClientHints};
 use seleniumbase_rs_codec::akamai::Akamai;
 use seleniumbase_rs_codec::client_hello::{ext_id, ClientHello};
@@ -14,7 +15,6 @@ use seleniumbase_rs_codec::ja3::peetprint::PeetprintSlot;
 use seleniumbase_rs_codec::ja3::{Ja3, Peetprint};
 use seleniumbase_rs_codec::ja4::{Ja4, Ja4Order, Ja4Raw};
 use seleniumbase_rs_codec::tls_spec::TlsSpecError;
-use seleniumbase_rs_codec::BrowserKind;
 use seleniumbase_rs_wire::client::{WireFormat, WireFormatError, WireProtocol};
 use seleniumbase_rs_wire::convert::ConvertError;
 
@@ -22,7 +22,7 @@ use crate::exchange::{exchange, Via};
 use crate::server::Served;
 
 fn base() -> WireFormat {
-    WireFormat::measured(BrowserKind::Chrome).expect("the measured profile")
+    WireFormat::measured(Browser::Chrome).expect("the measured profile")
 }
 
 async fn send(profile: &WireFormat) -> Served {
@@ -565,7 +565,7 @@ async fn a_custom_header_set_arrives_in_its_order_with_its_values() {
 
 /// The measured Chrome's identity: its user agent, language and client hints.
 fn measured_identity() -> ClientHeaders {
-    WireFormat::measured(BrowserKind::Chrome)
+    WireFormat::measured(Browser::Chrome)
         .expect("measured")
         .client_headers()
         .clone()

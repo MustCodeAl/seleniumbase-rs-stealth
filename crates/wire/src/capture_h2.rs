@@ -47,10 +47,10 @@ pub use site::{Observed, Protocol, Seen, Site};
 pub use store::{write_h2_fixtures, MeasuredDoc};
 
 use crate::tls_server::TlsServerError;
+use seleniumbase_rs::browser::config::Browser;
 use seleniumbase_rs_codec::h2_frames::H2CaptureError;
 use seleniumbase_rs_codec::h2_spec::H2SpecError;
 use seleniumbase_rs_codec::header_spec::HeaderSpecError;
-use seleniumbase_rs_codec::BrowserKind;
 use seleniumbase_rs_scrape::runtime::capture::args::ToolArgs;
 use seleniumbase_rs_scrape::runtime::capture::record::{BrowserVersion, EntryId};
 use seleniumbase_rs_scrape::runtime::capture::CaptureError;
@@ -295,7 +295,7 @@ fn write_result(
     now: DateTime<Utc>,
 ) -> Result<Report, CaptureH2Error> {
     let id = EntryId {
-        kind: BrowserKind::Chrome,
+        kind: Browser::Chrome,
         major: version.major,
         os: version.os()?,
     };

@@ -2,13 +2,13 @@
 
 use super::{WireFormat, WireFormatError};
 use crate::convert;
+use seleniumbase_rs::browser::config::Browser;
 use seleniumbase_rs::evasion::fingerprint::{Fingerprint, OsType};
 use seleniumbase_rs_codec::akamai::Akamai;
 use seleniumbase_rs_codec::header_spec::{ClientHeaders, HeaderSource, HeaderSpec, RequestShape};
 use seleniumbase_rs_codec::ja3::{Ja3, Peetprint};
 use seleniumbase_rs_codec::ja4::{Ja4Order, Ja4Raw};
 use seleniumbase_rs_codec::tls_spec::{TlsSpec, TlsSpecError};
-use seleniumbase_rs_codec::BrowserKind;
 
 /// One change to the header lists, applied in the order it was asked for.
 #[derive(Debug, Clone)]
@@ -62,7 +62,7 @@ enum HeaderEdit {
 #[derive(Debug, Clone)]
 pub struct WireFormatBuilder {
     /// The browser whose measurement is the base.
-    kind: BrowserKind,
+    kind: Browser,
     /// The system of the base, or the newest measured one.
     os: Option<OsType>,
     /// The base with the TLS and HTTP/2 overlays applied; resolved on first use.
@@ -85,7 +85,7 @@ impl WireFormatBuilder {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            kind: BrowserKind::Chrome,
+            kind: Browser::Chrome,
             os: None,
             profile: None,
             client_headers: None,
@@ -97,7 +97,7 @@ impl WireFormatBuilder {
     /// Takes the newest measurement of `kind` as the base. Call it first: it discards the TLS
     /// and HTTP/2 inputs given before it.
     #[must_use]
-    pub fn base(mut self, kind: BrowserKind) -> Self {
+    pub fn base(mut self, kind: Browser) -> Self {
         self.kind = kind;
         self.os = None;
         self.profile = None;
@@ -107,7 +107,7 @@ impl WireFormatBuilder {
     /// Takes the measurement of `kind` on `os` as the base; a pair with no capture is refused by
     /// the next input that needs the base, or by [`build`](Self::build). Call it first.
     #[must_use]
-    pub fn base_on(mut self, kind: BrowserKind, os: OsType) -> Self {
+    pub fn base_on(mut self, kind: Browser, os: OsType) -> Self {
         self.kind = kind;
         self.os = Some(os);
         self.profile = None;

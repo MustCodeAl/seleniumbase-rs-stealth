@@ -6,8 +6,8 @@ use super::{Identity, WireMeasurementRef};
 use crate::egress::geo::CountryCode;
 use crate::egress::route::ProxyKey;
 use crate::jar::store::SetCookieOutcome;
+use seleniumbase_rs::browser::config::Browser;
 use seleniumbase_rs::evasion::fingerprint::{Fingerprint, OsType};
-use seleniumbase_rs_codec::BrowserKind;
 
 /// An arbitrary "now", in seconds since the Unix epoch.
 pub(crate) const NOW: u64 = 1_800_000_000;
@@ -23,7 +23,7 @@ pub(crate) fn fingerprint() -> Fingerprint {
 /// The wire measurement the sample identity was measured against.
 pub(crate) fn wire_measurement() -> WireMeasurementRef {
     WireMeasurementRef {
-        kind: BrowserKind::Chrome,
+        kind: Browser::Chrome,
         major: MAJOR,
         os: OsType::Macos,
     }

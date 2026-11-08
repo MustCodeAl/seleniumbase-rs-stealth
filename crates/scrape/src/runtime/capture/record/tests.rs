@@ -33,7 +33,7 @@ fn rotated() -> Vec<u16> {
 
 fn id() -> EntryId {
     EntryId {
-        kind: BrowserKind::Chrome,
+        kind: Browser::Chrome,
         major: 155,
         os: OsType::Macos,
     }

@@ -21,7 +21,7 @@ mod stealth_support;
 use std::error::Error;
 use std::process::ExitCode;
 
-use seleniumbase_rs_codec::BrowserKind;
+use seleniumbase_rs::browser::config::Browser;
 use seleniumbase_rs_wire::{WireFormat, WireFormatBuilder, WireFormatError};
 
 /// An Akamai HTTP/2 fingerprint other than Chrome's: its own SETTINGS, connection window,
@@ -43,7 +43,7 @@ fn main() -> ExitCode {
 
 fn run() -> Result<(), Box<dyn Error>> {
     let (os, _major) = stealth_support::measured_chrome()?;
-    let base = WireFormat::for_system(BrowserKind::Chrome, os)?;
+    let base = WireFormat::for_system(Browser::Chrome, os)?;
     let ja3 = base.tls_spec().ja3().to_string();
     println!("the measured base: {}", base.source());
     println!("  user agent  {}", base.client_headers().user_agent);
@@ -56,7 +56,7 @@ fn run() -> Result<(), Box<dyn Error>> {
     );
 
     // A builder over the same measured base. Each input is checked when it is given.
-    let custom = || WireFormat::builder().base_on(BrowserKind::Chrome, os);
+    let custom = || WireFormat::builder().base_on(Browser::Chrome, os);
 
     println!("\naccepted");
     let other_h2 = custom().akamai(OTHER_HTTP2_START)?.build()?;

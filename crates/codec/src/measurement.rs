@@ -3,7 +3,7 @@
 //! Every wire value this crate imitates was measured from a real browser by a capture tool
 //! (`capture_tls`, `capture_hints`, `capture_h2`) and stored as JSON under `src/measured`.
 //! Nothing here is typed by hand. The files are embedded with `include_str!`, parsed once, and
-//! looked up by [`BrowserKind`] and [`OsType`].
+//! looked up by core's [`Browser`] and [`OsType`].
 //!
 //! Only what was measured exists. [`get`] answers an unmeasured browser and system pair with
 //! [`WireMeasurementError::NotMeasured`]; there is no fallback to a different system's values, because
@@ -15,17 +15,17 @@
 //! tool that rewrites a file keeps it.
 //!
 //! Custom tables are first-class: [`WireMeasurement::from_json`] reads any file in the same format,
-//! for a browser the crate does not ship.
+//! for a Chrome version or system the crate does not ship (no other browser is measured).
 //!
 //! ```
 //! use seleniumbase_rs::evasion::fingerprint::OsType;
 //! use seleniumbase_rs_codec::measurement::{self, WireMeasurementError};
-//! use seleniumbase_rs_codec::BrowserKind;
+//! use seleniumbase_rs::browser::config::Browser;
 //!
-//! let chrome = measurement::get(BrowserKind::Chrome, OsType::Macos)?;
+//! let chrome = measurement::get(Browser::Chrome, OsType::Macos)?;
 //! assert!(chrome.user_agent.contains(&format!("Chrome/{}", chrome.major)));
 //!
-//! let windows = measurement::get(BrowserKind::Chrome, OsType::Windows);
+//! let windows = measurement::get(Browser::Chrome, OsType::Windows);
 //! assert!(matches!(windows, Err(WireMeasurementError::NotMeasured { .. })));
 //! # Ok::<(), WireMeasurementError>(())
 //! ```
@@ -41,7 +41,7 @@ use super::h2_spec::H2Spec;
 use super::header_spec::{HeaderSpec, HeaderSpecError};
 pub use super::tls_spec::KnownGap;
 use super::tls_spec::TlsSpec;
-use super::BrowserKind;
+use seleniumbase_rs::browser::config::Browser;
 use seleniumbase_rs::evasion::fingerprint::{ClientHints, OsType};
 
 /// The measured files this crate ships: the file name and its text.
@@ -66,7 +66,7 @@ pub enum WireMeasurementError {
     )]
     NotMeasured {
         /// The browser that was asked for.
-        kind: BrowserKind,
+        kind: Browser,
         /// The operating system that was asked for.
         os: OsType,
     },
@@ -74,7 +74,7 @@ pub enum WireMeasurementError {
     #[error("{kind:?} {major} on {os:?} has not been measured")]
     VersionNotMeasured {
         /// The browser that was asked for.
-        kind: BrowserKind,
+        kind: Browser,
         /// The major version that was asked for.
         major: u32,
         /// The operating system that was asked for.
@@ -141,7 +141,7 @@ pub struct Provenance {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WireMeasurement {
     /// The browser.
-    pub kind: BrowserKind,
+    pub kind: Browser,
     /// The major version, such as `155`.
     pub major: u32,
     /// The full version, such as `155.0.8059.40`.
@@ -165,24 +165,11 @@ pub struct WireMeasurement {
     pub provenance: Provenance,
 }
 
-/// The browser name as the JSON spells it (`BrowserKind` has no serde of its own).
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-enum KindName {
-    Chrome,
-}
-
-impl From<KindName> for BrowserKind {
-    fn from(name: KindName) -> Self {
-        match name {
-            KindName::Chrome => BrowserKind::Chrome,
-        }
-    }
-}
-
-/// The name a browser has in the JSON, and the token its user agent carries.
-fn kind_names(kind: BrowserKind) -> (KindName, &'static str) {
+/// The token the user agent of a browser carries before its major version; only Chrome is measured.
+const fn user_agent_token(kind: Browser) -> Option<&'static str> {
     match kind {
-        BrowserKind::Chrome => (KindName::Chrome, "Chrome"),
+        Browser::Chrome => Some("Chrome"),
+        _ => None,
     }
 }
 
@@ -191,7 +178,7 @@ fn kind_names(kind: BrowserKind) -> (KindName, &'static str) {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct FileIn {
-    kind: KindName,
+    kind: Browser,
     major: u32,
     full_version: String,
     os: OsType,
@@ -214,7 +201,7 @@ struct FileIn {
 /// The JSON shape [`WireMeasurement::to_json`] writes.
 #[derive(Serialize)]
 struct FileOut<'a> {
-    kind: KindName,
+    kind: Browser,
     major: u32,
     full_version: &'a str,
     os: OsType,
@@ -254,7 +241,7 @@ impl WireMeasurement {
                 reason: error.to_string(),
             })?;
         let entry = Self {
-            kind: file.kind.into(),
+            kind: file.kind,
             major: file.major,
             full_version: file.full_version,
             os: file.os,
@@ -276,9 +263,8 @@ impl WireMeasurement {
     ///
     /// Returns [`WireMeasurementError::Parse`] when serialization fails, which a valid entry never does.
     pub fn to_json(&self) -> Result<String, WireMeasurementError> {
-        let (name, _) = kind_names(self.kind);
         let out = FileOut {
-            kind: name,
+            kind: self.kind,
             major: self.major,
             full_version: &self.full_version,
             os: self.os,
@@ -299,9 +285,7 @@ impl WireMeasurement {
     /// The stem the capture tools give this entry's files, such as `chrome-155-macos`.
     #[must_use]
     pub fn file_stem(&self) -> String {
-        let browser = match self.kind {
-            BrowserKind::Chrome => "chrome",
-        };
+        let browser = self.kind.name();
         format!("{browser}-{}-{}", self.major, os_slug(self.os))
     }
 
@@ -315,7 +299,9 @@ impl WireMeasurement {
         if !self.full_version.starts_with(&major_prefix) {
             return Err(inconsistent("full_version does not start with major"));
         }
-        let (_, token) = kind_names(self.kind);
+        let Some(token) = user_agent_token(self.kind) else {
+            return Err(inconsistent("kind is not a browser this crate measures"));
+        };
         if !self.user_agent.contains(&format!("{token}/{}", self.major)) {
             return Err(inconsistent(
                 "user_agent does not name the browser at major",
@@ -405,7 +391,7 @@ fn highest_major<'a>(
 
 /// The newest entry (highest major version) of `kind` in `entries`; the first of equals wins.
 #[must_use]
-pub fn newest(entries: &[WireMeasurement], kind: BrowserKind) -> Option<&WireMeasurement> {
+pub fn newest(entries: &[WireMeasurement], kind: Browser) -> Option<&WireMeasurement> {
     highest_major(entries.iter().filter(|entry| entry.kind == kind))
 }
 
@@ -413,7 +399,7 @@ pub fn newest(entries: &[WireMeasurement], kind: BrowserKind) -> Option<&WireMea
 #[must_use]
 pub fn newest_on(
     entries: &[WireMeasurement],
-    kind: BrowserKind,
+    kind: Browser,
     os: OsType,
 ) -> Option<&WireMeasurement> {
     highest_major(
@@ -425,15 +411,10 @@ pub fn newest_on(
 
 /// The newest measured entry of a browser, whatever the system.
 ///
-/// Every [`BrowserKind`] has an entry; the unit test `every_browser_kind_has_an_entry` fails
-/// when a variant is added without a measurement.
-///
-/// # Panics
-///
-/// Panics if `kind` has no entry, which that test rules out.
+/// `None` for a browser with no capture on any system: only Chrome has one.
 #[must_use]
-pub fn for_kind(kind: BrowserKind) -> &'static WireMeasurement {
-    newest(all(), kind).expect("every BrowserKind has a measured entry; a unit test enforces it")
+pub fn for_kind(kind: Browser) -> Option<&'static WireMeasurement> {
+    newest(all(), kind)
 }
 
 /// The newest measured entry of a browser on an operating system.
@@ -441,10 +422,7 @@ pub fn for_kind(kind: BrowserKind) -> &'static WireMeasurement {
 /// # Errors
 ///
 /// Returns [`WireMeasurementError::NotMeasured`] when the pair has no capture.
-pub fn get(
-    kind: BrowserKind,
-    os: OsType,
-) -> Result<&'static WireMeasurement, WireMeasurementError> {
+pub fn get(kind: Browser, os: OsType) -> Result<&'static WireMeasurement, WireMeasurementError> {
     newest_on(all(), kind, os).ok_or(WireMeasurementError::NotMeasured { kind, os })
 }
 
@@ -455,7 +433,7 @@ pub fn get(
 /// Returns [`WireMeasurementError::NotMeasured`] when the pair has no capture at all and
 /// [`WireMeasurementError::VersionNotMeasured`] when it has captures, but not at `major`.
 pub fn get_version(
-    kind: BrowserKind,
+    kind: Browser,
     os: OsType,
     major: u32,
 ) -> Result<&'static WireMeasurement, WireMeasurementError> {
@@ -468,7 +446,7 @@ pub fn get_version(
 
 /// The operating systems with a measured entry for `kind`, without repeats.
 #[must_use]
-pub fn measured_systems(kind: BrowserKind) -> Vec<OsType> {
+pub fn measured_systems(kind: Browser) -> Vec<OsType> {
     let mut seen = BTreeSet::new();
     all()
         .iter()

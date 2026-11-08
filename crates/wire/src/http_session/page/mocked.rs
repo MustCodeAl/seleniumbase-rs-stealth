@@ -16,7 +16,7 @@ use seleniumbase_rs::sb_cdp::{Browser, MockCtrl};
 const HOST: &str = "shop.test";
 
 fn measured_agent() -> String {
-    WireFormat::measured(BrowserKind::Chrome)
+    WireFormat::measured(Browser::Chrome)
         .expect("measured")
         .client_headers()
         .user_agent
@@ -24,7 +24,7 @@ fn measured_agent() -> String {
 }
 
 fn product() -> String {
-    let major = WireFormat::measured(BrowserKind::Chrome)
+    let major = WireFormat::measured(Browser::Chrome)
         .expect("measured")
         .major();
     format!("Chrome/{major}.0.0.0")
@@ -92,7 +92,7 @@ async fn a_page_hands_over_its_cookies_its_agent_and_its_languages() {
 
 #[tokio::test]
 async fn a_page_of_another_chrome_is_refused_whoever_reports_the_version() {
-    let measured = WireFormat::measured(BrowserKind::Chrome)
+    let measured = WireFormat::measured(Browser::Chrome)
         .expect("measured")
         .major();
     let newer = measured + 1;

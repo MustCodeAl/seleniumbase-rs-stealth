@@ -26,9 +26,9 @@ mod stealth_support;
 use std::error::Error;
 use std::process::ExitCode;
 
+use seleniumbase_rs::browser::config::Browser;
 use seleniumbase_rs::Fingerprint;
 use seleniumbase_rs_codec::measurement;
-use seleniumbase_rs_codec::BrowserKind;
 use seleniumbase_rs_scrape::Identity;
 use seleniumbase_rs_scrape::WireMeasurementRef;
 use seleniumbase_rs_wire::HttpSession;
@@ -64,7 +64,7 @@ async fn run() -> Result<(), Box<dyn Error>> {
     // client hints and the languages of every request.
     let fingerprint = Fingerprint::randomized_with_major(os, SEED, major);
     let emulation_ref = WireMeasurementRef {
-        kind: BrowserKind::Chrome,
+        kind: Browser::Chrome,
         major,
         os,
     };
@@ -105,7 +105,7 @@ async fn run() -> Result<(), Box<dyn Error>> {
         println!("  user agent: {agent}");
     }
 
-    let measured = measurement::get(BrowserKind::Chrome, os)?.tls.ja4();
+    let measured = measurement::get(Browser::Chrome, os)?.tls.ja4();
     println!("\nJA4 of the measured Chrome {major} (the client cannot send all of it): {measured}");
     println!(
         "left out of the profile because BoringSSL cannot send it: {:?}",

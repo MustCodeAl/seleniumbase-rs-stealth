@@ -10,9 +10,9 @@
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use seleniumbase_rs::browser::config::Browser;
 use seleniumbase_rs::evasion::fingerprint::OsType;
 use seleniumbase_rs_codec::measurement;
-use seleniumbase_rs_codec::BrowserKind;
 
 pub mod shop;
 
@@ -42,7 +42,7 @@ pub fn unix_now() -> u64 {
 /// see.
 pub fn measured_chrome() -> Result<(OsType, u32), String> {
     let os = host_os();
-    match measurement::get(BrowserKind::Chrome, os) {
+    match measurement::get(Browser::Chrome, os) {
         Ok(entry) => Ok((os, entry.major)),
         Err(error) => Err(format!(
             "{error}.\nThis example needs a measured system, and only Chrome 155 on macOS is \

@@ -5,22 +5,11 @@ use super::{
     try_all, KnownGap, WireMeasurement, WireMeasurementError, MAX_MEASURED_JSON_BYTES, SOURCES,
 };
 use crate::tls_spec::KnownGap as TlsKnownGap;
-use crate::BrowserKind;
+use seleniumbase_rs::browser::config::Browser;
 use seleniumbase_rs::evasion::fingerprint::OsType;
 
-/// The one browser that exists today, with the guard that makes a new variant fail to compile
-/// here until it is classified.
-fn all_kinds() -> [BrowserKind; 1] {
-    fn guard(kind: BrowserKind) -> BrowserKind {
-        match kind {
-            BrowserKind::Chrome => BrowserKind::Chrome,
-        }
-    }
-    [guard(BrowserKind::Chrome)]
-}
-
 fn chrome_macos() -> &'static WireMeasurement {
-    get(BrowserKind::Chrome, OsType::Macos).expect("Chrome on macOS is measured")
+    get(Browser::Chrome, OsType::Macos).expect("Chrome on macOS is measured")
 }
 
 /// The measured Chrome entry with a different major version and matching text.
@@ -60,7 +49,7 @@ fn every_embedded_file_parses_and_none_repeats() {
 fn chrome_on_macos_is_measured() {
     let chrome = chrome_macos();
 
-    assert_eq!(chrome.kind, BrowserKind::Chrome);
+    assert_eq!(chrome.kind, Browser::Chrome);
     assert_eq!(chrome.os, OsType::Macos);
     assert!(chrome
         .user_agent
@@ -132,12 +121,12 @@ fn the_known_gaps_are_the_tls_spec_type() {
 #[test]
 fn unmeasured_systems_are_refused_by_name() {
     for os in [OsType::Windows, OsType::Linux, OsType::Android, OsType::Ios] {
-        let error = get(BrowserKind::Chrome, os).expect_err("not measured");
+        let error = get(Browser::Chrome, os).expect_err("not measured");
 
         assert_eq!(
             error,
             WireMeasurementError::NotMeasured {
-                kind: BrowserKind::Chrome,
+                kind: Browser::Chrome,
                 os
             }
         );
@@ -153,19 +142,19 @@ fn unmeasured_systems_are_refused_by_name() {
 fn a_measured_system_with_another_major_is_a_version_error() {
     let chrome = chrome_macos();
 
-    let found = get_version(BrowserKind::Chrome, OsType::Macos, chrome.major);
+    let found = get_version(Browser::Chrome, OsType::Macos, chrome.major);
     assert_eq!(found.expect("the measured major").major, chrome.major);
 
-    let missing = get_version(BrowserKind::Chrome, OsType::Macos, chrome.major + 1);
+    let missing = get_version(Browser::Chrome, OsType::Macos, chrome.major + 1);
     assert_eq!(
         missing.expect_err("another major"),
         WireMeasurementError::VersionNotMeasured {
-            kind: BrowserKind::Chrome,
+            kind: Browser::Chrome,
             major: chrome.major + 1,
             os: OsType::Macos
         }
     );
-    let unmeasured = get_version(BrowserKind::Chrome, OsType::Windows, chrome.major);
+    let unmeasured = get_version(Browser::Chrome, OsType::Windows, chrome.major);
     assert!(matches!(
         unmeasured,
         Err(WireMeasurementError::NotMeasured { .. })
@@ -173,20 +162,46 @@ fn a_measured_system_with_another_major_is_a_version_error() {
 }
 
 #[test]
-fn every_browser_kind_has_an_entry() {
-    for kind in all_kinds() {
+fn only_chrome_has_an_entry_and_the_lookup_says_so() {
+    let chrome = for_kind(Browser::Chrome).expect("Chrome is measured");
+    assert_eq!(chrome.kind, Browser::Chrome);
+    for kind in [Browser::Edge, Browser::Firefox, Browser::Safari] {
         assert!(
-            all().iter().any(|entry| entry.kind == kind),
-            "{kind:?} has no measured entry; measure it or refuse it in a documented way"
+            for_kind(kind).is_none(),
+            "{kind:?} has no measured entry, and the lookup does not invent one"
         );
-        assert_eq!(for_kind(kind).kind, kind);
     }
+}
+
+#[test]
+fn the_kind_keeps_its_spelling_in_the_file_and_only_chrome_is_read() {
+    let mut value = chrome_json();
+    assert_eq!(value["kind"], "Chrome");
+    let entry = parse_value(&value).expect("the measured Chrome file parses");
+    assert_eq!(entry.kind, Browser::Chrome);
+    let written: serde_json::Value =
+        serde_json::from_str(&entry.to_json().expect("the entry is written")).expect("JSON");
+    assert_eq!(written["kind"], "Chrome", "the written file keeps the name");
+
+    value["kind"] = serde_json::json!("Firefox");
+    assert!(
+        matches!(
+            parse_value(&value),
+            Err(WireMeasurementError::Inconsistent { .. })
+        ),
+        "a browser core names and this crate does not measure is refused as a measured file"
+    );
+    value["kind"] = serde_json::json!("Netscape");
+    assert!(matches!(
+        parse_value(&value),
+        Err(WireMeasurementError::Parse { .. })
+    ));
 }
 
 #[test]
 fn only_measured_systems_are_listed() {
     assert_eq!(
-        measured_systems(BrowserKind::Chrome),
+        measured_systems(Browser::Chrome),
         vec![OsType::Macos],
         "Chrome is measured on macOS and nowhere else"
     );
@@ -200,16 +215,16 @@ fn the_newest_major_wins_and_the_first_of_equals() {
         with_major(153),
         with_major(151),
     ];
-    let best = newest(&entries, BrowserKind::Chrome).expect("an entry");
+    let best = newest(&entries, Browser::Chrome).expect("an entry");
 
     assert_eq!(best.major, 153);
     assert!(std::ptr::eq(best, entries.get(1).expect("second entry")));
     assert_eq!(
-        newest_on(&entries, BrowserKind::Chrome, OsType::Macos).map(|e| e.major),
+        newest_on(&entries, Browser::Chrome, OsType::Macos).map(|e| e.major),
         Some(153)
     );
-    assert!(newest_on(&entries, BrowserKind::Chrome, OsType::Linux).is_none());
-    assert!(newest(&[], BrowserKind::Chrome).is_none());
+    assert!(newest_on(&entries, Browser::Chrome, OsType::Linux).is_none());
+    assert!(newest(&[], Browser::Chrome).is_none());
 }
 
 #[test]

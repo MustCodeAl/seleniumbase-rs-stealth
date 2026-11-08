@@ -5,8 +5,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use seleniumbase_rs::browser::config::Browser;
 use seleniumbase_rs::evasion::fingerprint::{Fingerprint, OsType};
-use seleniumbase_rs_codec::{measurement, BrowserKind};
+use seleniumbase_rs_codec::measurement;
 use seleniumbase_rs_scrape::challenge::mitigation::{FetchKind, MitigationPolicy};
 use seleniumbase_rs_scrape::egress::geo::CountryCode;
 use seleniumbase_rs_scrape::ledger::events::{CollectingEventSink, ScrapeEvent};
@@ -51,7 +52,7 @@ fn patient_policy() -> MitigationPolicy {
 
 /// The Chrome major the measured TLS and HTTP/2 of macOS belong to.
 pub fn measured_major() -> u32 {
-    measurement::get(BrowserKind::Chrome, OsType::Macos)
+    measurement::get(Browser::Chrome, OsType::Macos)
         .expect("macOS is measured")
         .major
 }

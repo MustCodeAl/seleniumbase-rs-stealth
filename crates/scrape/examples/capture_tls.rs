@@ -12,7 +12,7 @@
 use std::path::Path;
 use std::process::ExitCode;
 
-use seleniumbase_rs_codec::BrowserKind;
+use seleniumbase_rs::browser::config::Browser;
 use seleniumbase_rs_scrape::runtime::capture::args::{ToolArgs, USAGE};
 use seleniumbase_rs_scrape::runtime::capture::record::write_fixtures;
 use seleniumbase_rs_scrape::runtime::capture::{measure_tls, CaptureError, EntryId, MeasuredFile};
@@ -42,7 +42,7 @@ async fn run() -> Result<(), CaptureError> {
     }
     let (version, tls) = measure_tls(&args.chrome).await?;
     let id = EntryId {
-        kind: BrowserKind::Chrome,
+        kind: Browser::Chrome,
         major: version.major,
         os: version.os()?,
     };

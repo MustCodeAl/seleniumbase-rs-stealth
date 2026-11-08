@@ -21,8 +21,9 @@ use super::{
 };
 use crate::client::WireFormat;
 use crate::tls_server::EphemeralCa;
+use seleniumbase_rs::browser::config::Browser;
 use seleniumbase_rs::sb_cdp::LaunchOptions;
-use seleniumbase_rs_codec::{measurement, BrowserKind};
+use seleniumbase_rs_codec::measurement;
 use seleniumbase_rs_scrape::egress::redact::Secret;
 use seleniumbase_rs_scrape::egress::route::ProxyRoute;
 use seleniumbase_rs_scrape::ledger::events::NoopEventSink;
@@ -105,7 +106,7 @@ fn the_websocket_bounds_have_defaults_and_show_in_debug() {
 
 #[test]
 fn the_websocket_hello_is_the_measured_one_without_its_gaps_and_offers_http1_only() {
-    let profile = WireFormat::measured(BrowserKind::Chrome).expect("measured");
+    let profile = WireFormat::measured(Browser::Chrome).expect("measured");
     let spec = websocket_spec(&profile).expect("a WebSocket hello is measured");
     let entry = measurement::get(profile.kind(), profile.os()).expect("the entry");
     let measured = entry.tls_websocket.as_ref().expect("measured");
@@ -356,7 +357,7 @@ fn chrome_args_pin_the_leaf_only_and_cover_loopback_and_quic() {
 
 #[tokio::test]
 async fn the_launch_line_has_the_proxy_and_switches_but_never_the_token() {
-    let profile = WireFormat::measured(BrowserKind::Chrome).expect("measured");
+    let profile = WireFormat::measured(Browser::Chrome).expect("measured");
     let mitm = MitmProxy::start(
         profile,
         None,
@@ -405,7 +406,7 @@ async fn the_launch_line_has_the_proxy_and_switches_but_never_the_token() {
 
 /// A proxy with the measured profile and the default options.
 async fn started() -> MitmProxy {
-    let profile = WireFormat::measured(BrowserKind::Chrome).expect("measured");
+    let profile = WireFormat::measured(Browser::Chrome).expect("measured");
     MitmProxy::start(
         profile,
         None,
@@ -475,7 +476,7 @@ async fn the_launch_opens_the_priming_page_unless_it_has_a_start_page_already() 
 
 #[tokio::test]
 async fn invalid_options_never_bind() {
-    let profile = WireFormat::measured(BrowserKind::Chrome).expect("measured");
+    let profile = WireFormat::measured(Browser::Chrome).expect("measured");
     let started = MitmProxy::start(
         profile,
         None,

@@ -12,6 +12,7 @@ use super::{
     check_emittable, compressor, http2_options, tls_options, wreq_headers, ConvertError,
     CERT_COMPRESSION_BROTLI, CERT_COMPRESSION_ZLIB, MAX_DECOMPRESSED_CERTIFICATE,
 };
+use seleniumbase_rs::browser::config::Browser;
 use seleniumbase_rs::evasion::fingerprint::OsType;
 use seleniumbase_rs_codec::akamai::Akamai;
 use seleniumbase_rs_codec::client_hello::ext_id;
@@ -19,7 +20,6 @@ use seleniumbase_rs_codec::h2_spec::H2Spec;
 use seleniumbase_rs_codec::ids::{CIPHER_SUITES, SIGNATURE_ALGORITHMS};
 use seleniumbase_rs_codec::measurement::{self, WireMeasurement};
 use seleniumbase_rs_codec::tls_spec::{Alps, TlsSpec};
-use seleniumbase_rs_codec::BrowserKind;
 
 /// The names `BoringSSL` gives the groups the measured Chrome offers.
 const BORINGSSL_GROUP_NAMES: [(u16, &str); 4] = [
@@ -30,7 +30,7 @@ const BORINGSSL_GROUP_NAMES: [(u16, &str); 4] = [
 ];
 
 fn chrome() -> &'static WireMeasurement {
-    measurement::get(BrowserKind::Chrome, OsType::Macos).expect("Chrome on macOS is measured")
+    measurement::get(Browser::Chrome, OsType::Macos).expect("Chrome on macOS is measured")
 }
 
 /// The measured TLS spec with the parts `BoringSSL` cannot send taken out.

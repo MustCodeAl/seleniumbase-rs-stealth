@@ -16,7 +16,7 @@
 use std::path::Path;
 use std::process::ExitCode;
 
-use seleniumbase_rs_codec::BrowserKind;
+use seleniumbase_rs::browser::config::Browser;
 use seleniumbase_rs_scrape::runtime::capture::args::{ToolArgs, USAGE};
 use seleniumbase_rs_scrape::runtime::capture::hints::console_snippet;
 use seleniumbase_rs_scrape::runtime::capture::{
@@ -52,7 +52,7 @@ async fn run() -> Result<(), CaptureError> {
     }
     let (version, hints) = measure_hints(&args.chrome).await?;
     let id = EntryId {
-        kind: BrowserKind::Chrome,
+        kind: Browser::Chrome,
         major: version.major,
         os: version.os()?,
     };

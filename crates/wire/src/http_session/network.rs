@@ -113,7 +113,7 @@ pub(super) fn build_client(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use seleniumbase_rs_codec::BrowserKind;
+    use seleniumbase_rs::browser::config::Browser;
 
     #[test]
     fn the_bypass_list_is_comma_separated_without_blanks() {
@@ -173,7 +173,7 @@ mod tests {
 
     #[test]
     fn a_client_is_built_for_the_measured_profile_with_and_without_a_proxy() {
-        let profile = WireFormat::measured(BrowserKind::Chrome).expect("measured");
+        let profile = WireFormat::measured(Browser::Chrome).expect("measured");
         let options = HttpSessionOptions::new();
         assert!(build_client(&profile, None, &options).is_ok());
         let egress =

@@ -2,9 +2,9 @@
 
 use super::{StealthError, StealthSession};
 use crate::client::WireFormat;
+use seleniumbase_rs::browser::config::Browser;
 use seleniumbase_rs::evasion::fingerprint::{Fingerprint, OsType};
 use seleniumbase_rs::evasion::humanize::Rng;
-use seleniumbase_rs_codec::BrowserKind;
 use seleniumbase_rs_scrape::challenge::mitigation::FetchKind;
 use seleniumbase_rs_scrape::egress::route::{ProxyKey, ProxyRoute};
 use seleniumbase_rs_scrape::error::ScrapeError;
@@ -180,7 +180,7 @@ impl StealthSession {
     /// The measured browser the session presents.
     fn emulation(&self) -> WireMeasurementRef {
         WireMeasurementRef {
-            kind: BrowserKind::Chrome,
+            kind: Browser::Chrome,
             major: self.persona.major,
             os: self.persona.os,
         }
@@ -234,14 +234,14 @@ mod tests {
     use seleniumbase_rs_scrape::passport::identity::IdentityError;
 
     fn measured() -> u32 {
-        measurement::get(BrowserKind::Chrome, OsType::Macos)
+        measurement::get(Browser::Chrome, OsType::Macos)
             .expect("macOS is measured")
             .major
     }
 
     fn emulation_of(major: u32) -> WireMeasurementRef {
         WireMeasurementRef {
-            kind: BrowserKind::Chrome,
+            kind: Browser::Chrome,
             major,
             os: OsType::Macos,
         }

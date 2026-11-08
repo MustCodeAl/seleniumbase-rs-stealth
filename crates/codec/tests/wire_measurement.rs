@@ -11,11 +11,11 @@ use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use seleniumbase_rs::browser::config::Browser;
 use seleniumbase_rs::evasion::fingerprint::OsType;
 use seleniumbase_rs_codec::akamai::{Akamai, PseudoHeader};
 use seleniumbase_rs_codec::h2_spec::H2Spec;
 use seleniumbase_rs_codec::measurement::{self, source_names};
-use seleniumbase_rs_codec::BrowserKind;
 
 fn root() -> &'static Path {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -69,7 +69,7 @@ fn the_file_name_matches_the_entry_it_holds() {
 }
 
 fn chrome() -> &'static measurement::WireMeasurement {
-    measurement::get(BrowserKind::Chrome, OsType::Macos).expect("Chrome on macOS is measured")
+    measurement::get(Browser::Chrome, OsType::Macos).expect("Chrome on macOS is measured")
 }
 
 fn fixture(name: &str) -> Vec<u8> {

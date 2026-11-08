@@ -25,9 +25,9 @@ use hyper::server::conn::http1;
 use hyper::service::service_fn;
 use hyper::{Request, Response};
 use hyper_util::rt::TokioIo;
+use seleniumbase_rs::browser::config::Browser;
 use seleniumbase_rs_codec::client_hello::{ClientHello, MAX_CLIENT_HELLO};
 use seleniumbase_rs_codec::h2_frames::H2Preface;
-use seleniumbase_rs_codec::BrowserKind;
 use seleniumbase_rs_scrape::egress::route::ProxyRoute;
 use seleniumbase_rs_scrape::ledger::events::CollectingEventSink;
 use seleniumbase_rs_scrape::runtime::capture::stream::{
@@ -64,7 +64,7 @@ const MAX_HEAD: usize = 64 * 1024;
 
 /// The measured Chrome profile.
 pub fn profile() -> WireFormat {
-    WireFormat::measured(BrowserKind::Chrome).expect("Chrome is measured")
+    WireFormat::measured(Browser::Chrome).expect("Chrome is measured")
 }
 
 /// A CA of its own, shared.

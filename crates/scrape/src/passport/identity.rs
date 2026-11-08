@@ -23,9 +23,9 @@ use serde_json::error::Category;
 use crate::challenge::detect::{clearance_cookie, ProtectionVendor};
 use crate::egress::route::ProxyKey;
 use crate::jar::store::{site_of, CookieJar};
+use seleniumbase_rs::browser::config::Browser;
 use seleniumbase_rs::evasion::fingerprint::{Fingerprint, FingerprintError, OsType, Spoof};
 use seleniumbase_rs::sb_cdp::{Cookie, Session};
-use seleniumbase_rs_codec::BrowserKind;
 
 #[cfg(test)]
 pub(crate) mod fixtures;
@@ -42,48 +42,37 @@ pub const NO_EXPIRY: u64 = u64::MAX;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WireMeasurementRef {
     /// Which browser was measured.
-    #[serde(with = "browser_kind")]
-    pub kind: BrowserKind,
+    #[serde(with = "browser_name")]
+    pub kind: Browser,
     /// The browser's major version.
     pub major: u32,
     /// The operating system the measurement was made on.
     pub os: OsType,
 }
 
-/// Serde for [`BrowserKind`], which has none of its own. A kind this file does not know cannot be
-/// written: `BrowserKind` lives in the codec crate and is `#[non_exhaustive]`, so a kind added there
-/// later is refused with an error until it is given a spelling here.
-mod browser_kind {
+/// Serde for [`Browser`] in the identity file, which spells it as core names it (`chrome`):
+/// [`Browser::name`] writes it, and [`FromStr`](std::str::FromStr) reads it, but only that exact
+/// spelling: a file that writes `Chrome` or `netscape` is refused, as it was before.
+mod browser_name {
     use serde::de::Error as _;
-    use serde::ser::Error as _;
     use serde::{Deserialize, Deserializer, Serializer};
 
-    use seleniumbase_rs_codec::BrowserKind;
-
-    /// The spelling of [`BrowserKind::Chrome`].
-    const CHROME: &str = "chrome";
+    use seleniumbase_rs::browser::config::Browser;
 
     #[expect(
         clippy::trivially_copy_pass_by_ref,
         reason = "serde's `with` hands the field over by reference"
     )]
-    pub(super) fn serialize<S: Serializer>(kind: &BrowserKind, out: S) -> Result<S::Ok, S::Error> {
-        match kind {
-            BrowserKind::Chrome => out.serialize_str(CHROME),
-            other => Err(S::Error::custom(format!(
-                "the browser {other:?} has no spelling in the identity file"
-            ))),
-        }
+    pub(super) fn serialize<S: Serializer>(kind: &Browser, out: S) -> Result<S::Ok, S::Error> {
+        out.serialize_str(kind.name())
     }
 
-    pub(super) fn deserialize<'de, D: Deserializer<'de>>(
-        input: D,
-    ) -> Result<BrowserKind, D::Error> {
+    pub(super) fn deserialize<'de, D: Deserializer<'de>>(input: D) -> Result<Browser, D::Error> {
         let name = String::deserialize(input)?;
-        match name.as_str() {
-            CHROME => Ok(BrowserKind::Chrome),
-            other => Err(D::Error::unknown_variant(other, &[CHROME])),
-        }
+        name.parse::<Browser>()
+            .ok()
+            .filter(|kind| kind.name() == name)
+            .ok_or_else(|| D::Error::custom(format!("unknown browser `{name}`")))
     }
 }
 

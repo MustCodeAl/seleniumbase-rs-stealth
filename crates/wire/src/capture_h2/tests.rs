@@ -14,10 +14,10 @@ use super::probes::{Probe, DOCUMENT, FETCH, IMAGE, PROBES, SCRIPT, STYLE};
 use super::site::{Observed, Seen};
 use super::store::{write_h2_fixtures, MeasuredDoc};
 use super::{parse_args, CaptureH2Error, Passes};
+use seleniumbase_rs::browser::config::Browser;
 use seleniumbase_rs::evasion::fingerprint::OsType;
 use seleniumbase_rs_codec::akamai::PseudoHeader;
 use seleniumbase_rs_codec::h2_frames::{encode_frame, frame_type, read_preface, CLIENT_PREFACE};
-use seleniumbase_rs_codec::BrowserKind;
 use seleniumbase_rs_scrape::runtime::capture::record::{BrowserVersion, EntryId};
 use seleniumbase_rs_scrape::runtime::capture::stream::Http1Request;
 
@@ -538,7 +538,7 @@ pub(super) fn version(full: &str) -> BrowserVersion {
 
 pub(super) fn entry() -> EntryId {
     EntryId {
-        kind: BrowserKind::Chrome,
+        kind: Browser::Chrome,
         major: 155,
         os: OsType::Macos,
     }

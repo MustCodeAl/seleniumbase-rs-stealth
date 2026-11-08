@@ -23,12 +23,12 @@ use super::error::HttpError;
 use super::options::HttpSessionOptions;
 use super::HttpSession;
 use crate::client::{WireFormat, WireFormatError};
+use seleniumbase_rs::browser::config::Browser;
 use seleniumbase_rs::error::SeleniumBaseError;
 use seleniumbase_rs::evasion::fingerprint::OsType;
 use seleniumbase_rs::evasion::randomize::Locale;
 use seleniumbase_rs::sb_cdp::{Page, Proxy};
 use seleniumbase_rs_codec::measurement;
-use seleniumbase_rs_codec::BrowserKind;
 use seleniumbase_rs_scrape::egress::route::{ProxyKey, ProxyRoute};
 use seleniumbase_rs_scrape::jar::store::CookieJar;
 use seleniumbase_rs_scrape::passport::identity::IdentityError;
@@ -112,7 +112,7 @@ pub(super) fn profile_of(probe: &Probe) -> Result<WireFormat, HttpError> {
         "its user agent names no Chrome version",
     ))?;
     let os = os_of(user_agent)?;
-    let measured = measurement::get(BrowserKind::Chrome, os)
+    let measured = measurement::get(Browser::Chrome, os)
         .map_err(WireFormatError::from)?
         .major;
     for browser in std::iter::once(claimed).chain(probe.product_major) {
@@ -121,7 +121,7 @@ pub(super) fn profile_of(probe: &Probe) -> Result<WireFormat, HttpError> {
         }
     }
     // The page's own user agent and languages, over the measured client hints of its system.
-    let mut identity = WireFormat::for_system(BrowserKind::Chrome, os)?
+    let mut identity = WireFormat::for_system(Browser::Chrome, os)?
         .client_headers()
         .clone();
     user_agent.clone_into(&mut identity.user_agent);
@@ -129,7 +129,7 @@ pub(super) fn profile_of(probe: &Probe) -> Result<WireFormat, HttpError> {
         identity.accept_language = Some(language);
     }
     Ok(WireFormat::builder()
-        .base_on(BrowserKind::Chrome, os)
+        .base_on(Browser::Chrome, os)
         .client_headers(identity)
         .build()?)
 }
@@ -559,7 +559,7 @@ mod tests {
 
     #[test]
     fn the_measured_major_is_accepted_and_the_user_agent_is_kept() {
-        let measured = measurement::get(BrowserKind::Chrome, OsType::Macos)
+        let measured = measurement::get(Browser::Chrome, OsType::Macos)
             .expect("measured")
             .major;
         let agent = MAC_155.replace("155", &measured.to_string());
@@ -578,7 +578,7 @@ mod tests {
 
     #[test]
     fn another_chrome_major_is_a_version_mismatch_whoever_reports_it() {
-        let measured = measurement::get(BrowserKind::Chrome, OsType::Macos)
+        let measured = measurement::get(Browser::Chrome, OsType::Macos)
             .expect("measured")
             .major;
         let newer = measured + 1;

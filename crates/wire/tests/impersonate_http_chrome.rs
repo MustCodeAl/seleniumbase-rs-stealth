@@ -22,8 +22,8 @@ mod measured_host;
 
 use std::time::Duration;
 
+use seleniumbase_rs::browser::config::Browser;
 use seleniumbase_rs::sb_cdp::{Browser, LaunchOptions, Page};
-use seleniumbase_rs_codec::BrowserKind;
 use seleniumbase_rs_scrape::egress::route::ProxyRoute;
 use seleniumbase_rs_wire::client::WireFormat;
 use seleniumbase_rs_wire::http_session::{HttpError, HttpSession, HttpSessionOptions};
@@ -61,7 +61,7 @@ async fn open() -> (Browser, Page) {
 
 /// Makes the page report the user agent of the measured Chrome instead of the headless one.
 async fn announce_as_measured(page: &Page) -> String {
-    let agent = WireFormat::measured(BrowserKind::Chrome)
+    let agent = WireFormat::measured(Browser::Chrome)
         .expect("measured")
         .client_headers()
         .user_agent

@@ -368,11 +368,11 @@ mod tests {
     use super::*;
     use crate::client::WireFormat;
     use crate::http_session::HttpSessionOptions;
-    use seleniumbase_rs_codec::BrowserKind;
+    use seleniumbase_rs::browser::config::Browser;
     use seleniumbase_rs_scrape::jar::store::CookieJar;
 
     fn session_with(options: HttpSessionOptions) -> HttpSession {
-        let profile = WireFormat::measured(BrowserKind::Chrome).expect("measured");
+        let profile = WireFormat::measured(Browser::Chrome).expect("measured");
         HttpSession::assemble(profile, CookieJar::new(), None, options).expect("a session")
     }
 

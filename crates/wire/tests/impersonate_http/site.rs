@@ -17,10 +17,11 @@ use hyper::server::conn::http1;
 use hyper::service::service_fn;
 use hyper::{Request, Response};
 use hyper_util::rt::TokioIo;
+use seleniumbase_rs::browser::config::Browser;
 use seleniumbase_rs::evasion::fingerprint::{Fingerprint, OsType};
 use seleniumbase_rs_codec::client_hello::{ClientHello, MAX_CLIENT_HELLO};
 use seleniumbase_rs_codec::h2_frames::H2Preface;
-use seleniumbase_rs_codec::{measurement, BrowserKind};
+use seleniumbase_rs_codec::measurement;
 use seleniumbase_rs_scrape::egress::route::{ProxyKey, ProxyRoute};
 use seleniumbase_rs_scrape::passport::identity::{Identity, WireMeasurementRef};
 use seleniumbase_rs_scrape::runtime::capture::stream::read_h2c_preface;
@@ -209,7 +210,7 @@ impl Site {
 
 /// The measured Chrome major version on macOS.
 pub fn measured_major() -> u32 {
-    measurement::get(BrowserKind::Chrome, OsType::Macos)
+    measurement::get(Browser::Chrome, OsType::Macos)
         .expect("macOS is measured")
         .major
 }
@@ -242,7 +243,7 @@ pub fn identity() -> Identity {
     identity_of(
         fingerprint(OsType::Macos, major),
         WireMeasurementRef {
-            kind: BrowserKind::Chrome,
+            kind: Browser::Chrome,
             major,
             os: OsType::Macos,
         },

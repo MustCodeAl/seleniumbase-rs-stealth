@@ -9,8 +9,8 @@ use crate::error::ScrapeError;
 use crate::ledger::events::ScrapeEvent;
 use crate::passport::identity::{IdentityError, NO_EXPIRY};
 use crate::runtime::browser_scraper::launcher::{claimed_major, host_os};
+use seleniumbase_rs::browser::config::Browser;
 use seleniumbase_rs::evasion::humanize::Rng;
-use seleniumbase_rs_codec::BrowserKind;
 
 const URL: &str = "https://shop.example/";
 
@@ -291,7 +291,7 @@ async fn an_identity_carries_the_fingerprint_the_cookies_and_the_clearance() {
 
     assert_eq!(&identity.fingerprint, scraper.fingerprint());
     assert_eq!(identity.session.cookies().len(), 1);
-    assert_eq!(identity.wire_measurement.kind, BrowserKind::Chrome);
+    assert_eq!(identity.wire_measurement.kind, Browser::Chrome);
     assert_eq!(identity.wire_measurement.major, 155);
     assert_eq!(identity.wire_measurement.os, host_os());
     assert_eq!(identity.proxy, None);

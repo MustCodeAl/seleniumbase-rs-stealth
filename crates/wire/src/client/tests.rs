@@ -3,20 +3,20 @@
 
 use super::{WireFormat, WireFormatError, WireProtocol};
 use crate::convert::ConvertError;
+use seleniumbase_rs::browser::config::Browser;
 use seleniumbase_rs::evasion::fingerprint::{Fingerprint, OsType, Spoof};
 use seleniumbase_rs_codec::client_hello::ext_id;
 use seleniumbase_rs_codec::h2_spec::H2SpecError;
 use seleniumbase_rs_codec::header_spec::{ClientHeaders, HeaderSource, RequestShape};
 use seleniumbase_rs_codec::measurement::{self, KnownGap, WireMeasurement, WireMeasurementError};
 use seleniumbase_rs_codec::tls_spec::TlsSpecError;
-use seleniumbase_rs_codec::BrowserKind;
 use seleniumbase_rs_scrape::egress::geo::{Locale, LocaleExt};
 
 /// The measured Chrome file, including the evidence the headers were derived from.
 const CHROME_FILE: &str = include_str!("../../../codec/src/measured/chrome-155-macos.json");
 
 fn chrome() -> WireFormat {
-    WireFormat::for_system(BrowserKind::Chrome, OsType::Macos).expect("Chrome on macOS is measured")
+    WireFormat::for_system(Browser::Chrome, OsType::Macos).expect("Chrome on macOS is measured")
 }
 
 /// The headers the browser sent in one probe of the HTTP/2 pass, pseudo-headers left out.
@@ -62,7 +62,7 @@ fn the_measured_profile_keeps_its_gaps_and_sends_a_reproducible_spec() {
     assert!(!profile.tls_spec().has_extension(ext_id::TRUST_ANCHORS));
     assert_eq!(profile.validate(), Ok(()));
     assert_eq!(profile.dropped_settings(), []);
-    let measured = measurement::get(BrowserKind::Chrome, OsType::Macos).expect("measured");
+    let measured = measurement::get(Browser::Chrome, OsType::Macos).expect("measured");
     assert_eq!(profile.client_headers().user_agent, measured.user_agent);
     assert_eq!(profile.tls_spec().grease, measured.tls.grease);
     assert_eq!(
@@ -95,7 +95,7 @@ fn an_entry_without_its_http2_spec_or_hints_is_not_a_profile() {
 #[test]
 fn a_measured_profile_names_its_browser_and_system() {
     let profile = chrome();
-    assert_eq!(profile.kind(), BrowserKind::Chrome);
+    assert_eq!(profile.kind(), Browser::Chrome);
     assert_eq!(profile.os(), OsType::Macos);
     assert!(profile.header_spec().document.len() > 5);
     assert!(profile.client_headers().sec_ch_ua.is_some());
@@ -126,7 +126,7 @@ fn a_fingerprint_without_a_user_agent_or_a_chrome_version_is_refused() {
 
 #[test]
 fn newest_measured_chrome_is_the_default() {
-    let newest = WireFormat::measured(BrowserKind::Chrome).expect("measured");
+    let newest = WireFormat::measured(Browser::Chrome).expect("measured");
     assert_eq!(newest, chrome());
 }
 
@@ -134,11 +134,11 @@ fn newest_measured_chrome_is_the_default() {
 fn an_unmeasured_system_is_refused_not_guessed() {
     for os in [OsType::Windows, OsType::Linux, OsType::Android, OsType::Ios] {
         let error =
-            WireFormat::for_system(BrowserKind::Chrome, os).expect_err("only macOS is measured");
+            WireFormat::for_system(Browser::Chrome, os).expect_err("only macOS is measured");
         assert_eq!(
             error,
             WireFormatError::Measurement(WireMeasurementError::NotMeasured {
-                kind: BrowserKind::Chrome,
+                kind: Browser::Chrome,
                 os
             })
         );
@@ -324,7 +324,7 @@ fn a_fingerprint_without_its_own_hints_sends_computed_ones_and_a_measured_profil
         "{computed:?}"
     );
 
-    let captured = measurement::get(BrowserKind::Chrome, OsType::Macos)
+    let captured = measurement::get(Browser::Chrome, OsType::Macos)
         .expect("an entry")
         .client_hints
         .clone()
@@ -594,8 +594,8 @@ fn the_base_can_be_named_and_the_header_lists_replaced_as_a_whole() {
         ..Default::default()
     };
     let profile = WireFormat::builder()
-        .base(BrowserKind::Chrome)
-        .base_on(BrowserKind::Chrome, OsType::Macos)
+        .base(Browser::Chrome)
+        .base_on(Browser::Chrome, OsType::Macos)
         .headers(replacement)
         .build()
         .expect("builds");
@@ -609,7 +609,7 @@ fn the_base_can_be_named_and_the_header_lists_replaced_as_a_whole() {
 #[test]
 fn a_base_with_no_capture_is_refused_when_the_builder_needs_it() {
     let error = WireFormat::builder()
-        .base_on(BrowserKind::Chrome, OsType::Windows)
+        .base_on(Browser::Chrome, OsType::Windows)
         .build()
         .expect_err("Windows is not measured");
     assert!(matches!(

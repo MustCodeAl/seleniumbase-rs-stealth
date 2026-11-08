@@ -1,4 +1,4 @@
-//! Wire-level fingerprints: TLS and HTTP/2 specs measured from a local browser, and the `BrowserKind` they come from.
+//! Wire-level fingerprints: TLS and HTTP/2 specs measured from a local browser, named by core's `Browser`.
 //!
 //! The main types are re-exported here: the parsers (`ClientHello`, `Ja3`, `Ja4`, `Ja4Raw`,
 //! `Peetprint`, `Akamai`), the specs (`TlsSpec`, `H2Spec`, `HeaderSpec`), and the measured table
@@ -31,11 +31,3 @@ pub use ja3::{Ja3, Ja3Error, Peetprint, PeetprintError};
 pub use ja4::{Ja4, Ja4Error, Ja4Raw};
 pub use measurement::{WireMeasurement, WireMeasurementError};
 pub use tls_spec::{KnownGap, TlsSpec, TlsSpecError};
-
-/// A browser whose wire behaviour the measured tables describe.
-#[non_exhaustive]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum BrowserKind {
-    /// Google Chrome, the first browser measured (on macOS).
-    Chrome,
-}

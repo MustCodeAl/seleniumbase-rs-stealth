@@ -288,7 +288,7 @@ impl HttpSession {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use seleniumbase_rs_codec::BrowserKind;
+    use seleniumbase_rs::browser::config::Browser;
 
     #[test]
     fn an_emulation_mismatch_of_an_identity_is_a_version_mismatch_and_nothing_else_is() {
@@ -312,7 +312,7 @@ mod tests {
 
     #[test]
     fn a_session_from_a_profile_shows_counts_and_the_egress_key_only() {
-        let profile = WireFormat::measured(BrowserKind::Chrome).expect("measured");
+        let profile = WireFormat::measured(Browser::Chrome).expect("measured");
         let egress =
             ProxyRoute::parse("http://alice:s3cret@proxy.example:8080", None).expect("a spec");
         let session = HttpSession::assemble(
@@ -336,7 +336,7 @@ mod tests {
 
     #[test]
     fn the_installed_chrome_must_be_the_measured_one_when_a_profile_is_used_directly() {
-        let profile = WireFormat::measured(BrowserKind::Chrome).expect("measured");
+        let profile = WireFormat::measured(Browser::Chrome).expect("measured");
         let measured = profile.major();
         let stale = HttpSession::assemble(
             profile.clone(),

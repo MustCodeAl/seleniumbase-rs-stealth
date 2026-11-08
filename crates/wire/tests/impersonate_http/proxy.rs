@@ -1,8 +1,8 @@
 //! The egress as a proxy: where the traffic goes, how the credentials travel, and what the
 //! failure says.
 
+use seleniumbase_rs::browser::config::Browser;
 use seleniumbase_rs::evasion::fingerprint::OsType;
-use seleniumbase_rs_codec::BrowserKind;
 use seleniumbase_rs_scrape::passport::identity::WireMeasurementRef;
 use seleniumbase_rs_wire::http_session::{HttpError, HttpSession, HttpSessionOptions};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -39,7 +39,7 @@ fn session_behind(spec: &str) -> HttpSession {
     let base = identity_of(
         fingerprint(OsType::Macos, major),
         WireMeasurementRef {
-            kind: BrowserKind::Chrome,
+            kind: Browser::Chrome,
             major,
             os: OsType::Macos,
         },
@@ -99,7 +99,7 @@ async fn the_bypass_list_sends_a_host_around_the_proxy() {
     let base = identity_of(
         fingerprint(OsType::Macos, major),
         WireMeasurementRef {
-            kind: BrowserKind::Chrome,
+            kind: Browser::Chrome,
             major,
             os: OsType::Macos,
         },

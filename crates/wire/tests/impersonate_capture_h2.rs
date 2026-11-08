@@ -8,9 +8,9 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use seleniumbase_rs::browser::config::Browser;
 use seleniumbase_rs::evasion::fingerprint::OsType;
 use seleniumbase_rs_codec::measurement::{self, WireMeasurement};
-use seleniumbase_rs_codec::BrowserKind;
 use seleniumbase_rs_scrape::runtime::capture::record::to_hex;
 use seleniumbase_rs_wire::capture_h2::{derive, H1Evidence, H2Evidence, PROBES};
 
@@ -20,7 +20,7 @@ fn root() -> PathBuf {
 }
 
 fn chrome() -> &'static WireMeasurement {
-    measurement::get(BrowserKind::Chrome, OsType::Macos).expect("Chrome on macOS is measured")
+    measurement::get(Browser::Chrome, OsType::Macos).expect("Chrome on macOS is measured")
 }
 
 fn file() -> serde_json::Value {

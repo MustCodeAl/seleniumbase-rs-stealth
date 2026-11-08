@@ -3,6 +3,7 @@
 //! The expected values are never typed here: they come from the measured file through
 //! `codec::emulation`, and from the evidence that file keeps.
 
+use seleniumbase_rs::browser::config::Browser;
 use seleniumbase_rs::evasion::fingerprint::OsType;
 use seleniumbase_rs_codec::client_hello::{ext_id, is_grease, without_grease, ClientHello};
 use seleniumbase_rs_codec::h2_spec::H2Spec;
@@ -12,7 +13,6 @@ use seleniumbase_rs_codec::ja3::Peetprint;
 use seleniumbase_rs_codec::ja4::{Ja4, Ja4AField};
 use seleniumbase_rs_codec::measurement::{self, KnownGap, WireMeasurement};
 use seleniumbase_rs_codec::tls_spec::TlsSpec;
-use seleniumbase_rs_codec::BrowserKind;
 use seleniumbase_rs_wire::client::{WireFormat, WireProtocol};
 
 use crate::exchange::{exchange, exchange_with, Via};
@@ -21,11 +21,11 @@ use crate::exchange::{exchange, exchange_with, Via};
 const CHROME_FILE: &str = include_str!("../../../codec/src/measured/chrome-155-macos.json");
 
 fn chrome() -> &'static WireMeasurement {
-    measurement::get(BrowserKind::Chrome, OsType::Macos).expect("Chrome on macOS is measured")
+    measurement::get(Browser::Chrome, OsType::Macos).expect("Chrome on macOS is measured")
 }
 
 fn profile() -> WireFormat {
-    WireFormat::measured(BrowserKind::Chrome).expect("the measured profile")
+    WireFormat::measured(Browser::Chrome).expect("the measured profile")
 }
 
 /// The spec a hello shows, with the order Chrome shuffles removed, so it can be compared with a

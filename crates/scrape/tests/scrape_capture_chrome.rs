@@ -7,10 +7,10 @@
 //! cargo test -p seleniumbase-rs-scrape --test scrape_capture_chrome -- --ignored --test-threads=1
 //! ```
 
+use seleniumbase_rs::browser::config::Browser;
 use seleniumbase_rs::evasion::fingerprint::{ClientHints, OsType};
 use seleniumbase_rs_codec::client_hello::ClientHello;
 use seleniumbase_rs_codec::tls_spec::TlsSpec;
-use seleniumbase_rs_codec::BrowserKind;
 use seleniumbase_rs_scrape::runtime::capture::{
     measure_hints, measure_tls, BrowserVersion, ChromeOptions, EntryId, MeasuredFile,
 };
@@ -24,7 +24,7 @@ fn options() -> ChromeOptions {
 
 fn entry(version: &BrowserVersion) -> EntryId {
     EntryId {
-        kind: BrowserKind::Chrome,
+        kind: Browser::Chrome,
         major: version.major,
         os: version.os().expect("a known operating system"),
     }

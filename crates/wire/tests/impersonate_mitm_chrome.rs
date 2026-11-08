@@ -53,11 +53,11 @@ use btls::pkey::{PKey, Private};
 use btls::ssl::{Ssl, SslAcceptor, SslMethod};
 use btls::x509::extension::SubjectAlternativeName;
 use btls::x509::{X509Name, X509};
+use seleniumbase_rs::browser::config::Browser;
 use seleniumbase_rs::evasion::fingerprint::OsType;
 use seleniumbase_rs::sb_cdp::{Browser, ContextOptions, LaunchOptions, Page};
 use seleniumbase_rs_codec::ja4::Ja4;
 use seleniumbase_rs_codec::measurement;
-use seleniumbase_rs_codec::BrowserKind;
 use seleniumbase_rs_wire::mitm::{MitmOptions, MitmProxy};
 use seleniumbase_rs_wire::tls_server::ALPN_HTTP1;
 use serde_json::json;
@@ -356,7 +356,7 @@ async fn a_page_opens_a_websocket_through_the_proxy_and_receives_its_echo() {
         .next(WITHIN)
         .await
         .expect("the echo site took the handshake");
-    let measured = measurement::get(BrowserKind::Chrome, OsType::Macos).expect("measured");
+    let measured = measurement::get(Browser::Chrome, OsType::Macos).expect("measured");
     let websocket = measured
         .tls_websocket
         .as_ref()
