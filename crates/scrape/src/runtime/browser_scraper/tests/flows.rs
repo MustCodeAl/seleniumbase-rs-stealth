@@ -544,9 +544,6 @@ async fn a_solved_challenge_is_waited_for_as_long_as_the_policys_verify_timeout(
     assert_eq!(set.clearance_wait(), Duration::from_secs(7));
 }
 
-/// How long `solve_challenge` takes on a challenge that never clears, with a policy whose solve
-/// options wait `verify` for a result.
-
 fn snapshot(kind: ChallengeKind) -> PageSnapshot {
     PageSnapshot {
         detection: Detection {
