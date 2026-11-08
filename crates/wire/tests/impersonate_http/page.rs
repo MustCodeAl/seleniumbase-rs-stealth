@@ -6,7 +6,7 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
-use seleniumbase_rs::browser::config::Browser;
+use seleniumbase_rs::browser::config::Browser as BrowserName;
 use seleniumbase_rs::sb_cdp::ContextOptions;
 use seleniumbase_rs::sb_cdp::{Browser, MockCtrl, Page};
 use seleniumbase_rs_scrape::passport::identity::IdentityError;
@@ -20,7 +20,7 @@ const HOST: &str = "shop.test";
 
 /// The user agent of the measured Chrome.
 fn measured_agent() -> String {
-    WireFormat::measured(Browser::Chrome)
+    WireFormat::measured(BrowserName::Chrome)
         .expect("measured")
         .client_headers()
         .user_agent

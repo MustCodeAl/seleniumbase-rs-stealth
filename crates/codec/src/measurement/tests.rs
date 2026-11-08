@@ -1,7 +1,7 @@
 //! Parsing, lookup and the refusal of unmeasured browser and system pairs.
 
 use super::{
-    all, for_kind, get, get_version, measured_systems, newest, newest_on, parse_all, source_names,
+    for_kind, get, get_version, measured_systems, newest, newest_on, parse_all, source_names,
     try_all, KnownGap, WireMeasurement, WireMeasurementError, MAX_MEASURED_JSON_BYTES, SOURCES,
 };
 use crate::tls_spec::KnownGap as TlsKnownGap;
@@ -293,7 +293,7 @@ fn a_file_that_contradicts_itself_is_refused() {
 #[test]
 fn an_unknown_browser_or_a_missing_field_is_a_parse_error() {
     let mut value = chrome_json();
-    value["kind"] = serde_json::json!("Safari");
+    value["kind"] = serde_json::json!("Netscape");
     assert!(matches!(
         parse_value(&value),
         Err(WireMeasurementError::Parse { .. })

@@ -11,10 +11,10 @@
 //!     WireFormat, WireProtocol,
 //! };
 //! use seleniumbase_rs_codec::header_spec::RequestShape;
-//! use seleniumbase_rs_codec::BrowserKind;
+//! use seleniumbase_rs::browser::config::Browser;
 //!
 //! # async fn demo() -> Result<(), Box<dyn std::error::Error>> {
-//! let profile = WireFormat::measured(BrowserKind::Chrome)?;
+//! let profile = WireFormat::measured(Browser::Chrome)?;
 //! let client = profile.client_builder()?.build()?;
 //! let request = client.get("https://example.com/");
 //! let request = profile.apply(request, RequestShape::Document, None, WireProtocol::Http2)?;

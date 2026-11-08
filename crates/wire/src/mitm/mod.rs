@@ -145,10 +145,10 @@
 //! use seleniumbase_rs_wire::mitm::{MitmOptions, MitmProxy};
 //! use seleniumbase_rs::sb_cdp::{Browser, LaunchOptions};
 //! use seleniumbase_rs_scrape::ledger::events::NoopEventSink;
-//! use seleniumbase_rs_codec::BrowserKind;
+//! use seleniumbase_rs::browser::config::Browser as BrowserName;
 //!
 //! # async fn demo() -> Result<(), Box<dyn std::error::Error>> {
-//! let profile = WireFormat::measured(BrowserKind::Chrome)?;
+//! let profile = WireFormat::measured(BrowserName::Chrome)?;
 //! let mitm = MitmProxy::start(profile, None, MitmOptions::default(), Arc::new(NoopEventSink))
 //!     .await?;
 //! let options = mitm.configure_launch(LaunchOptions::builder().build()?)?;

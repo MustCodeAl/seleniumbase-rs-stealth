@@ -12,7 +12,7 @@ use super::transition::open_leg;
 use super::{Clock, Egress, StealthError, StealthSession, Wiring};
 use crate::http_session::{HttpRules, HttpSessionOptions};
 use crate::mitm::MitmOptions;
-use seleniumbase_rs::browser::config::Browser;
+use seleniumbase_rs::browser::config::Browser as BrowserName;
 use seleniumbase_rs::config::proxy_list::RotationStrategy;
 use seleniumbase_rs::error::SeleniumBaseError;
 use seleniumbase_rs::evasion::fingerprint::{Fingerprint, OsType};
@@ -418,7 +418,7 @@ async fn start_identity(
     }
     let os = fingerprint.os_type();
     let emulation = WireMeasurementRef {
-        kind: Browser::Chrome,
+        kind: BrowserName::Chrome,
         major: measured_major(os)?,
         os,
     };
@@ -432,7 +432,7 @@ async fn start_identity(
 
 /// The Chrome major the measured TLS and HTTP/2 of `os` belong to.
 fn measured_major(os: OsType) -> Result<u32, StealthError> {
-    Ok(measurement::get(Browser::Chrome, os)
+    Ok(measurement::get(BrowserName::Chrome, os)
         .map_err(crate::client::WireFormatError::from)?
         .major)
 }

@@ -7,7 +7,7 @@ use crate::error::ScrapeError;
 use crate::ledger::events::ScrapeEvent;
 use crate::passport::identity::{Identity, WireMeasurementRef};
 use crate::runtime::cdp::{self, ProxyLocale};
-use seleniumbase_rs::browser::config::Browser;
+use seleniumbase_rs::browser::config::Browser as BrowserName;
 use seleniumbase_rs::evasion::fingerprint::Fingerprint;
 use seleniumbase_rs::evasion::humanize::Rng;
 use seleniumbase_rs::sb_cdp::Browser;
@@ -224,7 +224,7 @@ impl BrowserScraper {
             .or_else(|| claimed_major(&self.persona.fingerprint))
             .unwrap_or_default();
         WireMeasurementRef {
-            kind: Browser::Chrome,
+            kind: BrowserName::Chrome,
             major,
             os: host_os(),
         }
