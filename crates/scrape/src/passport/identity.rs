@@ -51,7 +51,7 @@ pub struct WireMeasurementRef {
 }
 
 /// Serde for [`Browser`] in the identity file, which spells it as core names it (`chrome`):
-/// [`Browser::name`] writes it, and [`FromStr`](std::str::FromStr) reads it, but only that exact
+/// [`Browser::as_str`] writes it, and [`FromStr`](std::str::FromStr) reads it, but only that exact
 /// spelling: a file that writes `Chrome` or `netscape` is refused, as it was before.
 mod browser_name {
     use serde::de::Error as _;
@@ -64,14 +64,14 @@ mod browser_name {
         reason = "serde's `with` hands the field over by reference"
     )]
     pub(super) fn serialize<S: Serializer>(kind: &Browser, out: S) -> Result<S::Ok, S::Error> {
-        out.serialize_str(kind.name())
+        out.serialize_str(kind.as_str())
     }
 
     pub(super) fn deserialize<'de, D: Deserializer<'de>>(input: D) -> Result<Browser, D::Error> {
         let name = String::deserialize(input)?;
         name.parse::<Browser>()
             .ok()
-            .filter(|kind| kind.name() == name)
+            .filter(|kind| kind.as_str() == name)
             .ok_or_else(|| D::Error::custom(format!("unknown browser `{name}`")))
     }
 }

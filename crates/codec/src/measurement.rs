@@ -285,7 +285,7 @@ impl WireMeasurement {
     /// The stem the capture tools give this entry's files, such as `chrome-155-macos`.
     #[must_use]
     pub fn file_stem(&self) -> String {
-        let browser = self.kind.name();
+        let browser = self.kind.as_str();
         format!("{browser}-{}-{}", self.major, os_slug(self.os))
     }
 
