@@ -20,16 +20,18 @@ pub(super) fn to_cdp(cookie: &StoredCookie) -> Cookie {
     } else {
         format!("{DOMAIN_COOKIE_DOT}{}", cookie.domain)
     };
-    Cookie {
-        name: cookie.name.clone(),
-        value: cookie.value.clone(),
-        domain,
-        path: cookie.path.clone(),
-        expires: cookie.expires.map(seconds_to_f64),
-        http_only: cookie.http_only,
-        secure: cookie.secure,
-        same_site: cookie.same_site,
+    let mut cdp = Cookie::new(cookie.name.clone(), cookie.value.clone())
+        .domain(domain)
+        .path(cookie.path.clone())
+        .http_only(cookie.http_only)
+        .secure(cookie.secure);
+    if let Some(seconds) = cookie.expires {
+        cdp = cdp.expires(seconds_to_f64(seconds));
     }
+    if let Some(same_site) = cookie.same_site {
+        cdp = cdp.same_site(same_site);
+    }
+    cdp
 }
 
 /// The stored form of a CDP cookie, created and last accessed at `now`. The domain is lowered
