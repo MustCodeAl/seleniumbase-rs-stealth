@@ -656,11 +656,7 @@ async fn a_restored_session_skips_expired_cookies_and_foreign_storage() {
     let session = Session::new(vec![
         Cookie::new("live", "1").domain("shop.example").expires(2e9),
         Cookie::new("dead", "2").domain("shop.example").expires(1.0),
-    ])
-    .with_local_storage(
-        "https://shop.example",
-        std::collections::BTreeMap::from([("k".to_owned(), "v".to_owned())]),
-    );
+    ]).into_builder().local_storage("https://shop.example", std::collections::BTreeMap::from([("k".to_owned(), "v".to_owned())])).build();
 
     restore_session(&page, session, 1.8e9)
         .await

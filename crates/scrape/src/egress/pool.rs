@@ -70,10 +70,8 @@ impl ProxyPool {
         routes: Vec<ProxyRoute>,
         rotation: RotationStrategy,
     ) -> Result<Self, ProxyRouteError> {
-        let mut list = ProxyList::new().with_rotation(rotation).with_quarantine(
-            DEFAULT_QUARANTINE_AFTER,
-            Duration::from_secs(DEFAULT_QUARANTINE_SECS),
-        );
+        let mut list = ProxyList::new().rotation(rotation).quarantine(DEFAULT_QUARANTINE_AFTER,
+        Duration::from_secs(DEFAULT_QUARANTINE_SECS),);
         for route in &routes {
             let address = list_address(route.key());
             list.add(&address)
@@ -121,10 +119,10 @@ impl ProxyPool {
     }
 
     /// Sets how many failures in a row put a proxy out of rotation, and for how long, as core's
-    /// [`ProxyList::with_quarantine`] does: a limit of zero is read as one.
+    /// [`ProxyList::quarantine`] does: a limit of zero is read as one.
     #[must_use]
     pub fn with_quarantine(mut self, after_failures: u32, rest: Duration) -> Self {
-        self.list = std::mem::take(&mut self.list).with_quarantine(after_failures, rest);
+        self.list = std::mem::take(&mut self.list).quarantine(after_failures, rest);
         self
     }
 
@@ -609,9 +607,7 @@ mod tests {
     #[test]
     fn a_core_list_becomes_a_pool_that_keeps_its_rotation_and_quarantine() {
         let list = ProxyList::parse("p1.example:8080\np2.example:8080\np3.example:8080\n")
-            .expect("a list")
-            .with_rotation(RotationStrategy::StickyPerSite)
-            .with_quarantine(1, secs(600));
+            .expect("a list").rotation(RotationStrategy::StickyPerSite).quarantine(1, secs(600));
         let pool = ProxyPool::from_list(list).expect("routes");
         let first = pool.pick(Some("a.example"), 0).expect("a proxy");
         let other = pool.pick(Some("b.example"), 0).expect("a proxy");

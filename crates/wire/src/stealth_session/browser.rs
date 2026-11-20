@@ -53,8 +53,7 @@ impl BrowserLeg {
         let options = mitm.configure_launch(
             wiring
                 .launch
-                .clone()
-                .with_fingerprint(&identity.fingerprint)?,
+                .clone().into_builder().fingerprint(&identity.fingerprint).build()?,
         )?;
         let browser = wiring.launcher.launch(options).await?;
         match Self::settle(&browser, identity, measured, (wiring.clock)()).await {

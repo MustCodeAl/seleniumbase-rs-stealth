@@ -302,8 +302,7 @@ async fn start_browser(
 ) -> Result<BrowserScraper, ScrapeError> {
     let options = wiring
         .launch
-        .clone()
-        .with_fingerprint(&persona.fingerprint)?;
+        .clone().into_builder().fingerprint(&persona.fingerprint).build()?;
     let browser = wiring.launcher.launch(options).await?;
     let page = match wiring.open_page(&browser, proxy.current.as_ref()).await {
         Ok(page) => page,
