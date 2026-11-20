@@ -2034,7 +2034,7 @@ dependencies = [
 [[package]]
 name = "seleniumbase-rs"
 version = "0.8.0"
-source = "git+https://github.com/MustCodeAl/seleniumbase-rs#a262de2c48b2375cb1eaaa7e8c55eab1d0fe0860"
+source = "git+https://github.com/MustCodeAl/seleniumbase-rs#ab7f2b55cd820ed840016939cded3bee442222a2"
 dependencies = [
  "anstream",
  "async-trait",
