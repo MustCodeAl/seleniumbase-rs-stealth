@@ -2033,14 +2033,13 @@ dependencies = [
 
 [[package]]
 name = "seleniumbase-rs"
-version = "0.8.0"
-source = "git+https://github.com/MustCodeAl/seleniumbase-rs#ab7f2b55cd820ed840016939cded3bee442222a2"
+version = "0.8.7"
+source = "git+https://github.com/MustCodeAl/seleniumbase-rs#9baed7d16a87015464c44b83630de6a5628020d4"
 dependencies = [
  "anstream",
  "async-trait",
  "base64",
  "bytes",
- "chrono",
  "dirs",
  "figment",
  "flate2",
