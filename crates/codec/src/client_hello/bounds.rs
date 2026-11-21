@@ -6,7 +6,8 @@ use super::{ext_id, ClientHello, ClientHelloError, MAX_HELLO_RECORDS};
 
 /// A padded hello, long enough to span more than [`MAX_HELLO_RECORDS`] one-byte records.
 fn long_hello() -> HelloBuilder {
-    HelloBuilder::new(&CHROME_CIPHERS, &[ext_id::PADDING]).body(ext_id::PADDING, vec![0; 2 * MAX_HELLO_RECORDS])
+    HelloBuilder::new(&CHROME_CIPHERS, &[ext_id::PADDING])
+        .body(ext_id::PADDING, vec![0; 2 * MAX_HELLO_RECORDS])
 }
 
 /// `message` in exactly `count` handshake records: all but the last carry one byte each.

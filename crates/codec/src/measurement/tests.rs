@@ -1,8 +1,8 @@
 //! Parsing, lookup and the refusal of unmeasured browser and system pairs.
 
 use super::{
-    for_kind, get, measured_systems, newest, newest_on, parse_all, source_names, version,
-    try_all, KnownGap, WireMeasurement, WireMeasurementError, MAX_MEASURED_JSON_BYTES, SOURCES,
+    for_kind, get, measured_systems, newest, newest_on, parse_all, source_names, try_all, version,
+    KnownGap, WireMeasurement, WireMeasurementError, MAX_MEASURED_JSON_BYTES, SOURCES,
 };
 use crate::tls_spec::KnownGap as TlsKnownGap;
 use seleniumbase_rs::browser::config::Browser;

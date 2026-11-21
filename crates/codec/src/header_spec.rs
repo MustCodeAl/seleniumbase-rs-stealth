@@ -364,9 +364,11 @@ impl ClientHeaders {
     /// [`ClientHints`]: the brand list, whether it is mobile, and the platform.
     #[must_use]
     pub fn client_hints_from(self, hints: &ClientHints) -> Self {
-        self.client_hints(sec_ch_ua(&hints.brands),
-        if hints.mobile { MOBILE } else { NOT_MOBILE },
-        quote(&hints.platform),)
+        self.client_hints(
+            sec_ch_ua(&hints.brands),
+            if hints.mobile { MOBILE } else { NOT_MOBILE },
+            quote(&hints.platform),
+        )
     }
 
     /// The override for the header `name`; the last one given wins.

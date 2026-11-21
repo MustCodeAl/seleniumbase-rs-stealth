@@ -80,7 +80,8 @@ pub async fn hello_of(
 ) -> Result<ClientHello, String> {
     let capture = Capture::bind()
         .await
-        .map_err(|error| error.to_string())?.timeout(PROBE_WITHIN);
+        .map_err(|error| error.to_string())?
+        .timeout(PROBE_WITHIN);
     let builder = wreq::Client::builder()
         .resolve(PROBE_HOST, capture.addr())
         .no_proxy()
@@ -102,7 +103,8 @@ pub async fn h2c_of(
 ) -> Result<CapturedH2c, String> {
     let capture = Capture::bind()
         .await
-        .map_err(|error| error.to_string())?.timeout(PROBE_WITHIN);
+        .map_err(|error| error.to_string())?
+        .timeout(PROBE_WITHIN);
     let builder = wreq::Client::builder()
         .http2_only()
         .no_proxy()

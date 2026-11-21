@@ -197,7 +197,15 @@ impl HelloBuilder {
         self.ciphers.insert(0, GREASE_CIPHER);
         self.extensions.insert(0, (GREASE_EXT_FIRST, Vec::new()));
         self.extensions.push((GREASE_EXT_LAST, vec![0]));
-        self.body(ext_id::SUPPORTED_GROUPS, length16(&u16s(&[GREASE_GROUP, 0x001D, 0x0017, 0x0018]))).body(ext_id::SUPPORTED_VERSIONS, length8(&u16s(&[GREASE_VERSION, 0x0304, 0x0303]))).body(ext_id::KEY_SHARE, key_share_body(&[GREASE_CIPHER, 0x001D]))
+        self.body(
+            ext_id::SUPPORTED_GROUPS,
+            length16(&u16s(&[GREASE_GROUP, 0x001D, 0x0017, 0x0018])),
+        )
+        .body(
+            ext_id::SUPPORTED_VERSIONS,
+            length8(&u16s(&[GREASE_VERSION, 0x0304, 0x0303])),
+        )
+        .body(ext_id::KEY_SHARE, key_share_body(&[GREASE_CIPHER, 0x001D]))
     }
 
     /// The handshake message: header and body.

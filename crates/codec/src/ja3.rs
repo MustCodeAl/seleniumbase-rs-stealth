@@ -451,7 +451,7 @@ pub mod peetprint {
 
     /// Why a peetprint string was refused.
     #[derive(Debug, Clone, PartialEq, Eq, Error)]
-#[non_exhaustive]
+    #[non_exhaustive]
     pub enum PeetprintError {
         /// The string does not have exactly eight `|` separated fields.
         #[error("a peetprint has 8 fields separated by `|`, found {0}")]

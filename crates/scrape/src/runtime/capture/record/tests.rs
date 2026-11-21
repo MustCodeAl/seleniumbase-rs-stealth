@@ -14,8 +14,7 @@ const MAC_UA: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKi
                       (KHTML, like Gecko) Chrome/100.0.0.0 Safari/537.36";
 
 fn hello(order: &[u16]) -> Vec<u8> {
-    HelloBuilder::new(&CHROME_CIPHERS, order).grease()
-        .record()
+    HelloBuilder::new(&CHROME_CIPHERS, order).grease().record()
 }
 
 fn reversed() -> Vec<u16> {
@@ -52,7 +51,9 @@ fn permuted_measurement() -> TlsMeasurement {
         hello(&reversed()),
         hello(&rotated()),
     ];
-    let websocket = HelloBuilder::chrome_like().body(ext_id::ALPN, length16(&strings8(&["http/1.1"]))).grease()
+    let websocket = HelloBuilder::chrome_like()
+        .body(ext_id::ALPN, length16(&strings8(&["http/1.1"])))
+        .grease()
         .record();
     TlsMeasurement::from_hellos(&page, Some(&websocket)).expect("one browser")
 }
@@ -276,7 +277,9 @@ const GREASE_SIGALG: u16 = 0x9A9A;
 fn hello_with_grease_sigalg(extension_order: &[u16]) -> Vec<u8> {
     let mut sigalgs = vec![GREASE_SIGALG];
     sigalgs.extend_from_slice(&CHROME_SIGALGS);
-    HelloBuilder::new(&CHROME_CIPHERS, extension_order).body(ext_id::SIGNATURE_ALGORITHMS, length16(&u16s(&sigalgs))).grease()
+    HelloBuilder::new(&CHROME_CIPHERS, extension_order)
+        .body(ext_id::SIGNATURE_ALGORITHMS, length16(&u16s(&sigalgs)))
+        .grease()
         .record()
 }
 
@@ -320,7 +323,8 @@ fn no_hello_is_an_error() {
 
 #[test]
 fn hellos_of_different_clients_are_refused() {
-    let other = HelloBuilder::new(&CHROME_CIPHERS[1..], &JA4_EXAMPLE_EXTENSIONS).grease()
+    let other = HelloBuilder::new(&CHROME_CIPHERS[1..], &JA4_EXAMPLE_EXTENSIONS)
+        .grease()
         .record();
 
     let error = TlsMeasurement::from_hellos(&[hello(&JA4_EXAMPLE_EXTENSIONS), other], None)
@@ -333,7 +337,9 @@ fn hellos_of_different_clients_are_refused() {
 fn hellos_with_different_ja4_are_unstable() {
     let mut sigalgs = CHROME_SIGALGS.to_vec();
     sigalgs.swap(0, 1);
-    let other = HelloBuilder::new(&CHROME_CIPHERS, &JA4_EXAMPLE_EXTENSIONS).body(ext_id::SIGNATURE_ALGORITHMS, length16(&u16s(&sigalgs))).grease()
+    let other = HelloBuilder::new(&CHROME_CIPHERS, &JA4_EXAMPLE_EXTENSIONS)
+        .body(ext_id::SIGNATURE_ALGORITHMS, length16(&u16s(&sigalgs)))
+        .grease()
         .record();
 
     let error = TlsMeasurement::from_hellos(&[hello(&JA4_EXAMPLE_EXTENSIONS), other], None)
@@ -346,7 +352,12 @@ fn hellos_with_different_ja4_are_unstable() {
 fn what_boringssl_cannot_send_is_recorded_as_known_gaps() {
     let mut extensions = JA4_EXAMPLE_EXTENSIONS.to_vec();
     extensions.push(ext_id::TRUST_ANCHORS);
-    let raw = HelloBuilder::new(&CHROME_CIPHERS, &extensions).body(ext_id::SIGNATURE_ALGORITHMS, length16(&u16s(&[0x0403, 0x0904]))).grease()
+    let raw = HelloBuilder::new(&CHROME_CIPHERS, &extensions)
+        .body(
+            ext_id::SIGNATURE_ALGORITHMS,
+            length16(&u16s(&[0x0403, 0x0904])),
+        )
+        .grease()
         .record();
 
     let measurement = TlsMeasurement::from_hellos(&[raw], None).expect("one hello");
@@ -441,7 +452,8 @@ fn known_gaps_survive_a_later_stamp() {
     let dir = tempfile::tempdir().expect("a temporary directory");
     let mut extensions = JA4_EXAMPLE_EXTENSIONS.to_vec();
     extensions.push(ext_id::TRUST_ANCHORS);
-    let raw = HelloBuilder::new(&CHROME_CIPHERS, &extensions).grease()
+    let raw = HelloBuilder::new(&CHROME_CIPHERS, &extensions)
+        .grease()
         .record();
     let measurement = TlsMeasurement::from_hellos(&[raw], None).expect("one hello");
     let now = chrono::Utc::now();

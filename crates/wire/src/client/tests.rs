@@ -300,9 +300,7 @@ fn a_fingerprint_gives_its_identity_to_the_headers() {
     let hints = fingerprint.client_hints().value().expect("Chrome hints");
     assert_eq!(
         identity.sec_ch_ua,
-        ClientHeaders::new("")
-            .client_hints_from(hints)
-            .sec_ch_ua
+        ClientHeaders::new("").client_hints_from(hints).sec_ch_ua
     );
 }
 

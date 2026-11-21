@@ -161,7 +161,10 @@ fn a_placeholder_without_a_value_leaves_its_header_out() {
 #[test]
 fn every_identity_value_can_be_supplied_by_the_caller() {
     let s = spec();
-    let identity = ClientHeaders::new("Mine/3").accept_language("de-DE,de;q=0.9").client_hints("\"Mine\";v=\"3\"", "?1", "\"MineOS\"").cookie("k=v");
+    let identity = ClientHeaders::new("Mine/3")
+        .accept_language("de-DE,de;q=0.9")
+        .client_hints("\"Mine\";v=\"3\"", "?1", "\"MineOS\"")
+        .cookie("k=v");
     let rendered = s
         .render(RequestShape::Document, &identity)
         .expect("renders");
@@ -184,7 +187,9 @@ fn every_identity_value_can_be_supplied_by_the_caller() {
 fn overrides_replace_a_value_by_name_without_regard_to_case() {
     let s = spec();
     let identity = ClientHeaders::new("A/1")
-        .override_header("accept", "application/json").override_header("X-Not-In-The-Spec", "ignored").override_header("user-agent", "Override/2");
+        .override_header("accept", "application/json")
+        .override_header("X-Not-In-The-Spec", "ignored")
+        .override_header("user-agent", "Override/2");
     let rendered = s.render(RequestShape::Fetch, &identity).expect("renders");
     assert_eq!(
         rendered[0],
@@ -231,7 +236,9 @@ fn a_resolved_value_that_is_not_a_header_value_is_refused_without_echoing_it() {
 
 #[test]
 fn the_debug_of_an_identity_hides_the_cookie_and_the_override_values() {
-    let identity = ClientHeaders::new("UA/1").cookie("session=SECRET-COOKIE").override_header("Authorization", "Bearer SECRET-TOKEN");
+    let identity = ClientHeaders::new("UA/1")
+        .cookie("session=SECRET-COOKIE")
+        .override_header("Authorization", "Bearer SECRET-TOKEN");
     let shown = format!("{identity:?}");
     assert!(!shown.contains("SECRET"), "{shown}");
     assert!(

@@ -295,7 +295,8 @@ mod tests {
                 route("http://p2.example:8080", None),
             ],
             RotationStrategy::RoundRobin,
-        ).quarantine(3, secs(600));
+        )
+        .quarantine(3, secs(600));
         for _ in 0..3 {
             pool.report(&key("p1.example"), ProxyOutcome::ConnectFailed, 100);
         }
@@ -322,7 +323,8 @@ mod tests {
         let pool = pool(
             vec![route("http://p1.example:8080", None)],
             RotationStrategy::RoundRobin,
-        ).quarantine(2, secs(10));
+        )
+        .quarantine(2, secs(10));
         for _ in 0..2 {
             pool.report(&key("p1.example"), ProxyOutcome::ConnectFailed, 0);
         }
@@ -339,7 +341,8 @@ mod tests {
         let pool = pool(
             vec![route("http://p1.example:8080", None)],
             RotationStrategy::RoundRobin,
-        ).quarantine(0, secs(60));
+        )
+        .quarantine(0, secs(60));
         assert!(pool.pick(None, 0).is_some());
         pool.report(&key("p1.example"), ProxyOutcome::ConnectFailed, 0);
         assert!(pool.pick(None, 1).is_none());
@@ -476,8 +479,7 @@ mod tests {
             for host in ["p1.example", "p2.example", "p3.example"] {
                 assert!(seen.iter().any(|h| h == host), "{host} never drawn");
             }
-            let resting =
-                pool(three(), RotationStrategy::Random { seed }).quarantine(1, secs(600));
+            let resting = pool(three(), RotationStrategy::Random { seed }).quarantine(1, secs(600));
             resting.report(&key("p2.example"), ProxyOutcome::Blocked, 0);
             assert!(!hosts(&resting, 60, 1).contains(&"p2.example".to_owned()));
         }
@@ -559,7 +561,8 @@ mod tests {
                 route("http://de.example:8080", Some("DE")),
             ],
             RotationStrategy::RoundRobin,
-        ).quarantine(1, secs(600));
+        )
+        .quarantine(1, secs(600));
         pool.report(
             &key_with_country("de.example", "DE"),
             ProxyOutcome::Blocked,
@@ -657,7 +660,8 @@ mod tests {
         let pool = pool(
             vec![route("http://p1.example:8080", None)],
             RotationStrategy::RoundRobin,
-        ).quarantine(1, secs(60));
+        )
+        .quarantine(1, secs(60));
         pool.report(&key("p1.example"), ProxyOutcome::Blocked, u64::MAX);
         assert!(pool.pick(None, u64::MAX).is_none());
     }
