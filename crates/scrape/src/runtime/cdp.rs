@@ -319,7 +319,10 @@ pub async fn capture_session(page: &Page) -> Result<Session, ScrapeError> {
     if origin.starts_with("http") {
         let entries = page.local_storage().entries().await?;
         if !entries.is_empty() {
-            session = session.into_builder().local_storage(origin, entries).build();
+            session = session
+                .into_builder()
+                .local_storage(origin, entries)
+                .build();
         }
     }
     Ok(session)

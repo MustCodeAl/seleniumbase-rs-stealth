@@ -197,7 +197,13 @@ impl BrowserScraper {
         fingerprint: Fingerprint,
         current: Option<Current>,
     ) -> Result<(), ScrapeError> {
-        let options = self.wiring.launch.clone().into_builder().fingerprint(&fingerprint).build()?;
+        let options = self
+            .wiring
+            .launch
+            .clone()
+            .into_builder()
+            .fingerprint(&fingerprint)
+            .build()?;
         let browser = self.wiring.launcher.launch(options).await?;
         let page = match self.wiring.open_page(&browser, current.as_ref()).await {
             Ok(page) => page,

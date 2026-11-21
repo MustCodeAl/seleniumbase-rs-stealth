@@ -509,8 +509,9 @@ fn the_cookies_are_a_core_session_and_survive_a_file() {
 fn replacing_the_cookies_keeps_the_local_storage() {
     let mut identity = identity();
     let storage = BTreeMap::from([("cart".to_owned(), "3".to_owned())]);
-    identity.session =
-        Session::builder().local_storage("https://example.com", storage.clone()).build();
+    identity.session = Session::builder()
+        .local_storage("https://example.com", storage.clone())
+        .build();
     let jar = identity_with_clearance().cookie_jar(NOW);
 
     identity.replace_cookies(&jar, NOW);

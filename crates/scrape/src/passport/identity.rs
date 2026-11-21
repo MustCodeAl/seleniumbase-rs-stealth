@@ -268,7 +268,10 @@ mod session_json {
         CookieJar::check_cdp(&stored.cookies).map_err(D::Error::custom)?;
         let session = Session::new(stored.cookies);
         Ok(match stored.origin {
-            Some(origin) => session.into_builder().local_storage(origin, stored.local_storage).build(),
+            Some(origin) => session
+                .into_builder()
+                .local_storage(origin, stored.local_storage)
+                .build(),
             None => session,
         })
     }
@@ -342,9 +345,10 @@ impl Identity {
     pub fn replace_cookies(&mut self, jar: &CookieJar, now: u64) {
         let session = Session::new(jar.to_cdp(now));
         self.session = match self.session.origin() {
-            Some(origin) => {
-                session.into_builder().local_storage(origin, self.session.local_storage().clone()).build()
-            }
+            Some(origin) => session
+                .into_builder()
+                .local_storage(origin, self.session.local_storage().clone())
+                .build(),
             None => session,
         };
     }
