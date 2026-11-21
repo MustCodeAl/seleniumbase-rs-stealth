@@ -44,6 +44,9 @@ Only `scrape` and `mimic` were affected; `codec` holds no fingerprint.
   `SessionBuilder::local_storage` (in place of `with_local_storage`), and set a `ProxyList`'s
   rotation and quarantine with `rotation` and `quarantine`. Core's selector parameters are
   `impl Into<SelectorBuf>`, a string still works.
+  `deny.toml` now ignores RUSTSEC-2026-0543 (chrono is unmaintained, no safe upgrade) with its
+  reason written beside it: the scrape and wire crates still use chrono's `DateTime<Utc>` in the
+  capture API, and moving them to `time` or `jiff` is a lane of its own.
 
 - **The error enums that could grow are `#[non_exhaustive]`**: `ClientHelloError`, `Ja3Error`,
   `PeetprintError`, `Ja4Error`, `GeoError`, `SetCookieError` and `JarError`, as the other error

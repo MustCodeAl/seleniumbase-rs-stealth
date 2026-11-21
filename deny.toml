@@ -11,9 +11,10 @@ all-features = true
 
 [advisories]
 # Each ignore needs a rationale and, where the fix is upstream, a pointer to what we are
-# waiting on. None today: `cargo audit` reports no advisory and no unmaintained crate for
-# this lockfile (2026-11-06).
-ignore = []
+# waiting on.
+ignore = [
+    { id = "RUSTSEC-2026-0543", reason = "chrono is unmaintained, with no safe upgrade (2026-11-21). The scrape and wire crates take and give chrono's DateTime<Utc> in their capture API (the `stamp` methods, `measure_and_write`) and parse cookie dates with it; the core crate dropped chrono in 0.8.5. Moving them to `time` or `jiff` changes that public API and the stored timestamp text, so it is its own lane; an unmaintained notice, not a vulnerability." },
+]
 
 [licenses]
 allow = [
