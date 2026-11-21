@@ -11,6 +11,14 @@ Done in phase 2, part 2 (branch `lane/stealth-scrape`, the CHANGELOG has the pub
 `BrowserKind` is gone: core's `browser::config::Browser` names the browser, and the measured
 JSON files are unchanged (`"kind": "Chrome"`, which core's `Browser` is spelled as).
 
+Done in the API-rules pass (branch `lane/core-085`): the rows below that say `keep` for a
+`get_` or a consuming `with_*` setter are superseded. `measurement::get_version` is `version`;
+`ClientHeaders::with_accept_language`, `with_client_hints`, `with_client_hints_from`,
+`with_cookie` and `with_override` are `accept_language`, `client_hints`, `client_hints_from`,
+`cookie` and `override_header`; `HelloBuilder::with_body` and `with_grease` are `body` and
+`grease`; `ProxyPool::with_quarantine` is `quarantine`; `Capture::with_timeout` is `timeout`.
+The CHANGELOG (Unreleased, Breaking) has the reasons and what stayed.
+
 ## What the stealth crate is for
 
 In the user's words:

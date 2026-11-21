@@ -19,6 +19,38 @@ Only `scrape` and `mimic` were affected; `codec` holds no fingerprint.
 
 ### Breaking
 
+- **Plain setter and lookup names, as in core** (core 0.8.5 and later keep `with_*` for constructors
+  and for `&self` methods that build a changed copy, as `Path::with_extension` does, and drop `get_`
+  from getters). Rename the calls; the behaviour is the same and every JSON and wire format
+  (the measured files, the identity file, the header and TLS specs) loads byte for byte as before.
+  No aliases are kept.
+  - codec: `measurement::get_version` is `measurement::version`.
+    `ClientHeaders::with_accept_language`, `with_client_hints`, `with_client_hints_from`,
+    `with_cookie` and `with_override` are `accept_language`, `client_hints`, `client_hints_from`,
+    `cookie` and `override_header` (`override` is a reserved word). The test fixture
+    `HelloBuilder::with_body` and `with_grease` are `body` and `grease`.
+  - scrape: `ProxyPool::with_quarantine` is `quarantine`, the name core's `ProxyList::quarantine`
+    has; `Capture::with_timeout` is `timeout`.
+  - Kept, each with its reason: `measurement::get` (a lookup by key in a table, as
+    `HashMap::get`), `ResponseHeaders::get` and `get_all` (the names of `http::HeaderMap`), and every
+    `&self` method that returns a changed copy and may refuse it: `HeaderSpec::with_header` and
+    `with_priority`, `TlsSpec::with_ja3`, `with_ja4_raw`, `with_peetprint`,
+    `with_signature_algorithms` and `with_observed_order`, `H2Spec::with_akamai`.
+
+- **Built against core 0.8.7 (main `9baed7d1`).** Core builds launch options, sessions and proxy
+  lists with builders and plain setters now, so the scrapers and the stealth session make their
+  `LaunchOptions` with `options.into_builder().fingerprint(&fp).build()?` (in place of
+  `with_fingerprint`), keep local storage in a `Session` with `Session::into_builder()` and
+  `SessionBuilder::local_storage` (in place of `with_local_storage`), and set a `ProxyList`'s
+  rotation and quarantine with `rotation` and `quarantine`. Core's selector parameters are
+  `impl Into<SelectorBuf>`, a string still works.
+
+- **The error enums that could grow are `#[non_exhaustive]`**: `ClientHelloError`, `Ja3Error`,
+  `PeetprintError`, `Ja4Error`, `GeoError`, `SetCookieError` and `JarError`, as the other error
+  enums of the crates were. A `match` on one outside its crate needs a `_` arm. `CountryCode`
+  implements `FromStr` (`"de".parse::<CountryCode>()`), the same check as `CountryCode::new`.
+
+
 - **`WireFormat` and its builder read the identity from core's types** (design note rows
   "`ImpersonationProfile`", "`CustomProfileBuilder::*`", "Accept-Language from a language list"
   and "`GeoInfo.coordinates`"):
