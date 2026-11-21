@@ -448,7 +448,7 @@ fn an_unknown_country_matches_but_two_known_ones_must_agree() {
     unknown.country = None;
     assert_eq!(made.check_proxy(Some(&unknown)), Ok(()));
     let mut elsewhere = proxy("p1.example");
-    elsewhere.country = CountryCode::new("FR").ok();
+    elsewhere.country = CountryCode::try_new("FR").ok();
     assert!(made.check_proxy(Some(&elsewhere)).is_err());
 }
 

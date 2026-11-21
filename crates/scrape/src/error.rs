@@ -207,7 +207,7 @@ mod tests {
             Ok(())
         }
         fn geo() -> Result<(), ScrapeError> {
-            crate::egress::geo::CountryCode::new("Germany")?;
+            crate::egress::geo::CountryCode::try_new("Germany")?;
             Ok(())
         }
         fn identity() -> Result<(), ScrapeError> {

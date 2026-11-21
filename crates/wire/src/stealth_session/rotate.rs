@@ -282,7 +282,7 @@ mod tests {
 
     #[test]
     fn a_persona_takes_the_language_and_time_zone_of_its_egress() {
-        let locale = Locale::for_country(CountryCode::new("DE").expect("a country"))
+        let locale = Locale::for_country(CountryCode::try_new("DE").expect("a country"))
             .expect("Germany has a locale");
         let placed = ProxyLocale {
             locale,

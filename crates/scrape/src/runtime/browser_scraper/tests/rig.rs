@@ -190,7 +190,7 @@ pub(super) fn policy_with(verify: Duration) -> MitigationPolicy {
 
 /// A country code that is known to be valid.
 pub(super) fn country(code: &str) -> CountryCode {
-    CountryCode::new(code).expect("a valid country code")
+    CountryCode::try_new(code).expect("a valid country code")
 }
 
 /// A challenge page of Cloudflare's script challenge, as the site serves it.

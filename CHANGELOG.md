@@ -51,7 +51,7 @@ Only `scrape` and `mimic` were affected; `codec` holds no fingerprint.
 - **The error enums that could grow are `#[non_exhaustive]`**: `ClientHelloError`, `Ja3Error`,
   `PeetprintError`, `Ja4Error`, `GeoError`, `SetCookieError` and `JarError`, as the other error
   enums of the crates were. A `match` on one outside its crate needs a `_` arm. `CountryCode`
-  implements `FromStr` (`"de".parse::<CountryCode>()`), the same check as `CountryCode::new`.
+  implements `FromStr` (`"de".parse::<CountryCode>()`), the same check as `CountryCode::try_new`.
 
 - **Instants are jiff's, and chrono is gone** (the scrape and wire crates were the last to use it;
   core moved in 0.8.5). `MeasuredFile::stamp` (scrape), `MeasuredDoc::stamp` and
@@ -65,6 +65,10 @@ Only `scrape` and `mimic` were affected; `codec` holds no fingerprint.
   for byte, with a stamp of its own day, in tests of both crates.
   `deny.toml` no longer ignores RUSTSEC-2026-0543: `cargo tree -i chrono --workspace
   --all-features` finds no package, and `Cargo.lock` has no `chrono` or `iana-time-zone`.
+
+- **`CountryCode::new` is `CountryCode::try_new`**: a constructor that returns a `Result` is
+  `try_new`. Rename the calls; the check, the error (`GeoError::InvalidCountry`) and the
+  `FromStr`, `TryFrom<String>` and serde forms are the same.
 
 
 - **`WireFormat` and its builder read the identity from core's types** (design note rows

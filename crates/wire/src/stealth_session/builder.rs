@@ -484,7 +484,7 @@ mod tests {
         let builder = StealthSessionBuilder::new()
             .geo_proxies([(
                 "http://alice:s3cret@proxy.example:8080",
-                CountryCode::new("DE").expect("a country"),
+                CountryCode::try_new("DE").expect("a country"),
             )])
             .expect("a proxy");
         let shown = format!("{builder:?}");
@@ -499,7 +499,7 @@ mod tests {
         let error = StealthSessionBuilder::new()
             .geo_proxies([(
                 "ftp://alice:s3cret@proxy.example:21",
-                CountryCode::new("DE").expect("a country"),
+                CountryCode::try_new("DE").expect("a country"),
             )])
             .expect_err("a scheme that is not a proxy");
         let shown = format!("{error} | {error:?}");

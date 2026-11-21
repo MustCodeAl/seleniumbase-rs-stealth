@@ -328,8 +328,8 @@ fn brief_policy() -> MitigationPolicy {
 }
 
 fn two_proxies(world: &World) -> BrowserScraperBuilder {
-    let de = CountryCode::new("DE").expect("a valid country");
-    let fr = CountryCode::new("FR").expect("a valid country");
+    let de = CountryCode::try_new("DE").expect("a valid country");
+    let fr = CountryCode::try_new("FR").expect("a valid country");
     world
         .builder()
         .geo_proxies([

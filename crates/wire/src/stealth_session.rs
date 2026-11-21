@@ -36,7 +36,7 @@
 //!
 //! # async fn demo() -> Result<(), Box<dyn std::error::Error>> {
 //! let mut session = StealthSession::builder()
-//!     .geo_proxies([("http://user:pass@de.proxy.example:8080", CountryCode::new("DE")?)])?
+//!     .geo_proxies([("http://user:pass@de.proxy.example:8080", CountryCode::try_new("DE")?)])?
 //!     .build()
 //!     .await?;
 //! let page = session.fetch("https://example.com/").await?;

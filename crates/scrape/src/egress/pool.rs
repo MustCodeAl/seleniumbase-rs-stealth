@@ -207,7 +207,7 @@ mod tests {
     use super::*;
 
     fn route(spec: &str, country: Option<&str>) -> ProxyRoute {
-        let country = country.map(|code| CountryCode::new(code).expect("valid code"));
+        let country = country.map(|code| CountryCode::try_new(code).expect("valid code"));
         ProxyRoute::parse(spec, country).expect("valid spec")
     }
 
@@ -260,7 +260,7 @@ mod tests {
     #[test]
     fn an_empty_pool_has_nothing_to_pick() {
         let pool = pool(Vec::new(), RotationStrategy::RoundRobin);
-        let de = CountryCode::new("DE").expect("valid");
+        let de = CountryCode::try_new("DE").expect("valid");
         assert!(pool.pick(None, 0).is_none());
         assert!(pool.pick_in(de, None, 0).is_none());
         assert!(pool.pick_other(&key("p1.example"), None, 0).is_none());
@@ -537,7 +537,7 @@ mod tests {
 
     #[test]
     fn pick_in_only_returns_proxies_in_that_country() {
-        let de = CountryCode::new("DE").expect("valid");
+        let de = CountryCode::try_new("DE").expect("valid");
         let pool = pool(
             vec![
                 route("http://fr.example:8080", Some("FR")),
@@ -548,13 +548,13 @@ mod tests {
         for _ in 0..4 {
             assert_eq!(host_of(pool.pick_in(de, None, 0)), "de.example");
         }
-        let jp = CountryCode::new("JP").expect("valid");
+        let jp = CountryCode::try_new("JP").expect("valid");
         assert!(pool.pick_in(jp, None, 0).is_none());
     }
 
     #[test]
     fn pick_in_finds_nothing_when_the_whole_country_is_quarantined() {
-        let de = CountryCode::new("DE").expect("valid");
+        let de = CountryCode::try_new("DE").expect("valid");
         let pool = pool(
             vec![
                 route("http://fr.example:8080", Some("FR")),
@@ -583,8 +583,8 @@ mod tests {
 
     #[test]
     fn from_geo_proxies_sets_the_country_on_every_key() {
-        let de = CountryCode::new("DE").expect("valid");
-        let fr = CountryCode::new("FR").expect("valid");
+        let de = CountryCode::try_new("DE").expect("valid");
+        let fr = CountryCode::try_new("FR").expect("valid");
         let pool = ProxyPool::from_geo_proxies(
             [("de.example:8080", de), ("http://fr.example:3128", fr)],
             RotationStrategy::RoundRobin,
@@ -599,7 +599,7 @@ mod tests {
 
     #[test]
     fn from_geo_proxies_refuses_a_bad_spec() {
-        let de = CountryCode::new("DE").expect("valid");
+        let de = CountryCode::try_new("DE").expect("valid");
         let result =
             ProxyPool::from_geo_proxies([("ftp://x.example:21", de)], RotationStrategy::RoundRobin);
         assert!(result.is_err());
@@ -671,7 +671,7 @@ mod tests {
         let pool = ProxyPool::from_geo_proxies(
             [(
                 "http://alice:s3cret@p1.example:8080",
-                CountryCode::new("DE").expect("valid"),
+                CountryCode::try_new("DE").expect("valid"),
             )],
             RotationStrategy::StickyPerSite,
         )

@@ -64,7 +64,7 @@ pub fn fingerprint(seed: u64) -> Fingerprint {
 
 /// A country code that is known to be valid.
 pub fn country(code: &str) -> CountryCode {
-    CountryCode::new(code).expect("a valid country code")
+    CountryCode::try_new(code).expect("a valid country code")
 }
 
 /// The seconds since the Unix epoch, from the system clock.

@@ -372,7 +372,7 @@ mod tests {
 
     #[test]
     fn the_country_travels_with_the_key() {
-        let de = CountryCode::new("de").expect("valid");
+        let de = CountryCode::try_new("de").expect("valid");
         let egress = ProxyRoute::parse("proxy.example:8080", Some(de)).expect("valid spec");
         assert_eq!(egress.key().country, Some(de));
         let json = serde_json::to_string(egress.key()).expect("serializes");
@@ -383,7 +383,7 @@ mod tests {
 
     #[test]
     fn a_key_is_shown_without_its_country() {
-        let de = CountryCode::new("de").expect("valid");
+        let de = CountryCode::try_new("de").expect("valid");
         let egress = ProxyRoute::parse("https://proxy.example", Some(de)).expect("valid spec");
         assert_eq!(egress.to_string(), "https://proxy.example:443");
     }

@@ -572,7 +572,7 @@ use seleniumbase_rs_stealth::scrape::runtime::browser_scraper::BrowserScraper;
 
 # async fn demo() -> Result<(), seleniumbase_rs_stealth::scrape::error::ScrapeError> {
 let mut scraper = BrowserScraper::builder()
-    .geo_proxies([("http://user:pass@de.proxy.example:8080", CountryCode::new("DE")?)])?
+    .geo_proxies([("http://user:pass@de.proxy.example:8080", CountryCode::try_new("DE")?)])?
     .max_challenge_attempts(4)
     .build()
     .await?;
@@ -1229,7 +1229,7 @@ use seleniumbase_rs_stealth::scrape::CountryCode;
 
 # async fn demo() -> Result<(), Box<dyn std::error::Error>> {
 let mut session = StealthSession::builder()
-    .geo_proxies([("http://user:pass@de.proxy.example:8080", CountryCode::new("DE")?)])?
+    .geo_proxies([("http://user:pass@de.proxy.example:8080", CountryCode::try_new("DE")?)])?
     .build()
     .await?;
 let page = session.fetch("https://example.com/").await?;

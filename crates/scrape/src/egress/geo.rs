@@ -21,7 +21,7 @@ impl CountryCode {
     /// # Errors
     ///
     /// Returns [`GeoError::InvalidCountry`] unless `code` is exactly two ASCII letters.
-    pub fn new(code: &str) -> Result<Self, GeoError> {
+    pub fn try_new(code: &str) -> Result<Self, GeoError> {
         match code.as_bytes() {
             [a, b] if a.is_ascii_alphabetic() && b.is_ascii_alphabetic() => {
                 Ok(Self([a.to_ascii_uppercase(), b.to_ascii_uppercase()]))
@@ -33,7 +33,7 @@ impl CountryCode {
     /// The code as text, such as `DE`.
     #[must_use]
     pub fn as_str(&self) -> &str {
-        // The bytes are ASCII letters: `new` is the only way to build a value.
+        // The bytes are ASCII letters: `try_new` is the only way to build a value.
         std::str::from_utf8(&self.0).unwrap_or("??")
     }
 }
@@ -48,16 +48,16 @@ impl TryFrom<String> for CountryCode {
     type Error = GeoError;
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
-        Self::new(&value)
+        Self::try_new(&value)
     }
 }
 
 impl std::str::FromStr for CountryCode {
     type Err = GeoError;
 
-    /// Reads a two-letter code, as [`CountryCode::new`] does.
+    /// Reads a two-letter code, as [`CountryCode::try_new`] does.
     fn from_str(code: &str) -> Result<Self, Self::Err> {
-        Self::new(code)
+        Self::try_new(code)
     }
 }
 
@@ -247,7 +247,7 @@ mod tests {
     use seleniumbase_rs::evasion::fingerprint::{OsType, Spoof};
 
     fn country(code: &str) -> CountryCode {
-        CountryCode::new(code).expect("valid code")
+        CountryCode::try_new(code).expect("valid code")
     }
 
     fn resolve(egress: &ProxyRoute) -> Result<GeoInfo, GeoError> {
@@ -264,13 +264,13 @@ mod tests {
         assert_eq!(country("de").as_str(), "DE");
         assert_eq!(country("Gb").to_string(), "GB");
         for bad in ["", "D", "DEU", "1A", "D-", "é", "ÄÖ", " D", "D\n"] {
-            assert!(CountryCode::new(bad).is_err(), "{bad:?} was accepted");
+            assert!(CountryCode::try_new(bad).is_err(), "{bad:?} was accepted");
         }
     }
 
     #[test]
     fn a_rejected_code_is_named_in_the_error() {
-        let err = CountryCode::new("DEU").expect_err("three letters");
+        let err = CountryCode::try_new("DEU").expect_err("three letters");
         assert!(matches!(&err, GeoError::InvalidCountry(code) if code == "DEU"));
         assert!(err.to_string().contains("DEU"));
     }
@@ -294,7 +294,7 @@ mod tests {
     fn every_locale_has_a_valid_country_tag_and_iana_zone() {
         for locale in LOCALES {
             assert!(
-                CountryCode::new(locale.country).is_ok(),
+                CountryCode::try_new(locale.country).is_ok(),
                 "{}",
                 locale.country
             );

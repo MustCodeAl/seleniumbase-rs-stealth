@@ -24,7 +24,7 @@ const NOW: u64 = 1_800_000_000;
 const BRIEF: Duration = Duration::from_millis(60);
 
 fn egress(country: Option<&str>) -> ProxyRoute {
-    let country = country.map(|code| CountryCode::new(code).expect("a valid code"));
+    let country = country.map(|code| CountryCode::try_new(code).expect("a valid code"));
     ProxyRoute::parse("http://proxy.example:8080", country).expect("a valid spec")
 }
 

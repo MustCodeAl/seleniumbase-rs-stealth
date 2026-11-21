@@ -1062,7 +1062,7 @@ or extend), remove (the same result computed the same way, with the reason).
 | Item | Kind | Copied | Verdict | Proposed | Why |
 |---|---|---|---|---|---|
 | `CountryCode` | struct | yes | keep |  | core's `LocaleCode` is a language tag; the ISO country of a proxy's exit is new ground |
-| `CountryCode::new` | method | yes | keep |  | says what it does |
+| `CountryCode::new` | method | yes | rename | `try_new` | the constructor returns a `Result`, and a fallible constructor is `try_new` |
 | `CountryCode::as_str` | method | yes | keep |  | says what it does |
 | `GeoResolver` | trait | yes | keep |  | **copied** port, but covers ground core does not: finding a proxy's exit country |
 | `GeoResolver::resolve` | method | yes | keep |  | says what it does |

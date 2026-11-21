@@ -298,7 +298,7 @@ mod tests {
             scheme: "http".to_owned(),
             host: "p1.example".to_owned(),
             port: 8080,
-            country: CountryCode::new("DE").ok(),
+            country: CountryCode::try_new("DE").ok(),
         });
         state
     }

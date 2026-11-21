@@ -19,7 +19,7 @@ fn script_contexts(mock: &MockCtrl) {
 }
 
 fn egress(spec: &str) -> ProxyRoute {
-    let country = CountryCode::new("DE").expect("a valid code");
+    let country = CountryCode::try_new("DE").expect("a valid code");
     ProxyRoute::parse(spec, Some(country)).expect("a valid spec")
 }
 

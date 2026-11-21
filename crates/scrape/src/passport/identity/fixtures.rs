@@ -35,7 +35,7 @@ pub(crate) fn proxy(host: &str) -> ProxyKey {
         scheme: "http".to_owned(),
         host: host.to_owned(),
         port: 8080,
-        country: CountryCode::new("DE").ok(),
+        country: CountryCode::try_new("DE").ok(),
     }
 }
 

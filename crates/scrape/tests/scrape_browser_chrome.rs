@@ -183,7 +183,7 @@ fn builder(sink: &CollectingEventSink) -> BrowserScraperBuilder {
 }
 
 fn country(code: &str) -> CountryCode {
-    CountryCode::new(code).expect("a valid country")
+    CountryCode::try_new(code).expect("a valid country")
 }
 
 #[tokio::test]
