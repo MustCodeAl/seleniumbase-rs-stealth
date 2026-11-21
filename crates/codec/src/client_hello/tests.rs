@@ -58,7 +58,7 @@ fn decodes_the_remaining_typed_extensions() {
 
 #[test]
 fn grease_values_are_kept_and_detected() {
-    let hello = parse(&HelloBuilder::chrome_like().with_grease().record()).expect("parses");
+    let hello = parse(&HelloBuilder::chrome_like().grease().record()).expect("parses");
     assert!(hello.has_grease());
     assert_eq!(hello.cipher_suites.first(), Some(&GREASE_CIPHER));
     assert_eq!(hello.extension_ids().first(), Some(&GREASE_EXT_FIRST));
@@ -349,7 +349,7 @@ impl XorShift {
 
 #[test]
 fn every_single_byte_mutation_returns_without_panicking() {
-    let valid = HelloBuilder::chrome_like().with_grease().record();
+    let valid = HelloBuilder::chrome_like().grease().record();
     for index in 0..valid.len() {
         for value in [0x00, 0x01, 0x7F, 0x80, 0xFF, valid[index] ^ 0x5A] {
             let mut bytes = valid.clone();

@@ -6,7 +6,7 @@
 //! that belong to the caller's identity are placeholders, resolved at request time from a
 //! [`ClientHeaders`]: the `User-Agent`, `Accept-Language`, the client hints and the cookie.
 //! Because the caller supplies them, any of them can be changed without touching the spec,
-//! and any header can be replaced by name with [`ClientHeaders::with_override`] or
+//! and any header can be replaced by name with [`ClientHeaders::override_header`] or
 //! [`HeaderSpec::with_header`].
 //!
 //! A spec is built from a captured header list ([`HeaderSpec::from_captured`]), or written by
@@ -265,14 +265,14 @@ impl ClientHeaders {
 
     /// Sets the `Accept-Language` value.
     #[must_use]
-    pub fn with_accept_language(mut self, value: impl Into<String>) -> Self {
+    pub fn accept_language(mut self, value: impl Into<String>) -> Self {
         self.accept_language = Some(value.into());
         self
     }
 
     /// Sets the three client-hint headers a browser sends on every request.
     #[must_use]
-    pub fn with_client_hints(
+    pub fn client_hints(
         mut self,
         brands: impl Into<String>,
         mobile: impl Into<String>,
@@ -286,14 +286,14 @@ impl ClientHeaders {
 
     /// Sets the `Cookie` value.
     #[must_use]
-    pub fn with_cookie(mut self, value: impl Into<String>) -> Self {
+    pub fn cookie(mut self, value: impl Into<String>) -> Self {
         self.cookie = Some(value.into());
         self
     }
 
     /// Replaces the value of the header `name` (any capitalisation) wherever a spec has it.
     #[must_use]
-    pub fn with_override(mut self, name: impl Into<String>, value: impl Into<String>) -> Self {
+    pub fn override_header(mut self, name: impl Into<String>, value: impl Into<String>) -> Self {
         self.overrides.push((name.into(), value.into()));
         self
     }
@@ -340,13 +340,13 @@ impl ClientHeaders {
             .as_str()
             .or(fingerprint.languages().as_str());
         if let Some(language) = language {
-            identity = identity.with_accept_language(language);
+            identity = identity.accept_language(language);
         }
         if fingerprint.client_hints().is_off() {
             return Some(identity);
         }
         if let Some(hints) = fingerprint.client_hints().value() {
-            return Some(identity.with_client_hints_from(hints));
+            return Some(identity.client_hints_from(hints));
         }
         let (Some(major), Some(platform)) = (
             chrome_major(user_agent),
@@ -357,18 +357,16 @@ impl ClientHeaders {
         let mut hints = chromium_hints(major);
         platform.clone_into(&mut hints.platform);
         hints.mobile = fingerprint.os_type().is_mobile();
-        Some(identity.with_client_hints_from(&hints))
+        Some(identity.client_hints_from(&hints))
     }
 
     /// Sets the three client-hint headers a browser sends on every request from core's
     /// [`ClientHints`]: the brand list, whether it is mobile, and the platform.
     #[must_use]
-    pub fn with_client_hints_from(self, hints: &ClientHints) -> Self {
-        self.with_client_hints(
-            sec_ch_ua(&hints.brands),
-            if hints.mobile { MOBILE } else { NOT_MOBILE },
-            quote(&hints.platform),
-        )
+    pub fn client_hints_from(self, hints: &ClientHints) -> Self {
+        self.client_hints(sec_ch_ua(&hints.brands),
+        if hints.mobile { MOBILE } else { NOT_MOBILE },
+        quote(&hints.platform),)
     }
 
     /// The override for the header `name`; the last one given wins.

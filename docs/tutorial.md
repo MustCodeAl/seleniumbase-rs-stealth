@@ -625,7 +625,7 @@ while it leaves through that proxy, from a built-in locale table (the
 `Random { seed: Option<u64> }`, `LeastFailures` or `StickyPerSite`. The pool is a
 core `ProxyList` plus the exit country of each route, and the list does the
 choosing and the counting; `ProxyPool::from_list` takes one you built, and
-`with_quarantine(after_failures, rest)` sets its quarantine. An egress with three
+`quarantine(after_failures, rest)` sets its quarantine. An egress with three
 failures in a row is out of rotation for ten minutes by default.
 
 - `rotate_proxy()` opens a new browser context behind the new proxy and drops

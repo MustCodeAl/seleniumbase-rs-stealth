@@ -22,7 +22,7 @@ pub(super) fn hello(builder: &HelloBuilder) -> ClientHello {
 
 /// The spec of the published example hello, GREASE included.
 pub(super) fn chrome() -> TlsSpec {
-    TlsSpec::from_client_hello(&hello(&HelloBuilder::chrome_like().with_grease()))
+    TlsSpec::from_client_hello(&hello(&HelloBuilder::chrome_like().grease()))
 }
 
 pub(super) fn ja3(extensions: &str, groups: &str, point_formats: &str) -> Ja3 {
@@ -92,7 +92,7 @@ fn the_new_codepoint_and_optional_extensions_are_read() {
 fn the_spec_reproduces_the_fingerprints_of_its_hello() {
     for builder in [
         HelloBuilder::chrome_like(),
-        HelloBuilder::chrome_like().with_grease(),
+        HelloBuilder::chrome_like().grease(),
     ] {
         let parsed = hello(&builder);
         let spec = TlsSpec::from_client_hello(&parsed);
@@ -111,7 +111,7 @@ fn the_spec_reproduces_the_fingerprints_of_its_hello() {
             Ja4::of_original_order(&parsed)
         );
     }
-    let greased = hello(&HelloBuilder::chrome_like().with_grease());
+    let greased = hello(&HelloBuilder::chrome_like().grease());
     assert_eq!(chrome().peetprint(), Peetprint::of(&greased));
     let plain = hello(&HelloBuilder::chrome_like());
     let spec = TlsSpec::from_client_hello(&plain);

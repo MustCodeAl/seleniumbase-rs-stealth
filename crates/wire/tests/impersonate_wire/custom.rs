@@ -583,7 +583,7 @@ async fn custom_client_hints_arrive_as_the_three_hint_headers() {
         ..ClientHints::default()
     };
     let profile = WireFormat::builder()
-        .client_headers(measured_identity().with_client_hints_from(&hints))
+        .client_headers(measured_identity().client_hints_from(&hints))
         .build()
         .expect("builds");
     let served = send(&profile).await;

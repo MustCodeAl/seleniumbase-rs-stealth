@@ -465,7 +465,7 @@ impl Capture {
 
     /// Replaces how long a connection may take to send its first message.
     #[must_use]
-    pub fn with_timeout(mut self, timeout: Duration) -> Self {
+    pub fn timeout(mut self, timeout: Duration) -> Self {
         self.timeout = timeout;
         self
     }

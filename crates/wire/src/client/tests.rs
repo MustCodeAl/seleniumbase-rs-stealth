@@ -301,7 +301,7 @@ fn a_fingerprint_gives_its_identity_to_the_headers() {
     assert_eq!(
         identity.sec_ch_ua,
         ClientHeaders::new("")
-            .with_client_hints_from(hints)
+            .client_hints_from(hints)
             .sec_ch_ua
     );
 }
@@ -332,7 +332,7 @@ fn a_fingerprint_without_its_own_hints_sends_computed_ones_and_a_measured_profil
     assert_eq!(
         chrome().client_headers().sec_ch_ua,
         ClientHeaders::new("")
-            .with_client_hints_from(&captured)
+            .client_hints_from(&captured)
             .sec_ch_ua
     );
 }

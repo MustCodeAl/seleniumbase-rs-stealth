@@ -9,9 +9,7 @@ use seleniumbase_rs_codec::client_hello::fixtures::{
 use seleniumbase_rs_codec::client_hello::{ext_id, ClientHello};
 
 fn captured(host: &str) -> CapturedHello {
-    let raw = HelloBuilder::new(&CHROME_CIPHERS, &JA4_EXAMPLE_EXTENSIONS)
-        .with_body(ext_id::SERVER_NAME, server_name_body(host))
-        .with_grease()
+    let raw = HelloBuilder::new(&CHROME_CIPHERS, &JA4_EXAMPLE_EXTENSIONS).body(ext_id::SERVER_NAME, server_name_body(host)).grease()
         .record();
     CapturedHello {
         peer: SocketAddr::from((Ipv4Addr::LOCALHOST, 50_000)),

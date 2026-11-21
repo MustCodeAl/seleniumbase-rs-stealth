@@ -42,7 +42,7 @@ fn the_published_example_hashes_to_the_published_fingerprint() {
 #[test]
 fn grease_changes_nothing() {
     let plain = parse_hello(&HelloBuilder::chrome_like());
-    let greased = parse_hello(&HelloBuilder::chrome_like().with_grease());
+    let greased = parse_hello(&HelloBuilder::chrome_like().grease());
     assert_eq!(Ja4::of(&greased), Ja4::of(&plain));
     assert_eq!(Ja4::raw(&greased), Ja4::raw(&plain));
     assert_eq!(
@@ -80,7 +80,7 @@ fn the_sorted_fingerprint_ignores_order_and_the_original_order_one_does_not() {
 
 #[test]
 fn without_signature_algorithms_the_hash_covers_the_extensions_only() {
-    let builder = HelloBuilder::chrome_like().with_body(ext_id::SIGNATURE_ALGORITHMS, vec![0, 0]);
+    let builder = HelloBuilder::chrome_like().body(ext_id::SIGNATURE_ALGORITHMS, vec![0, 0]);
     let hello = parse_hello(&builder);
     let ja4 = Ja4::of(&hello);
     assert_eq!(ja4.c, C_WITHOUT_SIGALGS);

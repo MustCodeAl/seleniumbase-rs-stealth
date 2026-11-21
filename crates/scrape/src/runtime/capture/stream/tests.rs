@@ -29,7 +29,7 @@ fn feed(bytes: Vec<u8>, chunk: usize, keep_open: bool) -> DuplexStream {
 }
 
 fn chrome_like_record() -> Vec<u8> {
-    HelloBuilder::chrome_like().with_grease().record()
+    HelloBuilder::chrome_like().grease().record()
 }
 
 #[tokio::test]

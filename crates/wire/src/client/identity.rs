@@ -13,10 +13,10 @@ pub(super) fn identity_for(
 ) -> ClientHeaders {
     let mut identity = ClientHeaders::new(user_agent);
     if let Some(language) = accept_language {
-        identity = identity.with_accept_language(language);
+        identity = identity.accept_language(language);
     }
     if let Some(hints) = hints {
-        identity = identity.with_client_hints_from(hints);
+        identity = identity.client_hints_from(hints);
     }
     identity
 }

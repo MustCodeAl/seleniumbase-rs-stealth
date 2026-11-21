@@ -75,7 +75,7 @@ fn a_parsed_hello_yields_the_published_string_with_and_without_grease() {
     let ja3 = Ja3::of(&parse_hello(&plain));
     assert_eq!(ja3.to_string(), CHROME_JA3);
     assert_eq!(ja3.hash(), CHROME_JA3_HASH);
-    assert_eq!(Ja3::of(&parse_hello(&plain.with_grease())), ja3);
+    assert_eq!(Ja3::of(&parse_hello(&plain.grease())), ja3);
 }
 
 #[test]
@@ -170,7 +170,7 @@ fn the_documented_peetprint_example_round_trips() {
 
 #[test]
 fn a_parsed_hello_yields_a_sorted_peetprint() {
-    let hello = parse_hello(&HelloBuilder::chrome_like().with_grease());
+    let hello = parse_hello(&HelloBuilder::chrome_like().grease());
     let want = "GREASE-772-771|2-1.1|GREASE-29-23-24|1027-2052-1025-1283-2053-1281-2054-1537|1|2|GREASE-4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53|0-10-11-13-16-17513-18-21-23-27-35-43-45-5-51-65281-GREASE-GREASE";
     assert_eq!(Peetprint::of(&hello).to_string(), want);
     let shuffled = Peetprint::parse(PEET_EXAMPLE).expect("parses").normalized();

@@ -70,8 +70,10 @@ impl ProxyPool {
         routes: Vec<ProxyRoute>,
         rotation: RotationStrategy,
     ) -> Result<Self, ProxyRouteError> {
-        let mut list = ProxyList::new().rotation(rotation).quarantine(DEFAULT_QUARANTINE_AFTER,
-        Duration::from_secs(DEFAULT_QUARANTINE_SECS),);
+        let mut list = ProxyList::new().rotation(rotation).quarantine(
+            DEFAULT_QUARANTINE_AFTER,
+            Duration::from_secs(DEFAULT_QUARANTINE_SECS),
+        );
         for route in &routes {
             let address = list_address(route.key());
             list.add(&address)
@@ -121,7 +123,7 @@ impl ProxyPool {
     /// Sets how many failures in a row put a proxy out of rotation, and for how long, as core's
     /// [`ProxyList::quarantine`] does: a limit of zero is read as one.
     #[must_use]
-    pub fn with_quarantine(mut self, after_failures: u32, rest: Duration) -> Self {
+    pub fn quarantine(mut self, after_failures: u32, rest: Duration) -> Self {
         self.list = std::mem::take(&mut self.list).quarantine(after_failures, rest);
         self
     }
@@ -266,7 +268,7 @@ mod tests {
 
     #[test]
     fn round_robin_skips_a_quarantined_proxy_without_repeating_another() {
-        let pool = pool(three(), RotationStrategy::RoundRobin).with_quarantine(1, secs(600));
+        let pool = pool(three(), RotationStrategy::RoundRobin).quarantine(1, secs(600));
         pool.report(&key("p2.example"), ProxyOutcome::ConnectFailed, 0);
         assert_eq!(
             hosts(&pool, 6, 1),
@@ -277,7 +279,7 @@ mod tests {
 
     #[test]
     fn a_released_proxy_rejoins_the_cycle() {
-        let pool = pool(three(), RotationStrategy::RoundRobin).with_quarantine(1, secs(600));
+        let pool = pool(three(), RotationStrategy::RoundRobin).quarantine(1, secs(600));
         pool.report(&key("p2.example"), ProxyOutcome::ConnectFailed, 0);
         let _ = hosts(&pool, 2, 1);
         let mut after = hosts(&pool, 3, 600);
@@ -293,8 +295,7 @@ mod tests {
                 route("http://p2.example:8080", None),
             ],
             RotationStrategy::RoundRobin,
-        )
-        .with_quarantine(3, secs(600));
+        ).quarantine(3, secs(600));
         for _ in 0..3 {
             pool.report(&key("p1.example"), ProxyOutcome::ConnectFailed, 100);
         }
@@ -321,8 +322,7 @@ mod tests {
         let pool = pool(
             vec![route("http://p1.example:8080", None)],
             RotationStrategy::RoundRobin,
-        )
-        .with_quarantine(2, secs(10));
+        ).quarantine(2, secs(10));
         for _ in 0..2 {
             pool.report(&key("p1.example"), ProxyOutcome::ConnectFailed, 0);
         }
@@ -339,8 +339,7 @@ mod tests {
         let pool = pool(
             vec![route("http://p1.example:8080", None)],
             RotationStrategy::RoundRobin,
-        )
-        .with_quarantine(0, secs(60));
+        ).quarantine(0, secs(60));
         assert!(pool.pick(None, 0).is_some());
         pool.report(&key("p1.example"), ProxyOutcome::ConnectFailed, 0);
         assert!(pool.pick(None, 1).is_none());
@@ -374,7 +373,7 @@ mod tests {
 
     #[test]
     fn a_report_for_a_proxy_the_pool_does_not_hold_changes_nothing() {
-        let pool = pool(three(), RotationStrategy::RoundRobin).with_quarantine(1, secs(600));
+        let pool = pool(three(), RotationStrategy::RoundRobin).quarantine(1, secs(600));
         pool.report(&key("elsewhere.example"), ProxyOutcome::Blocked, 0);
         assert_eq!(
             hosts(&pool, 3, 0),
@@ -448,7 +447,7 @@ mod tests {
 
     #[test]
     fn a_sticky_proxy_that_is_quarantined_gives_way() {
-        let pool = pool(three(), RotationStrategy::StickyPerSite).with_quarantine(1, secs(600));
+        let pool = pool(three(), RotationStrategy::StickyPerSite).quarantine(1, secs(600));
         let first = pool.pick(Some("a.example"), 0).expect("a proxy");
         pool.report(first.key(), ProxyOutcome::Blocked, 0);
         let next = host_of(pool.pick(Some("a.example"), 0));
@@ -478,7 +477,7 @@ mod tests {
                 assert!(seen.iter().any(|h| h == host), "{host} never drawn");
             }
             let resting =
-                pool(three(), RotationStrategy::Random { seed }).with_quarantine(1, secs(600));
+                pool(three(), RotationStrategy::Random { seed }).quarantine(1, secs(600));
             resting.report(&key("p2.example"), ProxyOutcome::Blocked, 0);
             assert!(!hosts(&resting, 60, 1).contains(&"p2.example".to_owned()));
         }
@@ -560,8 +559,7 @@ mod tests {
                 route("http://de.example:8080", Some("DE")),
             ],
             RotationStrategy::RoundRobin,
-        )
-        .with_quarantine(1, secs(600));
+        ).quarantine(1, secs(600));
         pool.report(
             &key_with_country("de.example", "DE"),
             ProxyOutcome::Blocked,
@@ -607,7 +605,9 @@ mod tests {
     #[test]
     fn a_core_list_becomes_a_pool_that_keeps_its_rotation_and_quarantine() {
         let list = ProxyList::parse("p1.example:8080\np2.example:8080\np3.example:8080\n")
-            .expect("a list").rotation(RotationStrategy::StickyPerSite).quarantine(1, secs(600));
+            .expect("a list")
+            .rotation(RotationStrategy::StickyPerSite)
+            .quarantine(1, secs(600));
         let pool = ProxyPool::from_list(list).expect("routes");
         let first = pool.pick(Some("a.example"), 0).expect("a proxy");
         let other = pool.pick(Some("b.example"), 0).expect("a proxy");
@@ -657,8 +657,7 @@ mod tests {
         let pool = pool(
             vec![route("http://p1.example:8080", None)],
             RotationStrategy::RoundRobin,
-        )
-        .with_quarantine(1, secs(60));
+        ).quarantine(1, secs(60));
         pool.report(&key("p1.example"), ProxyOutcome::Blocked, u64::MAX);
         assert!(pool.pick(None, u64::MAX).is_none());
     }

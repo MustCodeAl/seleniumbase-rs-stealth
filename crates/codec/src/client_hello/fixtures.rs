@@ -185,7 +185,7 @@ impl HelloBuilder {
     }
 
     /// Replaces the body of the first extension with this id; does nothing when it is absent.
-    pub fn with_body(mut self, id: u16, body: Vec<u8>) -> Self {
+    pub fn body(mut self, id: u16, body: Vec<u8>) -> Self {
         if let Some(slot) = self.extensions.iter_mut().find(|(ext, _)| *ext == id) {
             slot.1 = body;
         }
@@ -193,19 +193,11 @@ impl HelloBuilder {
     }
 
     /// Adds browser-style GREASE: a cipher, two extensions, a group, a version and a key share.
-    pub fn with_grease(mut self) -> Self {
+    pub fn grease(mut self) -> Self {
         self.ciphers.insert(0, GREASE_CIPHER);
         self.extensions.insert(0, (GREASE_EXT_FIRST, Vec::new()));
         self.extensions.push((GREASE_EXT_LAST, vec![0]));
-        self.with_body(
-            ext_id::SUPPORTED_GROUPS,
-            length16(&u16s(&[GREASE_GROUP, 0x001D, 0x0017, 0x0018])),
-        )
-        .with_body(
-            ext_id::SUPPORTED_VERSIONS,
-            length8(&u16s(&[GREASE_VERSION, 0x0304, 0x0303])),
-        )
-        .with_body(ext_id::KEY_SHARE, key_share_body(&[GREASE_CIPHER, 0x001D]))
+        self.body(ext_id::SUPPORTED_GROUPS, length16(&u16s(&[GREASE_GROUP, 0x001D, 0x0017, 0x0018]))).body(ext_id::SUPPORTED_VERSIONS, length8(&u16s(&[GREASE_VERSION, 0x0304, 0x0303]))).body(ext_id::KEY_SHARE, key_share_body(&[GREASE_CIPHER, 0x001D]))
     }
 
     /// The handshake message: header and body.

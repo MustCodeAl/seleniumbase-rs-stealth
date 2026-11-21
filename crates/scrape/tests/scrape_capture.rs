@@ -251,7 +251,7 @@ async fn a_connection_that_sends_nothing_times_out_without_a_hello() {
     let capture = Capture::bind()
         .await
         .expect("binds")
-        .with_timeout(Duration::from_millis(100));
+        .timeout(Duration::from_millis(100));
     let port = capture.port();
     let _silent = tokio::spawn(async move {
         let _stream = TcpStream::connect(("127.0.0.1", port))

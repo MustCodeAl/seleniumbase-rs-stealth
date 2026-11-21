@@ -403,7 +403,7 @@ impl WireFormat {
     ) -> Result<Vec<(String, String)>, WireFormatError> {
         let mut identity = self.identity.clone();
         if let Some(cookie) = cookie {
-            identity = identity.with_cookie(cookie);
+            identity = identity.cookie(cookie);
         }
         let mut list = self.headers.render(shape, &identity)?;
         if let Some(cookie) = cookie
