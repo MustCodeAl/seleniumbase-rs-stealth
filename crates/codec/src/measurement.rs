@@ -419,6 +419,9 @@ pub fn for_kind(kind: Browser) -> Option<&'static WireMeasurement> {
 
 /// The newest measured entry of a browser on an operating system.
 ///
+/// `get` stays a `get` because it is a lookup by key in a table, as `HashMap::get` is, not a
+/// getter of a field.
+///
 /// # Errors
 ///
 /// Returns [`WireMeasurementError::NotMeasured`] when the pair has no capture.
@@ -432,7 +435,7 @@ pub fn get(kind: Browser, os: OsType) -> Result<&'static WireMeasurement, WireMe
 ///
 /// Returns [`WireMeasurementError::NotMeasured`] when the pair has no capture at all and
 /// [`WireMeasurementError::VersionNotMeasured`] when it has captures, but not at `major`.
-pub fn get_version(
+pub fn version(
     kind: Browser,
     os: OsType,
     major: u32,

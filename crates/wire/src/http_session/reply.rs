@@ -47,6 +47,9 @@ impl ResponseHeaders {
     }
 
     /// Every value of `name`, matched without regard to case.
+    ///
+    /// Keeps the name of `http::HeaderMap::get_all`, which users of an HTTP client know: it looks a
+    /// key up, it is not a getter.
     pub fn get_all<'a>(&'a self, name: &'a str) -> impl Iterator<Item = &'a str> {
         self.0
             .iter()

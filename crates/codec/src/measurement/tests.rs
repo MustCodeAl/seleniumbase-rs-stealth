@@ -1,7 +1,7 @@
 //! Parsing, lookup and the refusal of unmeasured browser and system pairs.
 
 use super::{
-    for_kind, get, get_version, measured_systems, newest, newest_on, parse_all, source_names,
+    for_kind, get, measured_systems, newest, newest_on, parse_all, source_names, version,
     try_all, KnownGap, WireMeasurement, WireMeasurementError, MAX_MEASURED_JSON_BYTES, SOURCES,
 };
 use crate::tls_spec::KnownGap as TlsKnownGap;
@@ -142,10 +142,10 @@ fn unmeasured_systems_are_refused_by_name() {
 fn a_measured_system_with_another_major_is_a_version_error() {
     let chrome = chrome_macos();
 
-    let found = get_version(Browser::Chrome, OsType::Macos, chrome.major);
+    let found = version(Browser::Chrome, OsType::Macos, chrome.major);
     assert_eq!(found.expect("the measured major").major, chrome.major);
 
-    let missing = get_version(Browser::Chrome, OsType::Macos, chrome.major + 1);
+    let missing = version(Browser::Chrome, OsType::Macos, chrome.major + 1);
     assert_eq!(
         missing.expect_err("another major"),
         WireMeasurementError::VersionNotMeasured {
@@ -154,7 +154,7 @@ fn a_measured_system_with_another_major_is_a_version_error() {
             os: OsType::Macos
         }
     );
-    let unmeasured = get_version(Browser::Chrome, OsType::Windows, chrome.major);
+    let unmeasured = version(Browser::Chrome, OsType::Windows, chrome.major);
     assert!(matches!(
         unmeasured,
         Err(WireMeasurementError::NotMeasured { .. })
