@@ -80,6 +80,7 @@ impl Default for EscalationPolicy {
 /// A change of mode, or none.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
+#[non_exhaustive]
 pub enum Escalation {
     /// Keep the mode.
     Stay,

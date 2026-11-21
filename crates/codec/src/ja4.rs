@@ -64,6 +64,7 @@ const VERSION_CODES: [(u16, &str); 9] = [
 
 /// Whether the cipher and extension lists are sorted, as JA4 defines, or kept in wire order.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[non_exhaustive]
 pub enum Ja4Order {
     /// Sorted ids, SNI and ALPN left out of the extension list: `JA4` and `JA4_r`.
     Sorted,
@@ -73,6 +74,7 @@ pub enum Ja4Order {
 
 /// A section of a fingerprint, named in errors and mismatches.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum Ja4Section {
     /// The `a` section.
     A,

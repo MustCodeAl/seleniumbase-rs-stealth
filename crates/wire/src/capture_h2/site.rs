@@ -55,6 +55,7 @@ const HTML_TYPE: &str = "text/html; charset=utf-8";
 
 /// Which protocol a site speaks; the ALPN list is fixed to it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Protocol {
     /// HTTP/2 over TLS (ALPN `h2`).
     H2,
@@ -75,6 +76,7 @@ impl Protocol {
 
 /// What the first request on a connection looked like.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Seen {
     /// An HTTP/2 connection start: the bytes read and what the frames say.
     H2 {

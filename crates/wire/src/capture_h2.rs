@@ -166,6 +166,7 @@ pub enum CaptureH2Error {
 
 /// Which passes a run makes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Passes {
     /// The HTTP/2 pass, then the HTTP/1.1 pass.
     Both,

@@ -151,6 +151,7 @@ impl fmt::Debug for StoredCookie {
 /// Where a request comes from relative to its target, which decides the `SameSite` rules
 /// (RFC 6265bis section 5.2).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub enum SiteContext {
     /// The request comes from the target's own site: every cookie may be sent.
     SameSite {
@@ -197,6 +198,7 @@ pub enum SetCookieOutcome {
 
 /// Why a cookie was refused.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub enum IgnoreReason {
     /// The header or cookie is malformed: a control character, no name and no value, a `;` or
     /// `=` where none may be, or a domain or path that is not a valid host or path.

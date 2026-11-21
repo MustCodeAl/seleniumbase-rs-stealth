@@ -70,6 +70,12 @@ Only `scrape` and `mimic` were affected; `codec` holds no fingerprint.
   `try_new`. Rename the calls; the check, the error (`GeoError::InvalidCountry`) and the
   `FromStr`, `TryFrom<String>` and serde forms are the same.
 
+- **Closed-set enums that may grow are `#[non_exhaustive]`**: `IgnoreReason` and `SiteContext`
+  (`jar::store`), `Escalation` (`passport::policy`), `Passes`, `Protocol` and `Seen`
+  (`capture_h2`, wire), `Ja4Order` and `Ja4Section` (codec). A `match` on one outside its crate
+  needs a `_` arm; building a variant, comparing and the serde forms are unchanged. No match
+  elsewhere in the workspace broke, so no arm was added.
+
 
 - **`WireFormat` and its builder read the identity from core's types** (design note rows
   "`ImpersonationProfile`", "`CustomProfileBuilder::*`", "Accept-Language from a language list"
