@@ -52,6 +52,15 @@ impl TryFrom<String> for CountryCode {
     }
 }
 
+impl std::str::FromStr for CountryCode {
+    type Err = GeoError;
+
+    /// Reads a two-letter code, as [`CountryCode::new`] does.
+    fn from_str(code: &str) -> Result<Self, Self::Err> {
+        Self::new(code)
+    }
+}
+
 impl From<CountryCode> for String {
     fn from(code: CountryCode) -> Self {
         code.as_str().to_owned()
@@ -60,6 +69,7 @@ impl From<CountryCode> for String {
 
 /// Why a geo lookup or a country code was refused.
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum GeoError {
     /// The text is not a two-letter country code.
     #[error("`{0}` is not an ISO 3166-1 alpha-2 country code")]
@@ -263,6 +273,13 @@ mod tests {
         let err = CountryCode::new("DEU").expect_err("three letters");
         assert!(matches!(&err, GeoError::InvalidCountry(code) if code == "DEU"));
         assert!(err.to_string().contains("DEU"));
+    }
+
+    #[test]
+    fn a_country_code_is_read_with_from_str_as_with_new() {
+        assert_eq!("de".parse::<CountryCode>().expect("valid"), country("DE"));
+        let err = "DEU".parse::<CountryCode>().expect_err("three letters");
+        assert!(matches!(err, GeoError::InvalidCountry(code) if code == "DEU"));
     }
 
     #[test]

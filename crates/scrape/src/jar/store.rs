@@ -627,6 +627,7 @@ fn check_times(index: usize, cookie: &StoredCookie) -> Result<(), JarError> {
 
 /// Why a serialized jar was refused.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[non_exhaustive]
 pub enum JarError {
     /// A stored cookie breaks a rule the jar enforces.
     #[error("stored cookie {index} is refused: {reason:?}")]

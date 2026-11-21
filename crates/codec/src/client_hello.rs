@@ -145,6 +145,7 @@ pub struct ClientHello {
 
 /// Why a byte stream is not a usable `ClientHello`.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
+#[non_exhaustive]
 pub enum ClientHelloError {
     /// The first record is not a TLS handshake record.
     #[error("the bytes do not start with a TLS handshake record")]

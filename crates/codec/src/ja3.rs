@@ -53,6 +53,7 @@ impl fmt::Display for Ja3Field {
 
 /// Why a JA3 string was refused.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
+#[non_exhaustive]
 pub enum Ja3Error {
     /// The string does not have exactly five comma-separated fields.
     #[error("a JA3 string has 5 comma-separated fields, found {0}")]
@@ -450,6 +451,7 @@ pub mod peetprint {
 
     /// Why a peetprint string was refused.
     #[derive(Debug, Clone, PartialEq, Eq, Error)]
+#[non_exhaustive]
     pub enum PeetprintError {
         /// The string does not have exactly eight `|` separated fields.
         #[error("a peetprint has 8 fields separated by `|`, found {0}")]

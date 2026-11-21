@@ -97,6 +97,7 @@ impl fmt::Display for Ja4Section {
 
 /// Why a JA4 string was refused.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
+#[non_exhaustive]
 pub enum Ja4Error {
     /// The string has the wrong number of `_` separated sections.
     #[error("a JA4 string has 3 sections (4 when raw and signed), found {0}")]

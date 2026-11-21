@@ -304,6 +304,7 @@ pub fn has_forbidden_control(text: &str) -> bool {
 
 /// Why a `Set-Cookie` header was refused as a whole.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[non_exhaustive]
 pub enum SetCookieError {
     /// The header holds a control character other than a tab.
     #[error("the header holds a control character")]
