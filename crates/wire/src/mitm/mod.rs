@@ -808,7 +808,7 @@ impl MitmProxy {
     ///
     /// A start page already set on `options` is kept; an `http://` or `https://` one takes the
     /// credentials as well, as any page through the proxy does, but an `about:` or `data:` one does
-    /// not. A start page set after this call, with [`LaunchOptions::with_url`], replaces the
+    /// not. A start page set after this call, through [`LaunchOptions::into_builder`], replaces the
     /// priming page.
     ///
     /// # Errors
@@ -820,13 +820,14 @@ impl MitmProxy {
         options: LaunchOptions,
     ) -> Result<LaunchOptions, SeleniumBaseError> {
         let prime = options.url().is_none().then(|| self.prime_url());
-        let options = options
-            .with_proxy(self.inner.spec.expose())?
-            .with_args(self.launch_args())?;
-        match prime {
-            Some(url) => options.with_url(url),
-            None => Ok(options),
+        let mut builder = options.into_builder().proxy(self.inner.spec.expose());
+        for arg in self.launch_args() {
+            builder = builder.arg(arg);
         }
+        if let Some(url) = prime {
+            builder = builder.url(url);
+        }
+        builder.build()
     }
 
     /// The counts so far.

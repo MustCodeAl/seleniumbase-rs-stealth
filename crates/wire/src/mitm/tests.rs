@@ -465,7 +465,7 @@ async fn the_launch_opens_the_priming_page_unless_it_has_a_start_page_already() 
         .expect("valid launch options");
     let replaced = mitm
         .configure_launch(LaunchOptions::default())
-        .and_then(|options| options.with_url("https://example.org/"))
+        .and_then(|options| options.into_builder().url("https://example.org/").build())
         .expect("valid launch options");
 
     assert_eq!(primed.url(), Some(mitm.prime_url().as_str()));

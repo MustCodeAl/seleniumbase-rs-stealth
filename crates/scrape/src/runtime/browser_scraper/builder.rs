@@ -363,7 +363,12 @@ async fn start_persona(
 
 /// Starts a headless browser to read the version of Chrome, and closes it.
 async fn probe_major(wiring: &Wiring) -> Result<Option<u32>, ScrapeError> {
-    let options = wiring.launch.clone().with_headless(true)?;
+    let options = wiring
+        .launch
+        .clone()
+        .into_builder()
+        .headless(true)
+        .build()?;
     let probe = wiring.launcher.launch(options).await?;
     let major = browser_major(&probe).await;
     if let Err(error) = probe.close().await {

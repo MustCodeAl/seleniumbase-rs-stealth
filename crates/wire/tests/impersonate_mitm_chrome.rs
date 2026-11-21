@@ -120,17 +120,23 @@ async fn launch_any(options: LaunchOptions) -> Browser {
     );
     browser.close().await.expect("Chrome closes");
     let own = options
-        .with_args([format!(
+        .into_builder()
+        .arg(format!(
             "--user-agent={}",
             profile().client_headers().user_agent
-        )])
+        ))
+        .build()
         .expect("valid launch options");
     start(own).await
 }
 
 /// Starts a headless browser with `builder`.
 async fn start(options: LaunchOptions) -> Browser {
-    let options = options.with_headless(true).expect("valid launch options");
+    let options = options
+        .into_builder()
+        .headless(true)
+        .build()
+        .expect("valid launch options");
     Browser::launch(options).await.expect("Chrome starts")
 }
 
