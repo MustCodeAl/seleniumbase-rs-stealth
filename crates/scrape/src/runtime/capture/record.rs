@@ -9,7 +9,7 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
-use chrono::{DateTime, Utc};
+use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 
@@ -439,8 +439,8 @@ impl MeasuredFile {
     }
 
     /// Updates `provenance`: the date, the browser and the tool, which is merged with the tools
-    /// that already wrote the file.
-    pub fn stamp(&mut self, tool: &str, version: &BrowserVersion, now: DateTime<Utc>) {
+    /// that already wrote the file. `captured_on` is the UTC date of `now`, like `2026-10-11`.
+    pub fn stamp(&mut self, tool: &str, version: &BrowserVersion, now: Timestamp) {
         let known_gaps = self
             .doc
             .get("provenance")
@@ -457,7 +457,7 @@ impl MeasuredFile {
         self.doc.insert(
             "provenance".to_owned(),
             json!({
-                "captured_on": now.format("%Y-%m-%d").to_string(),
+                "captured_on": now.strftime("%Y-%m-%d").to_string(),
                 "tool": tools,
                 "browser": version.label(),
                 "known_gaps": known_gaps,

@@ -1,6 +1,6 @@
 //! The cookie-date parser of RFC 6265 section 5.1.1, used by the `Expires` attribute.
 
-use chrono::NaiveDate;
+use jiff::civil::{Date, DateTime, Time};
 
 use super::DECIMAL;
 
@@ -45,6 +45,11 @@ const MAX_HOUR: u32 = 23;
 
 /// The largest minute or second a cookie date may name; leap seconds cannot be written.
 const MAX_MINUTE_OR_SECOND: u32 = 59;
+
+/// The Unix epoch as a civil date and time, which a cookie date is counted from. A civil
+/// difference has no time zone and no instant range, so every date a four-digit year can name
+/// works, `Fri, 31 Dec 9999 23:59:59 GMT` included; a jiff `Timestamp` ends on 9999-12-30.
+const UNIX_EPOCH: DateTime = jiff::civil::date(1970, 1, 1).at(0, 0, 0, 0);
 
 /// Parses a cookie date (RFC 6265 section 5.1.1) into seconds since the Unix epoch.
 ///
@@ -121,9 +126,24 @@ impl DateFields {
         if !in_range {
             return None;
         }
-        let date = NaiveDate::from_ymd_opt(i32::try_from(year).ok()?, month, day)?;
-        let at = date.and_hms_opt(hour, minute, second)?;
-        Some(at.and_utc().timestamp())
+        let date = Date::new(
+            i16::try_from(year).ok()?,
+            i8::try_from(month).ok()?,
+            i8::try_from(day).ok()?,
+        )
+        .ok()?;
+        let time = Time::new(
+            i8::try_from(hour).ok()?,
+            i8::try_from(minute).ok()?,
+            i8::try_from(second).ok()?,
+            0,
+        )
+        .ok()?;
+        Some(
+            DateTime::from_parts(date, time)
+                .duration_since(UNIX_EPOCH)
+                .as_secs(),
+        )
     }
 }
 
@@ -186,11 +206,11 @@ mod tests {
         parse_cookie_date(text)
     }
 
-    fn epoch(y: i32, mo: u32, d: u32, h: u32, mi: u32, s: u32) -> i64 {
-        NaiveDate::from_ymd_opt(y, mo, d)
-            .and_then(|day| day.and_hms_opt(h, mi, s))
-            .map(|at| at.and_utc().timestamp())
-            .expect("valid test date")
+    fn epoch(y: i16, mo: i8, d: i8, h: i8, mi: i8, s: i8) -> i64 {
+        jiff::civil::date(y, mo, d)
+            .at(h, mi, s, 0)
+            .duration_since(UNIX_EPOCH)
+            .as_secs()
     }
 
     #[test]
@@ -245,14 +265,77 @@ mod tests {
         }
     }
 
+    /// The epochs below are fixed numbers, not computed by a date library, so they pin what the
+    /// parser answers whichever library it uses.
+    #[test]
+    fn known_dates_give_their_literal_epoch_seconds() {
+        for (text, secs) in [
+            ("Sun, 06 Nov 1994 08:49:37 GMT", 784_111_777),
+            ("Sunday, 06-Nov-94 08:49:37 GMT", 784_111_777),
+            ("Sun Nov  6 08:49:37 1994", 784_111_777),
+            ("Thu, 01 Jan 1970 00:00:00 GMT", 0),
+            ("Wed, 31 Dec 1969 23:59:59 GMT", -1),
+            ("Mon, 01 Jan 1601 00:00:00 GMT", -11_644_473_600),
+            ("Thu, 29 Feb 2024 00:00:00 GMT", 1_709_164_800),
+            ("Tue, 29 Feb 2000 00:00:00 GMT", 951_782_400),
+            ("Fri, 31 Dec 9999 23:59:59 GMT", 253_402_300_799),
+        ] {
+            assert_eq!(date(text), Some(secs), "{text}");
+        }
+    }
+
+    #[test]
+    fn every_month_ends_on_its_last_day() {
+        const LAST_DAYS: [(&str, u32); 12] = [
+            ("Jan", 31),
+            ("Feb", 28),
+            ("Mar", 31),
+            ("Apr", 30),
+            ("May", 31),
+            ("Jun", 30),
+            ("Jul", 31),
+            ("Aug", 31),
+            ("Sep", 30),
+            ("Oct", 31),
+            ("Nov", 30),
+            ("Dec", 31),
+        ];
+        for (month, last) in LAST_DAYS {
+            let on_the_last = format!("{last} {month} 2023 12:00:00");
+            let after_it = format!("{} {month} 2023 12:00:00", last + 1);
+            assert!(date(&on_the_last).is_some(), "{on_the_last}");
+            assert_eq!(date(&after_it), None, "{after_it}");
+        }
+    }
+
+    #[test]
+    fn a_leap_day_exists_only_in_a_leap_year() {
+        for year in [2000, 2024, 2096] {
+            let text = format!("29 Feb {year} 00:00:00");
+            assert!(date(&text).is_some(), "{text}");
+        }
+        for year in [1900, 2023, 2100, 2025] {
+            let text = format!("29 Feb {year} 00:00:00");
+            assert_eq!(date(&text), None, "{text}");
+        }
+    }
+
+    /// The civil date and time `secs` seconds after the Unix epoch, when a year of four digits
+    /// holds it.
+    fn at_epoch_seconds(secs: i64) -> Option<DateTime> {
+        UNIX_EPOCH
+            .checked_add(jiff::SignedDuration::from_secs(secs))
+            .ok()
+    }
+
     #[test]
     fn generated_epochs_survive_a_format_and_parse_round_trip() {
         let mut rng = Rng::new(42);
         let span = u64::try_from(epoch(9999, 12, 31, 23, 59, 59)).expect("positive");
         for _ in 0..5_000 {
             let secs = i64::try_from(rng.next_u64() % span).expect("in range");
-            let at = chrono::DateTime::from_timestamp(secs, 0).expect("in range");
-            let text = at.format("%a, %d %b %Y %H:%M:%S GMT").to_string();
+            let at = at_epoch_seconds(secs).expect("in range");
+            let text = at.strftime("%a, %d %b %Y %H:%M:%S GMT").to_string();
             assert_eq!(date(&text), Some(secs), "{text}");
         }
     }
@@ -267,10 +350,7 @@ mod tests {
             let len = rng.next_u64() % 12;
             let text: String = (0..len).map(|_| *rng.pick(&PIECES)).collect();
             if let Some(secs) = parse_cookie_date(&text) {
-                assert!(
-                    chrono::DateTime::from_timestamp(secs, 0).is_some(),
-                    "{text:?}"
-                );
+                assert!(at_epoch_seconds(secs).is_some(), "{text:?}");
             }
         }
     }

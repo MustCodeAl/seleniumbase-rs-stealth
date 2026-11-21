@@ -67,7 +67,7 @@ async fn chrome_hellos_parse_and_the_saved_json_round_trips() {
     let mut file = MeasuredFile::open(dir.path(), id).expect("opens");
     file.set_identity(id, &version);
     file.set_tls(&tls).expect("tls");
-    file.stamp("capture_tls test", &version, chrono::Utc::now());
+    file.stamp("capture_tls test", &version, jiff::Timestamp::now());
     file.save().expect("saves");
     let reread = MeasuredFile::open(dir.path(), id).expect("reopens");
     let spec: TlsSpec =

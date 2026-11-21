@@ -34,7 +34,7 @@ fn both_passes_write_the_evidence_the_specs_and_the_fixtures() {
         Some(h2),
         Some(h1),
         "capture_h2 9.9.9",
-        chrono::Utc::now(),
+        jiff::Timestamp::now(),
     )
     .expect("writes");
 
@@ -54,6 +54,27 @@ fn both_passes_write_the_evidence_the_specs_and_the_fixtures() {
 }
 
 #[test]
+fn the_run_stamps_the_file_with_the_day_of_the_instant_it_was_given() {
+    let dir = tempfile::tempdir().expect("a temporary directory");
+    write_base(dir.path(), BASE_JSON);
+    let (h2, h1) = evidence();
+
+    write_result(
+        &args(dir.path()),
+        version(FULL),
+        Some(h2),
+        Some(h1),
+        "capture_h2 9.9.9",
+        super::utc(2026, 3, 4, 23, 59, 59),
+    )
+    .expect("writes");
+
+    let provenance = &saved(dir.path())["provenance"];
+    assert_eq!(provenance["captured_on"], "2026-03-04");
+    assert_eq!(provenance["tool"], "capture_h2 9.9.9; capture_tls 0.1.0");
+}
+
+#[test]
 fn a_single_pass_keeps_the_stored_evidence_of_the_other() {
     let dir = tempfile::tempdir().expect("a temporary directory");
     write_base(dir.path(), BASE_JSON);
@@ -65,7 +86,7 @@ fn a_single_pass_keeps_the_stored_evidence_of_the_other() {
         Some(h2.clone()),
         None,
         "capture_h2 9.9.9",
-        chrono::Utc::now(),
+        jiff::Timestamp::now(),
     )
     .expect("writes the HTTP/2 pass");
     assert!(
@@ -82,7 +103,7 @@ fn a_single_pass_keeps_the_stored_evidence_of_the_other() {
         None,
         Some(h1),
         "capture_h2 9.9.9",
-        chrono::Utc::now(),
+        jiff::Timestamp::now(),
     )
     .expect("writes the HTTP/1.1 pass");
     assert!(
@@ -108,7 +129,7 @@ fn a_run_without_a_base_file_or_for_another_version_writes_nothing() {
             Some(h2.clone()),
             Some(h1.clone()),
             "capture_h2 9.9.9",
-            chrono::Utc::now(),
+            jiff::Timestamp::now(),
         )
     };
 

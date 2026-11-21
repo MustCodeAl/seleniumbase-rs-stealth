@@ -59,7 +59,7 @@ async fn run() -> Result<(), CaptureError> {
     let mut file = MeasuredFile::open(&args.out_dir, id)?;
     file.set_identity(id, &version);
     file.set_hints(&hints)?;
-    file.stamp(TOOL, &version, chrono::Utc::now());
+    file.stamp(TOOL, &version, jiff::Timestamp::now());
     file.save()?;
 
     println!("browser      {} on {:?}", version.product, id.os);

@@ -45,7 +45,7 @@ async fn run() -> Result<(), CaptureH2Error> {
         );
         return Ok(());
     }
-    let report = measure_and_write(&args, passes, TOOL, chrono::Utc::now()).await?;
+    let report = measure_and_write(&args, passes, TOOL, jiff::Timestamp::now()).await?;
     print_report(&report);
     Ok(())
 }

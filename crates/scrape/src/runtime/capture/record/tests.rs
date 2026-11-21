@@ -1,6 +1,7 @@
 //! Tests of the capture record types, the measurement and the JSON file.
 
-use chrono::TimeZone;
+use jiff::civil::date;
+use jiff::tz::TimeZone;
 use serde_json::json;
 
 use super::*;
@@ -43,6 +44,19 @@ fn version() -> BrowserVersion {
         "userAgent": MAC_UA,
     }))
     .expect("a Chrome version")
+}
+
+/// The measured file the codec crate commits. The tools wrote it before the move to jiff, so a
+/// load, a stamp and a save of it show that what they write is still what they read.
+const COMMITTED: &str = include_str!("../../../../../codec/src/measured/chrome-155-macos.json");
+
+/// An instant in UTC.
+fn utc(year: i16, month: i8, day: i8, hour: i8, minute: i8, second: i8) -> Timestamp {
+    date(year, month, day)
+        .at(hour, minute, second, 0)
+        .to_zoned(TimeZone::UTC)
+        .expect("a valid time")
+        .timestamp()
 }
 
 fn permuted_measurement() -> TlsMeasurement {
@@ -385,10 +399,7 @@ fn a_new_measured_file_is_empty() {
 fn the_tools_fill_one_file_between_them() {
     let dir = tempfile::tempdir().expect("a temporary directory");
     let measurement = permuted_measurement();
-    let now = chrono::Utc
-        .with_ymd_and_hms(2026, 10, 11, 9, 30, 0)
-        .single()
-        .expect("a valid time");
+    let now = utc(2026, 10, 11, 9, 30, 0);
     let mut file = MeasuredFile::open(dir.path(), id()).expect("open");
 
     file.set_identity(id(), &version());
@@ -435,6 +446,51 @@ fn the_tools_fill_one_file_between_them() {
 }
 
 #[test]
+fn a_committed_measured_file_reads_and_writes_back_as_it_was() {
+    let dir = tempfile::tempdir().expect("a temporary directory");
+    std::fs::write(dir.path().join(id().file_name()), COMMITTED).expect("seeded");
+    let mut file = MeasuredFile::open(dir.path(), id()).expect("opens");
+
+    assert_eq!(file.to_pretty_json().expect("json"), COMMITTED);
+    file.stamp(
+        "capture_h2 0.1.0",
+        &version(),
+        utc(2026, 10, 11, 23, 59, 59),
+    );
+    assert_eq!(
+        file.to_pretty_json().expect("json"),
+        COMMITTED,
+        "stamping the day the file was captured on writes the text it already has"
+    );
+    file.save().expect("saves");
+    assert_eq!(
+        std::fs::read_to_string(file.path()).expect("reads"),
+        COMMITTED
+    );
+}
+
+#[test]
+fn the_capture_day_is_the_utc_date_of_the_instant() {
+    let dir = tempfile::tempdir().expect("a temporary directory");
+    let mut file = MeasuredFile::open(dir.path(), id()).expect("open");
+
+    for (at, day) in [
+        (utc(2026, 10, 11, 0, 0, 0), "2026-10-11"),
+        (utc(2026, 10, 11, 23, 59, 59), "2026-10-11"),
+        (utc(2026, 10, 12, 0, 0, 0), "2026-10-12"),
+        (utc(2026, 1, 5, 12, 0, 0), "2026-01-05"),
+        (utc(2028, 2, 29, 23, 0, 0), "2028-02-29"),
+        (utc(2026, 12, 31, 23, 59, 59), "2026-12-31"),
+    ] {
+        file.stamp("capture_tls 0.1.0", &version(), at);
+        assert_eq!(
+            file.get("provenance").expect("provenance")["captured_on"],
+            day
+        );
+    }
+}
+
+#[test]
 fn a_tool_keeps_the_keys_it_does_not_own() {
     let dir = tempfile::tempdir().expect("a temporary directory");
     let path = dir.path().join("chrome-155-macos.json");
@@ -456,7 +512,7 @@ fn known_gaps_survive_a_later_stamp() {
         .grease()
         .record();
     let measurement = TlsMeasurement::from_hellos(&[raw], None).expect("one hello");
-    let now = chrono::Utc::now();
+    let now = jiff::Timestamp::now();
     let mut file = MeasuredFile::open(dir.path(), id()).expect("open");
 
     file.set_tls(&measurement).expect("tls");

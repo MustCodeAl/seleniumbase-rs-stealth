@@ -48,9 +48,14 @@ async fn chrome_http2_and_headers_have_the_chrome_shape_and_the_json_round_trips
     args.fixtures_dir = dir.path().join("fixtures");
     args.chrome.no_sandbox = std::env::var_os("CI").is_some();
 
-    let report = measure_and_write(&args, Passes::Both, "capture_h2 test", chrono::Utc::now())
-        .await
-        .expect("the capture works");
+    let report = measure_and_write(
+        &args,
+        Passes::Both,
+        "capture_h2 test",
+        jiff::Timestamp::now(),
+    )
+    .await
+    .expect("the capture works");
 
     let derived = report.derived.as_ref().expect("both passes ran");
     let akamai = derived.http2.akamai();

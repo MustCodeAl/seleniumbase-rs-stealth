@@ -49,7 +49,7 @@ async fn run() -> Result<(), CaptureError> {
     let mut file = MeasuredFile::open(&args.out_dir, id)?;
     file.set_identity(id, &version);
     file.set_tls(&tls)?;
-    file.stamp(TOOL, &version, chrono::Utc::now());
+    file.stamp(TOOL, &version, jiff::Timestamp::now());
     file.save()?;
     let fixtures = write_fixtures(&args.fixtures_dir, id, &tls)?;
 

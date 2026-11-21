@@ -13,7 +13,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use chrono::{DateTime, Utc};
+use jiff::Timestamp;
 use serde_json::{json, Map, Value};
 
 use super::assemble::{Derived, H1Evidence, H2Evidence};
@@ -153,8 +153,8 @@ impl MeasuredDoc {
     }
 
     /// Updates the provenance: the date, the browser, and the tool merged with the tools that
-    /// already wrote the file. The known gaps are kept.
-    pub fn stamp(&mut self, tool: &str, version: &BrowserVersion, now: DateTime<Utc>) {
+    /// already wrote the file. The known gaps are kept. `captured_on` is the UTC date of `now`.
+    pub fn stamp(&mut self, tool: &str, version: &BrowserVersion, now: Timestamp) {
         let existing = self.doc.get("provenance");
         let known_gaps = existing
             .and_then(|provenance| provenance.get("known_gaps"))
@@ -169,7 +169,7 @@ impl MeasuredDoc {
         self.doc.insert(
             "provenance".to_owned(),
             json!({
-                "captured_on": now.format("%Y-%m-%d").to_string(),
+                "captured_on": now.strftime("%Y-%m-%d").to_string(),
                 "tool": tools,
                 "browser": version.label(),
                 "known_gaps": known_gaps,

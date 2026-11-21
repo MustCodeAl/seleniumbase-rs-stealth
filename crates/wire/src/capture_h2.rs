@@ -38,7 +38,7 @@ pub mod store;
 
 use std::path::{Path, PathBuf};
 
-use chrono::{DateTime, Utc};
+use jiff::Timestamp;
 use thiserror::Error;
 
 pub use assemble::{derive, h1_evidence, h2_evidence, Derived, H1Evidence, H2Evidence};
@@ -248,7 +248,7 @@ pub async fn measure_and_write(
     args: &ToolArgs,
     passes: Passes,
     tool: &str,
-    now: DateTime<Utc>,
+    now: Timestamp,
 ) -> Result<Report, CaptureH2Error> {
     let mut version = None;
     let mut h2 = None;
@@ -292,7 +292,7 @@ fn write_result(
     new_h2: Option<Vec<H2Evidence>>,
     new_h1: Option<Vec<H1Evidence>>,
     tool: &str,
-    now: DateTime<Utc>,
+    now: Timestamp,
 ) -> Result<Report, CaptureH2Error> {
     let id = EntryId {
         kind: Browser::Chrome,

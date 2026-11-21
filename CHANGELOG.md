@@ -53,6 +53,19 @@ Only `scrape` and `mimic` were affected; `codec` holds no fingerprint.
   enums of the crates were. A `match` on one outside its crate needs a `_` arm. `CountryCode`
   implements `FromStr` (`"de".parse::<CountryCode>()`), the same check as `CountryCode::new`.
 
+- **Instants are jiff's, and chrono is gone** (the scrape and wire crates were the last to use it;
+  core moved in 0.8.5). `MeasuredFile::stamp` (scrape), `MeasuredDoc::stamp` and
+  `measure_and_write` (wire) take a `jiff::Timestamp` in place of chrono's `DateTime<Utc>`; pass
+  `jiff::Timestamp::now()` for the present. Both crates depend on `jiff` 0.2, as core does, and
+  neither on `chrono`. `parse_cookie_date` reads the date with jiff's civil types and answers what
+  it answered: every format it accepted still parses to the same seconds since the Unix epoch,
+  `Fri, 31 Dec 9999 23:59:59 GMT` and `Mon, 01 Jan 1601 00:00:00 GMT` included. What is saved keeps
+  its text: `provenance.captured_on` is the UTC date as `2026-10-11`, and the measured file committed
+  before the change (`crates/codec/src/measured/chrome-155-macos.json`) loads and saves back byte
+  for byte, with a stamp of its own day, in tests of both crates.
+  `deny.toml` no longer ignores RUSTSEC-2026-0543: `cargo tree -i chrono --workspace
+  --all-features` finds no package, and `Cargo.lock` has no `chrono` or `iana-time-zone`.
+
 
 - **`WireFormat` and its builder read the identity from core's types** (design note rows
   "`ImpersonationProfile`", "`CustomProfileBuilder::*`", "Accept-Language from a language list"

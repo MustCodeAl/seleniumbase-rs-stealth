@@ -13,9 +13,11 @@ workspace = true
 seleniumbase-rs.workspace = true
 seleniumbase-rs-codec.workspace = true
 async-trait = "0.1"
-chrono = "0.4"
 futures-util = { version = "0.3", default-features = false, features = ["std", "sink"] }
 http = "1.5"
+# Every instant the crate takes, gives or parses is jiff's: `Timestamp` in the capture API, civil
+# dates in the cookie-date parser. The same version as the core crate.
+jiff = "0.2.38"
 psl = { version = "2.1.241" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

@@ -12,9 +12,10 @@ all-features = true
 [advisories]
 # Each ignore needs a rationale and, where the fix is upstream, a pointer to what we are
 # waiting on.
-ignore = [
-    { id = "RUSTSEC-2026-0543", reason = "chrono is unmaintained, with no safe upgrade (2026-11-21). The scrape and wire crates take and give chrono's DateTime<Utc> in their capture API (the `stamp` methods, `measure_and_write`) and parse cookie dates with it; the core crate dropped chrono in 0.8.5. Moving them to `time` or `jiff` changes that public API and the stored timestamp text, so it is its own lane; an unmaintained notice, not a vulnerability." },
-]
+# None is needed now. RUSTSEC-2026-0543 (chrono is unmaintained) was ignored while the scrape and
+# wire crates used chrono; they use jiff, and nothing else in the workspace pulls chrono in
+# (`cargo tree -i chrono --workspace --all-features` finds no package).
+ignore = []
 
 [licenses]
 allow = [

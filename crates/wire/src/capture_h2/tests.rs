@@ -9,6 +9,10 @@ mod site;
 
 use std::path::Path;
 
+use jiff::civil::date;
+use jiff::tz::TimeZone;
+use jiff::Timestamp;
+
 use super::assemble::{derive, h1_evidence, h2_evidence, H1Evidence, H2Evidence};
 use super::probes::{Probe, DOCUMENT, FETCH, IMAGE, PROBES, SCRIPT, STYLE};
 use super::site::{Observed, Seen};
@@ -548,6 +552,64 @@ pub(super) fn write_base(dir: &Path, text: &str) {
     std::fs::write(dir.join(entry().file_name()), text).expect("writes the base file");
 }
 
+/// The measured file the codec crate commits. The tools wrote it before the move to jiff, so a
+/// load, a stamp and a save of it show that what they write is still what they read.
+const COMMITTED: &str = include_str!("../../../codec/src/measured/chrome-155-macos.json");
+
+/// An instant in UTC.
+pub(super) fn utc(year: i16, month: i8, day: i8, hour: i8, minute: i8, second: i8) -> Timestamp {
+    date(year, month, day)
+        .at(hour, minute, second, 0)
+        .to_zoned(TimeZone::UTC)
+        .expect("a valid time")
+        .timestamp()
+}
+
+#[test]
+fn a_committed_measured_file_reads_and_writes_back_as_it_was() {
+    let dir = tempfile::tempdir().expect("a temporary directory");
+    write_base(dir.path(), COMMITTED);
+    let mut doc = MeasuredDoc::open(dir.path(), entry(), &version("155.0.8059.40")).expect("opens");
+
+    assert_eq!(doc.to_pretty_json().expect("json"), COMMITTED);
+    doc.stamp(
+        "capture_h2 0.1.0",
+        &version("155.0.8059.40"),
+        utc(2026, 10, 11, 23, 59, 59),
+    );
+    assert_eq!(
+        doc.to_pretty_json().expect("json"),
+        COMMITTED,
+        "stamping the day the file was captured on writes the text it already has"
+    );
+    doc.save().expect("saves");
+    assert_eq!(
+        std::fs::read_to_string(doc.path()).expect("reads"),
+        COMMITTED
+    );
+}
+
+#[test]
+fn the_capture_day_is_the_utc_date_of_the_instant() {
+    let dir = tempfile::tempdir().expect("a temporary directory");
+    write_base(dir.path(), BASE_JSON);
+    let mut doc = MeasuredDoc::open(dir.path(), entry(), &version("155.0.1.2")).expect("opens");
+
+    for (at, day) in [
+        (utc(2026, 10, 11, 0, 0, 0), "2026-10-11"),
+        (utc(2026, 10, 11, 23, 59, 59), "2026-10-11"),
+        (utc(2026, 10, 12, 0, 0, 0), "2026-10-12"),
+        (utc(2026, 1, 5, 12, 0, 0), "2026-01-05"),
+        (utc(2028, 2, 29, 23, 0, 0), "2028-02-29"),
+        (utc(2026, 12, 31, 23, 59, 59), "2026-12-31"),
+    ] {
+        doc.stamp("capture_h2 0.1.0", &version("155.0.1.2"), at);
+        let text = doc.to_pretty_json().expect("json");
+        let saved: serde_json::Value = serde_json::from_str(&text).expect("valid JSON");
+        assert_eq!(saved["provenance"]["captured_on"], day);
+    }
+}
+
 #[test]
 fn the_file_is_extended_and_every_other_key_is_kept() {
     let dir = tempfile::tempdir().expect("a temporary directory");
@@ -562,7 +624,7 @@ fn the_file_is_extended_and_every_other_key_is_kept() {
     doc.stamp(
         "capture_h2 9.9.9",
         &version("155.0.1.2"),
-        chrono::Utc::now(),
+        jiff::Timestamp::now(),
     );
     doc.save().expect("saves");
 
