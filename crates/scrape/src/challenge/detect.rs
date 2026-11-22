@@ -11,7 +11,7 @@ use seleniumbase_rs::sb_cdp::Captcha;
 
 /// How much of a body is scanned. Anything past this is ignored, so a huge response costs a
 /// bounded scan and a marker buried deep in it cannot be used as a verdict.
-pub const MAX_SCAN_BYTES: usize = 256 * 1024;
+pub const MAX_SCAN_BYTES: usize = 1024 * 1024;
 
 /// The status of a response that asks the client to slow down.
 const RATE_LIMITED_STATUS: u16 = 429;
