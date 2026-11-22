@@ -87,7 +87,9 @@ pub enum GeoError {
 /// That is lookups in [`LOCALES`] by country and by tag, and the move of an identity to a
 /// locale. Bring the trait into scope to call `Locale::for_country`, `Locale::by_tag` and
 /// `locale.localize(..)`.
-pub trait LocaleExt {
+///
+/// This trait is sealed and cannot be implemented for types outside `seleniumbase-rs-stealth`.
+pub trait LocaleExt: private::LocaleTarget {
     /// The first locale of `country` in [`LOCALES`]. The US has four time zones under one
     /// country code; the first of them is returned.
     #[must_use]
@@ -112,6 +114,14 @@ pub trait LocaleExt {
     /// Returns the [`FingerprintError`] of the core when the changed settings do not build into a
     /// fingerprint. A fingerprint that was built before does not fail.
     fn localize(&self, fingerprint: &Fingerprint) -> Result<Fingerprint, FingerprintError>;
+}
+
+mod private {
+    use super::*;
+
+    pub trait LocaleTarget {}
+
+    impl LocaleTarget for Locale {}
 }
 
 impl LocaleExt for Locale {
