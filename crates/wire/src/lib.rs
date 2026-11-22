@@ -16,6 +16,7 @@
 #![forbid(unsafe_code)]
 
 pub mod capture_h2;
+pub mod capture_h3;
 pub mod client;
 pub mod convert;
 #[cfg(feature = "http3")]

@@ -49,6 +49,7 @@ pub(super) struct Prepared {
     pub(super) headers: Vec<(String, String)>,
     pub(super) body: Option<Bytes>,
     pub(super) timeout: Option<std::time::Duration>,
+    pub(super) protocol: Option<crate::client::WireProtocol>,
 }
 
 impl std::fmt::Debug for Prepared {
@@ -62,6 +63,7 @@ impl std::fmt::Debug for Prepared {
             .field("headers", &names)
             .field("body_bytes", &self.body.as_ref().map(Bytes::len))
             .field("timeout", &self.timeout)
+            .field("protocol", &self.protocol)
             .finish()
     }
 }
@@ -209,6 +211,7 @@ pub struct HttpRequest<'a> {
     headers: Vec<(String, String)>,
     body: Option<Bytes>,
     timeout: Option<std::time::Duration>,
+    protocol: Option<crate::client::WireProtocol>,
     error: Option<HttpError>,
 }
 
@@ -224,6 +227,7 @@ impl std::fmt::Debug for HttpRequest<'_> {
             )
             .field("headers", &names)
             .field("body_bytes", &self.body.as_ref().map(Bytes::len))
+            .field("protocol", &self.protocol)
             .finish_non_exhaustive()
     }
 }
@@ -238,6 +242,7 @@ impl<'a> HttpRequest<'a> {
             headers: Vec::new(),
             body: None,
             timeout: None,
+            protocol: None,
             error: None,
         }
     }
@@ -312,6 +317,12 @@ impl<'a> HttpRequest<'a> {
         self
     }
 
+    /// Explicitly selects the wire protocol version to send this request with.
+    pub fn protocol(mut self, protocol: crate::client::WireProtocol) -> Self {
+        self.protocol = Some(protocol);
+        self
+    }
+
     /// Checks the request and turns it into what the hop loop runs.
     pub(super) fn prepare(self) -> Result<(&'a HttpSession, Prepared), HttpError> {
         if let Some(error) = self.error {
@@ -337,6 +348,7 @@ impl<'a> HttpRequest<'a> {
             headers: self.headers,
             body: self.body,
             timeout: self.timeout,
+            protocol: self.protocol,
         };
         Ok((self.session, prepared))
     }

@@ -41,7 +41,13 @@ struct Answer {
     status: u16,
     headers: ResponseHeaders,
     protocol: WireProtocol,
-    response: wreq::Response,
+    body_source: HopBody,
+}
+
+enum HopBody {
+    Wreq(Box<wreq::Response>),
+    #[cfg_attr(not(feature = "http3"), allow(dead_code))]
+    Direct(Bytes),
 }
 
 /// Runs a prepared request to its reply.
@@ -69,7 +75,7 @@ pub(super) async fn run(
             limits.follow_redirects,
         )?;
         let Some(next) = target else {
-            let body = read_body(&hop, answer.response, limits.max_body_bytes, deadline).await?;
+            let body = read_body(&hop, answer.body_source, limits.max_body_bytes, deadline).await?;
             let reply = HttpResponse {
                 status: answer.status,
                 url: hop.url,
@@ -85,7 +91,7 @@ pub(super) async fn run(
         if chain.len() >= limits.max_redirects {
             return Err(HttpError::TooManyRedirects(limits.max_redirects));
         }
-        drain(answer.response, deadline).await;
+        drain(answer.body_source, deadline).await;
         chain.push(RedactedUrl::new(next.as_str()));
         hop = hop.follow(answer.status, next);
     }
@@ -109,6 +115,17 @@ async fn exchange(
     shape: RequestShape,
     deadline: Instant,
 ) -> Result<Answer, HttpError> {
+    #[cfg(feature = "http3")]
+    if hop.protocol == Some(WireProtocol::Http3) {
+        return exchange_http3(session, hop, shape, deadline).await;
+    }
+    #[cfg(not(feature = "http3"))]
+    if hop.protocol == Some(WireProtocol::Http3) {
+        return Err(HttpError::Client {
+            kind: "HTTP/3 requested but the `http3` feature is not enabled",
+        });
+    }
+
     let inner = session.inner();
     if let Some(pacer) = &inner.pacer {
         pacer.acquire(&site_name(&hop.url)).await;
@@ -123,6 +140,8 @@ async fn exchange(
         .map_err(|error| failure(&hop.url, classify(&error)))?;
     let protocol = if response.version() == wreq::Version::HTTP_2 {
         WireProtocol::Http2
+    } else if response.version() == wreq::Version::HTTP_3 {
+        WireProtocol::Http3
     } else {
         WireProtocol::Http1
     };
@@ -133,7 +152,56 @@ async fn exchange(
         status: response.status().as_u16(),
         headers,
         protocol,
-        response,
+        body_source: HopBody::Wreq(Box::new(response)),
+    })
+}
+
+#[cfg(feature = "http3")]
+async fn exchange_http3(
+    session: &HttpSession,
+    hop: &Hop,
+    shape: RequestShape,
+    deadline: Instant,
+) -> Result<Answer, HttpError> {
+    use crate::http3::{Http3Client, Http3Options, Http3Request};
+    let inner = session.inner();
+    if let Some(pacer) = &inner.pacer {
+        pacer.acquire(&site_name(&hop.url)).await;
+    }
+    let context = super::cookies::context_for(shape, &hop.method, hop.crossed_site);
+    let cookie = inner.jar.header_for(&hop.url, context, session.now());
+    let mut req = Http3Request::new(hop.method.as_str(), hop.url.as_str());
+    if let Some(cookie_val) = cookie {
+        req = req.header("cookie", cookie_val);
+    }
+    for (name, val) in &hop.headers {
+        req = req.header(name.to_ascii_lowercase(), val);
+    }
+    if let Some(body) = &hop.body {
+        req = req.body(body.to_vec());
+    }
+    let now = Instant::now();
+    let timeout = if deadline > now {
+        deadline - now
+    } else {
+        std::time::Duration::from_millis(1)
+    };
+    req = req.timeout(timeout);
+
+    let profile = &session.inner().profile;
+    let options = Http3Options::new().for_version(profile.major(), profile.os());
+    let mut client = Http3Client::start(&options).map_err(|_err| HttpError::Client {
+        kind: "http3 helper missing or failed to start",
+    })?;
+    let resp = client.send(req).await.map_err(|_err| failure(&hop.url, "http3 send failed"))?;
+    let headers = ResponseHeaders::new(resp.headers().to_vec());
+    store_cookies(session, &hop.url, &headers);
+    remember(session, &hop.url, WireProtocol::Http3);
+    Ok(Answer {
+        status: resp.status(),
+        headers,
+        protocol: WireProtocol::Http3,
+        body_source: HopBody::Direct(Bytes::from(resp.body().to_vec())),
     })
 }
 
@@ -208,7 +276,7 @@ fn build_request(
     merge_headers(&mut list, &hop.headers);
     let leading: &[&'static str] = match wire {
         WireProtocol::Http1 => &[HOST_HEADER],
-        WireProtocol::Http2 => &[],
+        WireProtocol::Http2 | WireProtocol::Http3 => &[],
     };
     let (headers, order) = convert::wreq_headers(&list, leading).map_err(WireFormatError::from)?;
     let mut request = inner
@@ -225,13 +293,15 @@ fn build_request(
 
 /// Reads the short body of a redirect, so that its connection goes back to the pool. A long or
 /// slow body is dropped, which closes the connection.
-async fn drain(response: wreq::Response, deadline: Instant) {
-    let mut stream = std::pin::pin!(response.bytes_stream());
-    let mut seen = 0_usize;
-    while let Ok(Some(Ok(chunk))) = timeout_at(deadline, stream.next()).await {
-        seen = seen.saturating_add(chunk.len());
-        if seen > MAX_REDIRECT_DRAIN_BYTES {
-            break;
+async fn drain(body_source: HopBody, deadline: Instant) {
+    if let HopBody::Wreq(response) = body_source {
+        let mut stream = std::pin::pin!(response.bytes_stream());
+        let mut seen = 0_usize;
+        while let Ok(Some(Ok(chunk))) = timeout_at(deadline, stream.next()).await {
+            seen = seen.saturating_add(chunk.len());
+            if seen > MAX_REDIRECT_DRAIN_BYTES {
+                break;
+            }
         }
     }
 }
@@ -239,32 +309,42 @@ async fn drain(response: wreq::Response, deadline: Instant) {
 /// Reads the body of the last hop within `limit` bytes, counted after decompression.
 async fn read_body(
     hop: &Hop,
-    response: wreq::Response,
+    body_source: HopBody,
     limit: usize,
     deadline: Instant,
 ) -> Result<Bytes, HttpError> {
-    let promised = response.content_length();
-    if hop.method != Method::HEAD && promised.is_some_and(|bytes| bytes > limit as u64) {
-        return Err(HttpError::BodyTooLarge(limit));
-    }
-    let presize = promised
-        .and_then(|bytes| usize::try_from(bytes).ok())
-        .unwrap_or(0)
-        .min(limit)
-        .min(MAX_PRESIZE_BYTES);
-    let mut body = BytesMut::with_capacity(presize);
-    let mut stream = std::pin::pin!(response.bytes_stream());
-    while let Some(chunk) = timeout_at(deadline, stream.next())
-        .await
-        .map_err(|_elapsed| failure(&hop.url, TIMED_OUT))?
-    {
-        let chunk = chunk.map_err(|error| failure(&hop.url, classify(&error)))?;
-        if body.len().saturating_add(chunk.len()) > limit {
-            return Err(HttpError::BodyTooLarge(limit));
+    match body_source {
+        HopBody::Direct(bytes) => {
+            if hop.method != Method::HEAD && bytes.len() > limit {
+                return Err(HttpError::BodyTooLarge(limit));
+            }
+            Ok(bytes)
         }
-        body.extend_from_slice(&chunk);
+        HopBody::Wreq(response) => {
+            let promised = response.content_length();
+            if hop.method != Method::HEAD && promised.is_some_and(|bytes| bytes > limit as u64) {
+                return Err(HttpError::BodyTooLarge(limit));
+            }
+            let presize = promised
+                .and_then(|bytes| usize::try_from(bytes).ok())
+                .unwrap_or(0)
+                .min(limit)
+                .min(MAX_PRESIZE_BYTES);
+            let mut body = BytesMut::with_capacity(presize);
+            let mut stream = std::pin::pin!(response.bytes_stream());
+            while let Some(chunk) = timeout_at(deadline, stream.next())
+                .await
+                .map_err(|_elapsed| failure(&hop.url, TIMED_OUT))?
+            {
+                let chunk = chunk.map_err(|error| failure(&hop.url, classify(&error)))?;
+                if body.len().saturating_add(chunk.len()) > limit {
+                    return Err(HttpError::BodyTooLarge(limit));
+                }
+                body.extend_from_slice(&chunk);
+            }
+            Ok(body.freeze())
+        }
     }
-    Ok(body.freeze())
 }
 
 /// A failed request, in the words of [`HttpError::Request`].

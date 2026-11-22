@@ -37,6 +37,8 @@ pub(super) struct Hop {
     pub(super) body: Option<Bytes>,
     /// A hop of the chain has changed site.
     pub(super) crossed_site: bool,
+    /// Explicit wire protocol requested, if any.
+    pub(super) protocol: Option<crate::client::WireProtocol>,
 }
 
 impl Hop {
@@ -48,6 +50,7 @@ impl Hop {
             headers: prepared.headers,
             body: prepared.body,
             crossed_site: false,
+            protocol: prepared.protocol,
         }
     }
 
@@ -57,6 +60,7 @@ impl Hop {
         let crossed_site = self.crossed_site || site_name(&self.url) != site_name(&next);
         let (method, keep_body) = rewrite(&self.method, status);
         let body = if keep_body { self.body } else { None };
+        let protocol = self.protocol;
         let headers = self
             .headers
             .into_iter()
@@ -72,6 +76,7 @@ impl Hop {
             headers,
             body,
             crossed_site,
+            protocol,
         }
     }
 }
@@ -164,6 +169,7 @@ mod tests {
                 .collect(),
             body: body.map(|text| Bytes::from_static(text.as_bytes())),
             timeout: None,
+            protocol: None,
         })
     }
 

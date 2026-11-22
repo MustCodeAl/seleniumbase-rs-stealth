@@ -117,7 +117,7 @@ pub trait LocaleExt: private::LocaleTarget {
 }
 
 mod private {
-    use super::*;
+    use super::Locale;
 
     pub trait LocaleTarget {}
 

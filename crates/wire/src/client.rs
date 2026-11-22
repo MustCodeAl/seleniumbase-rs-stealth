@@ -147,6 +147,8 @@ pub enum WireProtocol {
     Http1,
     /// HTTP/2.
     Http2,
+    /// HTTP/3 (QUIC).
+    Http3,
 }
 
 /// A measured browser as data: what to send on the wire and in the headers to look like it.
@@ -417,7 +419,7 @@ impl WireFormat {
                 .map_or(list.len(), |index| index + 1);
             list.insert(after, (COOKIE_HEADER.to_owned(), cookie.to_owned()));
         }
-        if wire == WireProtocol::Http2 {
+        if wire == WireProtocol::Http2 || wire == WireProtocol::Http3 {
             let destination = list
                 .iter()
                 .find(|(name, _)| name.eq_ignore_ascii_case(SEC_FETCH_DEST))
@@ -445,7 +447,7 @@ impl WireFormat {
         let list = self.headers_for(shape, cookie, wire)?;
         let leading: &[&'static str] = match wire {
             WireProtocol::Http1 => &[HOST_HEADER],
-            WireProtocol::Http2 => &[],
+            WireProtocol::Http2 | WireProtocol::Http3 => &[],
         };
         let (headers, order) = convert::wreq_headers(&list, leading)?;
         Ok(request
