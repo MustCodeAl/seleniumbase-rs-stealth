@@ -16,7 +16,7 @@ wire = ["dep:seleniumbase-rs-wire", "scrape"]
 http3 = ["wire", "seleniumbase-rs-wire/http3"]
 
 [dependencies]
-seleniumbase-rs = { workspace = true }
+seleniumbase-rs = { workspace = true, features = ["plugins"] }
 seleniumbase-rs-codec = { workspace = true, optional = true }
 seleniumbase-rs-scrape = { workspace = true, optional = true }
 seleniumbase-rs-wire = { workspace = true, optional = true }

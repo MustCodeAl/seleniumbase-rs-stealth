@@ -14,6 +14,15 @@ pub use seleniumbase_rs::*;
 pub mod fingerprint;
 pub use fingerprint::{FingerprintGenerator, GeneratedFingerprint, ProfileFingerprint};
 
+pub mod script;
+pub use script::StealthScriptBundle;
+
+pub mod plugin;
+pub use plugin::StealthPlugin;
+
+pub mod ext;
+pub use ext::{StealthBaseCaseExt, StealthPageExt};
+
 #[cfg(feature = "codec")]
 #[doc(inline)]
 pub use seleniumbase_rs_codec as codec;
