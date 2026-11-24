@@ -101,7 +101,11 @@ impl Http3Options {
     }
 
     /// Sets the profile to match the specified Chromium major and operating system (e.g. `chrome-157-macos`).
-    pub fn for_version(mut self, major: u32, os: seleniumbase_rs::evasion::fingerprint::OsType) -> Self {
+    pub fn for_version(
+        mut self,
+        major: u32,
+        os: seleniumbase_rs::evasion::fingerprint::OsType,
+    ) -> Self {
         let os_slug = match os {
             seleniumbase_rs::evasion::fingerprint::OsType::Windows => "windows",
             seleniumbase_rs::evasion::fingerprint::OsType::Linux => "linux",

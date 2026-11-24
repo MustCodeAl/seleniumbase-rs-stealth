@@ -4,9 +4,9 @@
 //! the QUIC transport parameters in wire order, the HTTP/3 SETTINGS frame entries,
 //! and the pseudo-header order (`:method`, `:authority`, `:scheme`, `:path`).
 
+use seleniumbase_rs::evasion::fingerprint::OsType;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use seleniumbase_rs::evasion::fingerprint::OsType;
 
 fn default_major() -> u32 {
     157
@@ -127,7 +127,13 @@ impl H3Spec {
         settings: Vec<(u64, u64)>,
         pseudo_headers: Vec<String>,
     ) -> Result<Self, H3SpecError> {
-        Self::new_with_version(157, OsType::Macos, transport_parameters, settings, pseudo_headers)
+        Self::new_with_version(
+            157,
+            OsType::Macos,
+            transport_parameters,
+            settings,
+            pseudo_headers,
+        )
     }
 
     /// Builds an HTTP/3 specification with a specific Chromium major version and OS.
@@ -305,7 +311,9 @@ mod tests {
             Some(262_144)
         );
         assert_eq!(spec.setting(setting_id::QPACK_BLOCKED_STREAMS), Some(100));
-        assert!(spec.transport_parameter(transport_param_id::MAX_IDLE_TIMEOUT).is_some());
+        assert!(spec
+            .transport_parameter(transport_param_id::MAX_IDLE_TIMEOUT)
+            .is_some());
         assert_eq!(spec.initial_packet_size, Some(1250));
     }
 

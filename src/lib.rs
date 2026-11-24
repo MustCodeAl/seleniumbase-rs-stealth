@@ -11,6 +11,9 @@
 #[doc(inline)]
 pub use seleniumbase_rs::*;
 
+pub mod fingerprint;
+pub use fingerprint::{FingerprintGenerator, GeneratedFingerprint, ProfileFingerprint};
+
 #[cfg(feature = "codec")]
 #[doc(inline)]
 pub use seleniumbase_rs_codec as codec;

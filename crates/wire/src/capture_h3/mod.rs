@@ -26,18 +26,9 @@
     clippy::manual_is_multiple_of,
     reason = "compatibility across compiler targets"
 )]
-#![allow(
-    clippy::collapsible_if,
-    reason = "matches RFC decoding layout"
-)]
-#![allow(
-    clippy::match_same_arms,
-    reason = "explicit RFC wire type mapping"
-)]
-#![allow(
-    clippy::doc_markdown,
-    reason = "RFC terminology in doc comments"
-)]
+#![allow(clippy::collapsible_if, reason = "matches RFC decoding layout")]
+#![allow(clippy::match_same_arms, reason = "explicit RFC wire type mapping")]
+#![allow(clippy::doc_markdown, reason = "RFC terminology in doc comments")]
 
 pub mod h3wire;
 pub mod initial;

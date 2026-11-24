@@ -1988,7 +1988,7 @@ dependencies = [
 [[package]]
 name = "seleniumbase-rs"
 version = "0.8.7"
-source = "git+https://github.com/MustCodeAl/seleniumbase-rs#9baed7d16a87015464c44b83630de6a5628020d4"
+source = "git+https://github.com/MustCodeAl/seleniumbase-rs#9c2093b1f9062c06fd3e91e11501dc6659b44714"
 dependencies = [
  "anstream",
  "async-trait",
@@ -2067,6 +2067,8 @@ dependencies = [
  "seleniumbase-rs-codec",
  "seleniumbase-rs-scrape",
  "seleniumbase-rs-wire",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -3372,3 +3374,7 @@ dependencies = [
  "cc",
  "pkg-config",
 ]
+
+[[patch.unused]]
+name = "seleniumbase-rs"
+version = "0.9.1"

@@ -373,7 +373,8 @@ pub fn parse_client_hello(stream: &[u8]) -> Result<ClientHello, HelloState> {
             stream[0]
         )));
     }
-    let len = (usize::from(stream[1]) << 16) | (usize::from(stream[2]) << 8) | usize::from(stream[3]);
+    let len =
+        (usize::from(stream[1]) << 16) | (usize::from(stream[2]) << 8) | usize::from(stream[3]);
     if stream.len() < 4 + len {
         return Err(HelloState::Incomplete);
     }
@@ -385,7 +386,9 @@ pub fn parse_client_hello(stream: &[u8]) -> Result<ClientHello, HelloState> {
     let sid_len = usize::from(*body.get(pos).ok_or_else(|| bad("session id"))?);
     pos += 1 + sid_len;
     let suites_len = usize::from(be16(body, &mut pos).ok_or_else(|| bad("suites"))?);
-    let suite_bytes = body.get(pos..pos + suites_len).ok_or_else(|| bad("suites"))?;
+    let suite_bytes = body
+        .get(pos..pos + suites_len)
+        .ok_or_else(|| bad("suites"))?;
     let cipher_suites = suite_bytes
         .chunks(2)
         .filter(|c| c.len() == 2)
@@ -408,7 +411,9 @@ pub fn parse_client_hello(stream: &[u8]) -> Result<ClientHello, HelloState> {
     while pos < ext_end {
         let ty = be16(body, &mut pos).ok_or_else(|| bad("extension type"))?;
         let elen = usize::from(be16(body, &mut pos).ok_or_else(|| bad("extension length"))?);
-        let data = body.get(pos..pos + elen).ok_or_else(|| bad("extension data"))?;
+        let data = body
+            .get(pos..pos + elen)
+            .ok_or_else(|| bad("extension data"))?;
         pos += elen;
         extensions.push((ty, data.to_vec()));
     }
@@ -589,7 +594,9 @@ pub fn describe_extension(id: u16, data: &[u8]) -> Value {
         }
         0x000a | 0x000d => json!(u16_list(data.get(2..).unwrap_or_default())),
         0x000b | 0x002d => json!(hex(data.get(1..).unwrap_or_default())),
-        0x0010 | 0x4469 | 0x44cd => json!(length_prefixed_strings(data.get(2..).unwrap_or_default())),
+        0x0010 | 0x4469 | 0x44cd => {
+            json!(length_prefixed_strings(data.get(2..).unwrap_or_default()))
+        }
         0x001b | 0x002b => json!(u16_list(data.get(1..).unwrap_or_default())),
         0x0033 => {
             let mut shares = Vec::new();
@@ -712,7 +719,11 @@ mod tests {
         assert_eq!(ids.first(), Some(&0x0000));
         assert_eq!(ids.last(), Some(&0x0039));
 
-        let (_, data) = hello.extensions.iter().find(|(id, _)| *id == 0x0039).unwrap();
+        let (_, data) = hello
+            .extensions
+            .iter()
+            .find(|(id, _)| *id == 0x0039)
+            .unwrap();
         let params = parse_transport_params(data).unwrap();
         let order: Vec<u64> = params.iter().map(|p| p.id).collect();
         assert_eq!(order, [0x04, 0x05, 0x07, 0x08, 0x01, 0x09, 0x0f, 0x06]);
@@ -744,9 +755,15 @@ mod tests {
     #[test]
     fn crypto_frames_reassemble_out_of_order_and_overlapping() {
         let mut stream = CryptoStream::default();
-        stream.add(&CryptoFrame { offset: 3, data: b"def".to_vec() });
+        stream.add(&CryptoFrame {
+            offset: 3,
+            data: b"def".to_vec(),
+        });
         assert_eq!(stream.contiguous(), b"");
-        stream.add(&CryptoFrame { offset: 0, data: b"abcd".to_vec() });
+        stream.add(&CryptoFrame {
+            offset: 0,
+            data: b"abcd".to_vec(),
+        });
         assert_eq!(stream.contiguous(), b"abcdef");
     }
 }

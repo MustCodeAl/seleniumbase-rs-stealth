@@ -193,7 +193,10 @@ async fn exchange_http3(
     let mut client = Http3Client::start(&options).map_err(|_err| HttpError::Client {
         kind: "http3 helper missing or failed to start",
     })?;
-    let resp = client.send(req).await.map_err(|_err| failure(&hop.url, "http3 send failed"))?;
+    let resp = client
+        .send(req)
+        .await
+        .map_err(|_err| failure(&hop.url, "http3 send failed"))?;
     let headers = ResponseHeaders::new(resp.headers().to_vec());
     store_cookies(session, &hop.url, &headers);
     remember(session, &hop.url, WireProtocol::Http3);

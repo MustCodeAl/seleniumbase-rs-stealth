@@ -256,7 +256,8 @@ pub fn static_table() -> &'static Vec<(String, String)> {
         let mut rows: Vec<(usize, String, String)> = Vec::new();
         for line in include_str!("qpack_static_table.txt").lines() {
             let mut parts = line.splitn(3, '|');
-            if let (Some(index), Some(name), Some(value)) = (parts.next(), parts.next(), parts.next())
+            if let (Some(index), Some(name), Some(value)) =
+                (parts.next(), parts.next(), parts.next())
             {
                 if let Ok(index) = index.parse::<usize>() {
                     rows.push((index, name.to_owned(), value.to_owned()));
@@ -310,8 +311,7 @@ fn read_string(buf: &[u8], pos: &mut usize, flag_mask: u8, n: u8) -> Option<(Str
 pub fn decode_field_section(block: &[u8]) -> Result<FieldSection, String> {
     let table = static_table();
     let mut pos = 0;
-    let (_, required_insert_count) =
-        read_prefixed(block, &mut pos, 8).ok_or("truncated prefix")?;
+    let (_, required_insert_count) = read_prefixed(block, &mut pos, 8).ok_or("truncated prefix")?;
     let (sign, delta_base) = read_prefixed(block, &mut pos, 7).ok_or("truncated prefix")?;
     let mut fields = Vec::new();
     while pos < block.len() {
@@ -343,7 +343,11 @@ pub fn decode_field_section(block: &[u8]) -> Result<FieldSection, String> {
             let is_static = flags & 0x10 != 0;
             let index = index as usize;
             let name = if is_static {
-                table.get(index).ok_or("static index out of range")?.0.clone()
+                table
+                    .get(index)
+                    .ok_or("static index out of range")?
+                    .0
+                    .clone()
             } else {
                 format!("dynamic:{index}")
             };
@@ -483,7 +487,10 @@ mod tests {
             let parts: Vec<&str> = line.split_whitespace().collect();
             let len: u32 = parts[2].parse().unwrap();
             let code = u32::from_str_radix(parts[1], 16).unwrap();
-            assert!(u64::from(code) < 1_u64 << len, "code fits its length: {line}");
+            assert!(
+                u64::from(code) < 1_u64 << len,
+                "code fits its length: {line}"
+            );
             sum += 1_u128 << (30 - len);
             count += 1;
         }
