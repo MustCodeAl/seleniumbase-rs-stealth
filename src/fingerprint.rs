@@ -4,23 +4,29 @@
 //! 1. [`ProfileFingerprint`]: A unified JSON-serializable fingerprint model whose field
 //!    names align directly with the [`Fingerprint`] API methods (`user_agent`, `platform`,
 //!    `languages`, `hardware_concurrency`, `device_memory`, `webgl_vendor`, `webgl_renderer`,
-//!    `canvas_noise`, `audio_noise`, `webrtc_policy`) instead of obscure masked names.
-//! 2. [`FingerprintGenerator`]: An enriched generator supporting empirical distributions
-//!    from Scrapfly `fingerprint-generator`, Browserforge, and Apify `fingerprint-suite`
-//!    (screen resolutions, DPR, orientation, taskbar offsets, WebGL 1 & 2 parameter tables,
-//!    WebGPU adapter limits, high-entropy Client Hints, audio dynamics compressor,
-//!    synthetic media devices, battery, and network metadata).
+//!    `canvas_noise`, `audio_noise`, `webrtc_policy`) with zero legacy aliases.
+//! 2. [`FingerprintGenerator`]: A seeded generator producing correlated display geometry,
+//!    color gamut, HDR, GPU/WebGL 1 & 2 parameter tables, WebGPU adapter limits and info,
+//!    high-entropy Client Hints with GREASE brands and known Chromium builds, Web Audio
+//!    metadata, synthetic media devices, battery, and network profiles.
 //! 3. [`GeneratedFingerprint`]: The output bundle combining the unified profile, the core
 //!    [`Fingerprint`], HTTP/Client Hints headers, hardware signatures, and device models.
 
 use std::collections::BTreeMap;
+use std::fmt;
 
 use serde::{Deserialize, Deserializer, Serialize};
 
+pub use seleniumbase_rs::evasion::fingerprint::BrandVersion;
 use seleniumbase_rs::evasion::fingerprint::{
-    AudioNoise, BrowserType, CanvasNoise, Fingerprint, FingerprintError, OsType, WebRtcPolicy,
+    AudioNoise, BatteryProfile, BrowserType, CanvasNoise, ClientHints as CoreClientHints,
+    ConnectionProfile, Fingerprint, FingerprintBuilder, FingerprintError, OsType, Spoof,
+    WebRtcPolicy,
 };
-use seleniumbase_rs::evasion::settings::{ColorGamut, MediaFeatures, WebGl};
+use seleniumbase_rs::evasion::randomize::{
+    chromium_hints, edge_hints, known_full_version, Locale, PRESET_CHROMIUM_MAJOR,
+};
+use seleniumbase_rs::evasion::settings::{ColorGamut, DynamicRange, MediaFeatures, WebGl};
 
 /// High Dynamic Range (HDR) screen capability mode.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -41,6 +47,12 @@ impl HdrMode {
             Self::Standard => "standard",
             Self::High => "high",
         }
+    }
+}
+
+impl fmt::Display for HdrMode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.media_value())
     }
 }
 
@@ -69,6 +81,12 @@ impl ScreenOrientationType {
             Self::LandscapeSecondary => "landscape-secondary",
             Self::PortraitSecondary => "portrait-secondary",
         }
+    }
+}
+
+impl fmt::Display for ScreenOrientationType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
     }
 }
 
@@ -214,19 +232,37 @@ impl WebGlParameters {
     /// Generates WebGL parameters matching an OS and unmasked GPU pair.
     #[must_use]
     pub fn for_gpu(os: OsType, unmasked_vendor: &str, unmasked_renderer: &str) -> Self {
-        let is_apple = matches!(os, OsType::Macos | OsType::Ios);
+        Self::for_gpu_with_max_texture(os, unmasked_vendor, unmasked_renderer, None)
+    }
+
+    /// Generates WebGL parameters with an optional explicit `MAX_TEXTURE_SIZE` cap.
+    #[must_use]
+    pub fn for_gpu_with_max_texture(
+        os: OsType,
+        unmasked_vendor: &str,
+        unmasked_renderer: &str,
+        max_texture_size: Option<u32>,
+    ) -> Self {
+        let is_apple = matches!(os, OsType::Macos | OsType::Ios)
+            || unmasked_vendor.contains("Apple")
+            || unmasked_renderer.contains("Apple");
+        let is_mobile = os.is_mobile()
+            || unmasked_renderer.contains("Adreno")
+            || unmasked_renderer.contains("Mali")
+            || unmasked_renderer.contains("PowerVR");
+        let max_tex = max_texture_size.unwrap_or(if os == OsType::Android { 8192 } else { 16384 });
         Self {
-            max_texture_size: 16384,
-            max_cube_map_texture_size: 16384,
-            max_renderbuffer_size: 16384,
+            max_texture_size: max_tex,
+            max_cube_map_texture_size: max_tex,
+            max_renderbuffer_size: max_tex,
             max_vertex_attribs: 16,
-            max_vertex_uniform_vectors: if is_apple { 1024 } else { 4096 },
+            max_vertex_uniform_vectors: if is_apple || is_mobile { 1024 } else { 4096 },
             max_varying_vectors: 30,
             max_fragment_uniform_vectors: 1024,
-            max_viewport_dims: [16384, 16384],
+            max_viewport_dims: [max_tex, max_tex],
             aliased_line_width_range: [1.0, 1.0],
             aliased_point_size_range: [1.0, 1024.0],
-            max_combined_texture_image_units: if is_apple { 32 } else { 80 },
+            max_combined_texture_image_units: if is_apple || is_mobile { 32 } else { 80 },
             max_vertex_texture_image_units: 16,
             max_texture_image_units: 16,
             max_3d_texture_size: 2048,
@@ -390,86 +426,138 @@ pub struct WebGpuMetadata {
     pub limits: WebGpuLimits,
 }
 
+fn detect_gpu_maker(os: OsType, vendor: &str, renderer: &str) -> &'static str {
+    let lower_r = renderer.to_ascii_lowercase();
+    let lower_v = vendor.to_ascii_lowercase();
+    for hay in [&lower_r, &lower_v] {
+        if hay.contains("apple") {
+            return "apple";
+        }
+        if hay.contains("nvidia") || hay.contains("geforce") {
+            return "nvidia";
+        }
+        if hay.contains("radeon") || hay.contains("amd") || hay.contains("ati ") {
+            return "amd";
+        }
+        if hay.contains("intel") || hay.contains("iris") || hay.contains("uhd graphics") {
+            return "intel";
+        }
+        if hay.contains("adreno") || hay.contains("qualcomm") {
+            return "qualcomm";
+        }
+        if hay.contains("mali") || hay.contains("arm") {
+            return "arm";
+        }
+        if hay.contains("powervr") {
+            return "imgtec";
+        }
+    }
+    match os {
+        OsType::Macos | OsType::Ios => "apple",
+        OsType::Android => "qualcomm",
+        OsType::Linux => "intel",
+        _ => "nvidia",
+    }
+}
+
+fn detect_gpu_architecture(maker: &str, renderer: &str) -> &'static str {
+    let lower = renderer
+        .to_ascii_lowercase()
+        .replace("(r)", "")
+        .replace("(tm)", "");
+    let has = |needles: &[&str]| needles.iter().any(|n| lower.contains(n));
+    match maker {
+        "apple" => "metal-3",
+        "nvidia" => {
+            if has(&["rtx 40"]) {
+                "lovelace"
+            } else if has(&["rtx 30"]) {
+                "ampere"
+            } else if has(&["rtx 20", "gtx 16"]) {
+                "turing"
+            } else if has(&["gtx 10"]) {
+                "pascal"
+            } else {
+                ""
+            }
+        }
+        "amd" => {
+            if has(&["rx 7"]) {
+                "rdna-3"
+            } else if has(&["rx 6"]) {
+                "rdna-2"
+            } else if has(&["rx 5"]) {
+                "rdna-1"
+            } else if has(&["vega"]) {
+                "gcn-5"
+            } else {
+                ""
+            }
+        }
+        "intel" => {
+            if has(&["arc"]) {
+                "gen-12-hp"
+            } else if has(&["iris xe", "uhd graphics 7"]) {
+                "gen-12-lp"
+            } else if has(&["uhd graphics 6", "hd graphics 6", "iris plus"]) {
+                "gen-9"
+            } else {
+                ""
+            }
+        }
+        "qualcomm" => {
+            if has(&["adreno 7", "adreno (tm) 7"]) {
+                "adreno-7xx"
+            } else if has(&["adreno 6", "adreno (tm) 6"]) {
+                "adreno-6xx"
+            } else {
+                ""
+            }
+        }
+        "arm" => {
+            if has(&["mali-g7", "immortalis"]) {
+                "valhall"
+            } else if has(&["mali-g5", "mali-g3"]) {
+                "bifrost"
+            } else {
+                ""
+            }
+        }
+        _ => "",
+    }
+}
+
 impl WebGpuMetadata {
     /// Generates WebGPU metadata for an OS and GPU pairing.
     #[must_use]
     pub fn for_gpu(os: OsType, vendor: &str, renderer: &str) -> Self {
-        let (vendor_norm, arch, desc, features) = match os {
-            OsType::Macos | OsType::Ios => (
-                "apple".to_string(),
-                "common-3".to_string(),
-                renderer.to_string(),
-                vec![
-                    "depth-clip-control".to_string(),
-                    "depth32float-stencil8".to_string(),
-                    "texture-compression-bc".to_string(),
-                    "texture-compression-etc2".to_string(),
-                    "texture-compression-astc".to_string(),
-                    "timestamp-query".to_string(),
-                    "indirect-first-instance".to_string(),
-                    "shader-f16".to_string(),
-                    "rg11b10ufloat-renderable".to_string(),
-                    "bgra8unorm-storage".to_string(),
-                    "float32-filterable".to_string(),
-                ],
-            ),
-            OsType::Linux => (
-                "intel".to_string(),
-                "gen-9".to_string(),
-                "Intel(R) UHD Graphics 630".to_string(),
-                vec![
-                    "depth-clip-control".to_string(),
-                    "depth32float-stencil8".to_string(),
-                    "texture-compression-bc".to_string(),
-                    "timestamp-query".to_string(),
-                    "indirect-first-instance".to_string(),
-                    "rg11b10ufloat-renderable".to_string(),
-                    "bgra8unorm-storage".to_string(),
-                    "float32-filterable".to_string(),
-                ],
-            ),
-            _ => {
-                if vendor.contains("NVIDIA") || renderer.contains("NVIDIA") {
-                    (
-                        "nvidia".to_string(),
-                        "ampere".to_string(),
-                        "NVIDIA GeForce RTX 3060".to_string(),
-                        vec![
-                            "depth-clip-control".to_string(),
-                            "depth32float-stencil8".to_string(),
-                            "texture-compression-bc".to_string(),
-                            "timestamp-query".to_string(),
-                            "indirect-first-instance".to_string(),
-                            "shader-f16".to_string(),
-                            "rg11b10ufloat-renderable".to_string(),
-                            "bgra8unorm-storage".to_string(),
-                            "float32-filterable".to_string(),
-                        ],
-                    )
-                } else {
-                    (
-                        "intel".to_string(),
-                        "gen-9".to_string(),
-                        "Intel(R) UHD Graphics 630".to_string(),
-                        vec![
-                            "depth-clip-control".to_string(),
-                            "depth32float-stencil8".to_string(),
-                            "texture-compression-bc".to_string(),
-                            "timestamp-query".to_string(),
-                            "indirect-first-instance".to_string(),
-                            "rg11b10ufloat-renderable".to_string(),
-                            "float32-filterable".to_string(),
-                        ],
-                    )
-                }
-            }
-        };
+        let maker = detect_gpu_maker(os, vendor, renderer);
+        let arch = detect_gpu_architecture(maker, renderer);
+        let mut features = vec![
+            "depth-clip-control".to_string(),
+            "depth32float-stencil8".to_string(),
+            "timestamp-query".to_string(),
+            "indirect-first-instance".to_string(),
+            "rg11b10ufloat-renderable".to_string(),
+            "float32-filterable".to_string(),
+        ];
+        if !matches!(os, OsType::Android) {
+            features.push("texture-compression-bc".to_string());
+            features.push("bgra8unorm-storage".to_string());
+        }
+        if matches!(maker, "apple" | "qualcomm" | "arm") || os.is_mobile() {
+            features.push("texture-compression-etc2".to_string());
+            features.push("texture-compression-astc".to_string());
+        }
+        if matches!(maker, "apple" | "nvidia" | "amd") {
+            features.push("shader-f16".to_string());
+        }
 
         Self {
-            vendor: vendor_norm,
-            architecture: arch,
+            vendor: maker.to_string(),
+            architecture: arch.to_string(),
             device: String::new(),
-            description: desc,
+            description: renderer.to_string(),
             features,
             limits: WebGpuLimits::default(),
         }
@@ -619,18 +707,12 @@ impl Default for NetworkMetadata {
     }
 }
 
-/// Browser brand version for Client Hints.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct BrandVersion {
-    /// Brand name.
-    pub brand: String,
-    /// Version string.
-    pub version: String,
-}
-
 /// High-entropy Client Hints metadata (`navigator.userAgentData.getHighEntropyValues`).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ClientHintsHighEntropy {
+    /// Low-entropy brand list (`navigator.userAgentData.brands` / `Sec-CH-UA`).
+    #[serde(default)]
+    pub brands: Vec<BrandVersion>,
     /// CPU architecture (`x86`, `arm`).
     pub architecture: String,
     /// Platform bitness (`64`, `32`).
@@ -641,85 +723,159 @@ pub struct ClientHintsHighEntropy {
     pub platform: String,
     /// Platform version (e.g. `15.0.0` for Windows 11).
     pub platform_version: String,
+    /// Full browser version string (`uaFullVersion`).
+    #[serde(default)]
+    pub ua_full_version: String,
     /// Full version list of brands.
     pub full_version_list: Vec<BrandVersion>,
     /// Whether running on mobile device.
     pub mobile: bool,
     /// Whether running under WOW64 emulation.
     pub wow64: bool,
+    /// Form factors (`Desktop`, `Mobile`).
+    #[serde(default)]
+    pub form_factors: Vec<String>,
 }
 
 impl ClientHintsHighEntropy {
-    /// Generates high entropy client hints matching an OS and browser major version.
+    /// Converts a core [`CoreClientHints`] structure into [`ClientHintsHighEntropy`].
+    #[must_use]
+    pub fn from_core(ch: &CoreClientHints) -> Self {
+        let form_factors = if ch.form_factors.is_empty() {
+            vec![if ch.mobile { "Mobile" } else { "Desktop" }.to_owned()]
+        } else {
+            ch.form_factors.clone()
+        };
+        Self {
+            brands: ch.brands.clone(),
+            architecture: ch.architecture.clone(),
+            bitness: ch.bitness.clone(),
+            model: ch.model.clone(),
+            platform: ch.platform.clone(),
+            platform_version: ch.platform_version.clone(),
+            ua_full_version: ch.ua_full_version.clone(),
+            full_version_list: ch.full_version_list.clone(),
+            mobile: ch.mobile,
+            wow64: ch.wow64,
+            form_factors,
+        }
+    }
+
+    /// Converts this structure into a core [`CoreClientHints`] value.
+    #[must_use]
+    pub fn to_core(&self) -> CoreClientHints {
+        let brands = if self.brands.is_empty() {
+            self.full_version_list
+                .iter()
+                .map(|b| {
+                    let major = b.version.split('.').next().unwrap_or(&b.version);
+                    BrandVersion::new(b.brand.clone(), major)
+                })
+                .collect()
+        } else {
+            self.brands.clone()
+        };
+        let ua_full_version = if self.ua_full_version.is_empty() {
+            self.full_version_list
+                .iter()
+                .find(|b| b.brand == "Google Chrome" || b.brand == "Microsoft Edge")
+                .or_else(|| {
+                    self.full_version_list
+                        .iter()
+                        .find(|b| b.brand == "Chromium")
+                })
+                .map_or_else(String::new, |b| b.version.clone())
+        } else {
+            self.ua_full_version.clone()
+        };
+        CoreClientHints {
+            brands,
+            full_version_list: self.full_version_list.clone(),
+            platform: self.platform.clone(),
+            platform_version: self.platform_version.clone(),
+            architecture: self.architecture.clone(),
+            bitness: self.bitness.clone(),
+            model: self.model.clone(),
+            ua_full_version,
+            mobile: self.mobile,
+            wow64: self.wow64,
+            form_factors: self.form_factors.clone(),
+        }
+    }
+
+    /// Generates high-entropy Client Hints matching an OS and Chromium major version.
     #[must_use]
     pub fn for_os(os: OsType, major: u32) -> Self {
+        Self::for_browser(os, false, major)
+    }
+
+    /// Generates high-entropy Client Hints for Chromium or Microsoft Edge.
+    #[must_use]
+    pub fn for_browser(os: OsType, is_edge: bool, major: u32) -> Self {
         let (arch, bitness, model, platform, platform_version, mobile) = match os {
-            OsType::Macos => (
-                "arm".to_string(),
-                "64".to_string(),
-                String::new(),
-                "macOS".to_string(),
-                "14.5.0".to_string(),
-                false,
-            ),
-            OsType::Linux => (
-                "x86".to_string(),
-                "64".to_string(),
-                String::new(),
-                "Linux".to_string(),
-                "6.5.0".to_string(),
-                false,
-            ),
-            OsType::Android => (
-                "arm".to_string(),
-                "64".to_string(),
-                "Pixel 8".to_string(),
-                "Android".to_string(),
-                "14.0.0".to_string(),
-                true,
-            ),
-            OsType::Ios => (
-                "arm".to_string(),
-                "64".to_string(),
-                "iPhone".to_string(),
-                "iOS".to_string(),
-                "17.5.0".to_string(),
-                true,
-            ),
-            _ => (
-                "x86".to_string(),
-                "64".to_string(),
-                String::new(),
-                "Windows".to_string(),
-                "15.0.0".to_string(),
-                false,
-            ),
+            OsType::Macos => ("arm", "64", "", "macOS", "27.0.1", false),
+            OsType::Linux => ("x86", "64", "", "Linux", "6.8.0", false),
+            OsType::Android => ("", "", "Pixel 8", "Android", "14.0.0", true),
+            OsType::Ios => ("arm", "64", "iPhone", "iOS", "26.0", true),
+            _ => ("x86", "64", "", "Windows", "15.0.0", false),
         };
 
-        let full_version_list = vec![
-            BrandVersion {
-                brand: "Not_A Brand".to_string(),
-                version: "8.0.0.0".to_string(),
-            },
-            BrandVersion {
-                brand: "Chromium".to_string(),
-                version: format!("{major}.0.7163.0"),
-            },
-            BrandVersion {
-                brand: "Google Chrome".to_string(),
-                version: format!("{major}.0.7163.0"),
-            },
-        ];
+        let mut hints = if is_edge {
+            edge_hints(major)
+        } else {
+            chromium_hints(major)
+        };
+        if !is_edge
+            && hints.ua_full_version.ends_with(".0.0.0")
+            && let Some(known) = known_full_version(major)
+        {
+            known.full_version.clone_into(&mut hints.ua_full_version);
+        }
+
+        let form_factors = vec![if mobile { "Mobile" } else { "Desktop" }.to_owned()];
 
         Self {
-            architecture: arch,
-            bitness,
-            model,
-            platform,
-            platform_version,
-            full_version_list,
+            brands: hints.brands,
+            architecture: arch.to_owned(),
+            bitness: bitness.to_owned(),
+            model: model.to_owned(),
+            platform: platform.to_owned(),
+            platform_version: platform_version.to_owned(),
+            ua_full_version: hints.ua_full_version,
+            full_version_list: hints.full_version_list,
             mobile,
             wow64: false,
+            form_factors,
+        }
+    }
+
+    /// Placeholder metadata for iOS/Safari personas (which do not expose `navigator.userAgentData`).
+    #[must_use]
+    pub fn for_safari(os: OsType) -> Self {
+        Self {
+            brands: Vec::new(),
+            architecture: "arm".to_owned(),
+            bitness: "64".to_owned(),
+            model: if os == OsType::Ios {
+                "iPhone".to_owned()
+            } else {
+                String::new()
+            },
+            platform: if os == OsType::Ios {
+                "iOS".to_owned()
+            } else {
+                "macOS".to_owned()
+            },
+            platform_version: if os == OsType::Ios {
+                "26.0".to_owned()
+            } else {
+                "27.0.1".to_owned()
+            },
+            ua_full_version: String::new(),
+            full_version_list: Vec::new(),
+            mobile: os.is_mobile(),
+            wow64: false,
+            form_factors: vec![if os.is_mobile() { "Mobile" } else { "Desktop" }.to_owned()],
         }
     }
 }
@@ -1095,6 +1251,10 @@ pub struct ProfileFingerprint {
     /// Network connection info.
     #[serde(default)]
     pub network: Option<NetworkMetadata>,
+
+    /// Deterministic seed used for noise and identity generation.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub seed: Option<u64>,
 }
 
 impl Default for ProfileFingerprint {
@@ -1128,8 +1288,42 @@ impl Default for ProfileFingerprint {
             client_hints: None,
             battery: Some(BatteryMetadata::default()),
             network: Some(NetworkMetadata::default()),
+            seed: None,
         }
     }
+}
+
+fn parse_languages_list(raw: &str) -> Vec<String> {
+    raw.split(',')
+        .map(|part| part.split(';').next().unwrap_or(part).trim())
+        .filter(|part| !part.is_empty())
+        .map(ToString::to_string)
+        .collect()
+}
+
+fn chrome_major_from_ua(ua: &str) -> Option<u32> {
+    let (_, rest) = ua.split_once("Chrome/")?;
+    rest.split('.').next()?.parse().ok()
+}
+
+fn extract_client_hints(fp: &Fingerprint) -> Option<ClientHintsHighEntropy> {
+    if fp.client_hints().is_off() || fp.browser_type() != BrowserType::Chromium {
+        return None;
+    }
+    if let Some(ch) = fp.client_hints().value() {
+        return Some(ClientHintsHighEntropy::from_core(ch));
+    }
+    let ua = fp.user_agent().as_str();
+    let major = fp
+        .core_version()
+        .or_else(|| ua.and_then(chrome_major_from_ua))
+        .unwrap_or(PRESET_CHROMIUM_MAJOR);
+    let is_edge = ua.is_some_and(|u| u.contains("Edg/"));
+    Some(ClientHintsHighEntropy::for_browser(
+        fp.os_type(),
+        is_edge,
+        major,
+    ))
 }
 
 impl ProfileFingerprint {
@@ -1144,18 +1338,31 @@ impl ProfileFingerprint {
 
         if let Some(os) = self.os {
             builder = builder.os_type(os);
+            builder = builder.max_touch_points(if os.is_mobile() { 5 } else { 0 });
         }
         if let Some(browser) = self.browser {
             builder = builder.browser_type(browser);
         }
+        if let Some(seed) = self.seed {
+            builder = builder.seed(seed);
+        }
         if let Some(ua) = &self.user_agent {
             builder = builder.user_agent(ua.clone());
+            if let Some(major) = chrome_major_from_ua(ua) {
+                builder = builder.core_version(major);
+            }
         }
         if let Some(platform) = &self.platform {
             builder = builder.platform(platform.clone());
         }
         if !self.languages.is_empty() {
-            builder = builder.languages(self.languages.join(","));
+            if let Some(accept_lang) = Locale::accept_language_list(&self.languages) {
+                builder = builder
+                    .languages(accept_lang.clone())
+                    .accept_languages(accept_lang);
+            } else {
+                builder = builder.languages(self.languages.join(","));
+            }
             if let Some(first) = self.languages.first() {
                 builder = builder.locale(first.clone());
             }
@@ -1169,6 +1376,9 @@ impl ProfileFingerprint {
         if let (Some(w), Some(h)) = (self.screen_width, self.screen_height) {
             builder = builder.screen(w, h);
         }
+        if let (Some(aw), Some(ah)) = (self.avail_width, self.avail_height) {
+            builder = builder.avail_screen((aw, ah));
+        }
         if let Some(dpr) = self.device_pixel_ratio {
             builder = builder.pixel_ratio(dpr);
         }
@@ -1178,18 +1388,35 @@ impl ProfileFingerprint {
         if let Some(tz) = &self.timezone {
             builder = builder.timezone(tz.clone());
         }
-        if let (Some(vendor), Some(renderer)) = (&self.webgl_vendor, &self.webgl_renderer) {
-            builder = builder.webgl(WebGl::new(vendor.clone(), renderer.clone()));
-        } else if let Some(renderer) = &self.webgl_renderer {
-            builder = builder.webgl(WebGl::renderer_only(renderer.clone()));
-        } else if let Some(vendor) = &self.webgl_vendor {
-            builder = builder.webgl(WebGl::vendor_only(vendor.clone()));
+        if let Some(gl) = self.to_webgl() {
+            builder = builder.webgl(gl);
         }
 
+        self.apply_spoof_overrides(builder).build()
+    }
+
+    fn to_webgl(&self) -> Option<WebGl> {
+        let mut webgl = match (&self.webgl_vendor, &self.webgl_renderer) {
+            (Some(vendor), Some(renderer)) => Some(WebGl::new(vendor.clone(), renderer.clone())),
+            (None, Some(renderer)) => Some(WebGl::renderer_only(renderer.clone())),
+            (Some(vendor), None) => Some(WebGl::vendor_only(vendor.clone())),
+            (None, None) => None,
+        };
+        if let Some(ref mut gl) = webgl
+            && !self.webgl_extensions.is_empty()
+        {
+            gl.extensions.clone_from(&self.webgl_extensions);
+        }
+        webgl
+    }
+
+    fn apply_spoof_overrides(&self, mut builder: FingerprintBuilder) -> FingerprintBuilder {
         if !self.fonts.is_empty() {
             builder = builder.fonts(self.fonts.clone());
         }
-
+        if let Some(rate) = self.audio_sample_rate {
+            builder = builder.audio_sample_rate(rate);
+        }
         if let Some(canvas) = self.canvas_noise {
             builder = builder.canvas_noise(canvas);
         }
@@ -1199,34 +1426,100 @@ impl ProfileFingerprint {
         if let Some(webrtc) = self.webrtc_policy {
             builder = builder.webrtc_policy(webrtc);
         }
-        if let Some(gamut) = self.color_gamut {
-            builder = builder.media_features(MediaFeatures::new(gamut));
+        if self.color_gamut.is_some() || self.hdr.is_some() {
+            let mut mf = MediaFeatures::new(self.color_gamut.unwrap_or(ColorGamut::Srgb));
+            if self.hdr == Some(true) {
+                mf.dynamic_range = DynamicRange::High;
+            }
+            builder = builder.media_features(mf);
         }
-
-        builder.build()
+        let safari_like =
+            self.browser == Some(BrowserType::MobileSafari) || self.os == Some(OsType::Ios);
+        if let Some(ch) = &self.client_hints {
+            builder = builder.client_hints(ch.to_core());
+        } else if safari_like {
+            builder = builder.client_hints(Spoof::Off);
+        }
+        if let Some(b) = &self.battery {
+            builder = builder.battery(BatteryProfile {
+                charging: b.charging,
+                level: b.level,
+                charging_time: b.charging_time,
+                discharging_time: b.discharging_time,
+            });
+        } else if safari_like {
+            builder = builder.battery(Spoof::Off);
+        }
+        if let Some(n) = &self.network {
+            builder = builder.connection(ConnectionProfile {
+                effective_type: n.effective_type.clone(),
+                rtt: n.rtt,
+                downlink: n.downlink,
+                save_data: n.save_data,
+            });
+        } else if safari_like {
+            builder = builder.connection(Spoof::Off);
+        }
+        builder
     }
 
     /// Creates a [`ProfileFingerprint`] extracted from a built [`Fingerprint`].
     #[must_use]
     pub fn from_fingerprint(fp: &Fingerprint) -> Self {
+        let os = fp.os_type();
         let screen = fp.screen().value();
+        let avail_screen = fp.avail_screen().value();
         let webgl = fp.webgl().value();
-        let languages = fp.languages().value().map_or_else(Vec::new, |s| {
-            s.split(',')
-                .map(str::trim)
-                .map(ToString::to_string)
-                .collect()
-        });
+        let media_features = fp.media_features().value();
 
-        let (width, height) = screen.map_or((1920, 1080), |s| (s.width, s.height));
-        let avail_height = if fp.os_type() == OsType::Macos {
-            height.saturating_sub(25)
+        let mut languages = fp
+            .languages()
+            .value()
+            .or_else(|| fp.accept_languages().value())
+            .map_or_else(Vec::new, |s| parse_languages_list(s));
+        if languages.is_empty()
+            && let Some(locale) = fp.locale().value()
+        {
+            languages.push(locale.clone());
+        }
+
+        let (width, height) = screen.map_or_else(|| os.default_screen(), |s| (s.width, s.height));
+        let (avail_width, avail_height) = avail_screen.map_or_else(
+            || {
+                let lost = if os.is_mobile() { 0 } else { 40 };
+                (width, height.saturating_sub(lost))
+            },
+            |a| (a.width, a.height),
+        );
+
+        let battery = if fp.battery().is_off() {
+            None
+        } else if let Some(b) = fp.battery().value() {
+            Some(BatteryMetadata {
+                charging: b.charging,
+                charging_time: b.charging_time,
+                discharging_time: b.discharging_time,
+                level: b.level,
+            })
         } else {
-            height.saturating_sub(40)
+            Some(BatteryMetadata::default())
+        };
+
+        let network = if fp.connection().is_off() {
+            None
+        } else if let Some(c) = fp.connection().value() {
+            Some(NetworkMetadata {
+                downlink: c.downlink,
+                effective_type: c.effective_type.clone(),
+                rtt: c.rtt,
+                save_data: c.save_data,
+            })
+        } else {
+            Some(NetworkMetadata::default())
         };
 
         Self {
-            os: Some(fp.os_type()),
+            os: Some(os),
             browser: Some(fp.browser_type()),
             user_agent: fp.user_agent().value().map(ToString::to_string),
             platform: fp.platform().value().map(ToString::to_string),
@@ -1235,28 +1528,30 @@ impl ProfileFingerprint {
             device_memory: fp.device_memory().value().copied(),
             webgl_vendor: webgl.and_then(|w| w.vendor.clone()),
             webgl_renderer: webgl.and_then(|w| w.renderer.clone()),
-            webgl_extensions: Vec::new(),
+            webgl_extensions: webgl.map_or_else(Vec::new, |w| w.extensions.clone()),
             canvas_noise: Some(fp.policy().canvas_noise),
             audio_noise: Some(fp.policy().audio_noise),
             webrtc_policy: fp.policy().webrtc_policy,
-            color_gamut: fp.media_features().value().map(|m| m.color_gamut),
-            hdr: Some(false),
-            audio_sample_rate: Some(
-                if fp.os_type().is_mobile() || fp.os_type() == OsType::Macos {
+            color_gamut: media_features.map(|m| m.color_gamut),
+            hdr: media_features
+                .map(|m| matches!(m.dynamic_range, DynamicRange::High))
+                .or(Some(false)),
+            audio_sample_rate: fp.audio_sample_rate().or(Some(
+                if matches!(os, OsType::Linux | OsType::Android) {
                     44100
                 } else {
                     48000
                 },
-            ),
+            )),
             fonts: fp.fonts().value().cloned().unwrap_or_default(),
             screen_width: Some(width),
             screen_height: Some(height),
-            avail_width: Some(width),
+            avail_width: Some(avail_width),
             avail_height: Some(avail_height),
             device_pixel_ratio: fp.pixel_ratio().value().copied(),
             color_depth: fp.color_depth().value().copied(),
             screen_orientation: Some(ScreenOrientation {
-                orientation_type: if fp.os_type().is_mobile() {
+                orientation_type: if height > width || os.is_mobile() {
                     ScreenOrientationType::PortraitPrimary
                 } else {
                     ScreenOrientationType::LandscapePrimary
@@ -1264,9 +1559,10 @@ impl ProfileFingerprint {
                 angle: 0,
             }),
             timezone: fp.timezone().value().map(ToString::to_string),
-            client_hints: Some(ClientHintsHighEntropy::for_os(fp.os_type(), 157)),
-            battery: Some(BatteryMetadata::default()),
-            network: Some(NetworkMetadata::default()),
+            client_hints: extract_client_hints(fp),
+            battery,
+            network,
+            seed: Some(fp.seed()),
         }
     }
 
@@ -1346,9 +1642,38 @@ static APPLE_WEBGL_EXTENSIONS: [&str; 23] = [
     "WEBGL_lose_context",
 ];
 
-// ---------------------------------------------------------------------------
-// Comprehensive Font Lists per OS
-// ---------------------------------------------------------------------------
+static MOBILE_WEBGL_EXTENSIONS: [&str; 19] = [
+    "ANGLE_instanced_arrays",
+    "EXT_blend_minmax",
+    "EXT_color_buffer_half_float",
+    "EXT_float_blend",
+    "EXT_frag_depth",
+    "EXT_shader_texture_lod",
+    "EXT_sRGB",
+    "EXT_texture_filter_anisotropic",
+    "OES_element_index_uint",
+    "OES_fbo_render_mipmap",
+    "OES_standard_derivatives",
+    "OES_texture_float",
+    "OES_texture_float_linear",
+    "OES_texture_half_float",
+    "OES_texture_half_float_linear",
+    "OES_vertex_array_object",
+    "WEBGL_compressed_texture_etc",
+    "WEBGL_debug_renderer_info",
+    "WEBGL_lose_context",
+];
+
+static ANDROID_FONTS: [&str; 8] = [
+    "Roboto",
+    "Noto Sans",
+    "Noto Serif",
+    "Droid Sans Mono",
+    "Noto Color Emoji",
+    "Cutive Mono",
+    "Dancing Script",
+    "Coming Soon",
+];
 
 static WINDOWS_FONTS: [&str; 52] = [
     "Arial",
@@ -1591,54 +1916,36 @@ impl FingerprintGenerator {
     /// Generates a coherent [`GeneratedFingerprint`] bundle with full parameters.
     #[must_use]
     pub fn generate(&self) -> GeneratedFingerprint {
-        let (gpu_vendor, gpu_renderer, gpu_extensions, webgl_params) = self.generate_gpu();
-        let webgpu = WebGpuMetadata::for_gpu(self.os, &gpu_vendor, &gpu_renderer);
-        let display = self.generate_display();
-        let audio = self.generate_audio();
-        let media_devices = MediaDeviceMetadata::synthetic(self.seed, self.os);
-        let battery = self.generate_battery();
-        let network = Self::generate_network();
-        let fonts = self.generate_fonts();
-        let (user_agent, platform) = self.generate_navigator();
-        let client_hints = ClientHintsHighEntropy::for_os(self.os, self.major);
-        let headers = self.generate_headers(&user_agent, &client_hints);
+        let fingerprint = self.build_core_fingerprint();
+        let os = fingerprint.os_type();
 
-        let profile = ProfileFingerprint {
-            os: Some(self.os),
-            browser: Some(self.browser),
-            user_agent: Some(user_agent),
-            platform: Some(platform),
-            languages: vec!["en-US".to_owned(), "en".to_owned()],
-            hardware_concurrency: Some(match self.os {
-                OsType::Windows => 12,
-                _ => 8,
-            }),
-            device_memory: Some(8.0),
-            webgl_vendor: Some(gpu_vendor.clone()),
-            webgl_renderer: Some(gpu_renderer.clone()),
-            webgl_extensions: gpu_extensions.clone(),
-            canvas_noise: Some(self.canvas_noise),
-            audio_noise: Some(self.audio_noise),
-            webrtc_policy: Some(self.webrtc_policy),
-            color_gamut: Some(display.color_gamut),
-            hdr: Some(matches!(display.hdr, HdrMode::High)),
-            audio_sample_rate: Some(audio.sample_rate),
-            fonts: fonts.clone(),
-            screen_width: Some(display.width),
-            screen_height: Some(display.height),
-            avail_width: Some(display.avail_width),
-            avail_height: Some(display.avail_height),
-            device_pixel_ratio: Some(display.pixel_ratio),
-            color_depth: Some(display.color_depth),
-            screen_orientation: Some(display.orientation),
-            timezone: Some("America/New_York".to_owned()),
-            client_hints: Some(client_hints.clone()),
-            battery: Some(battery),
-            network: Some(network.clone()),
-        };
+        let (gpu_vendor, gpu_renderer, gpu_extensions, webgl_params) =
+            Self::build_gpu(&fingerprint);
+        let webgpu = WebGpuMetadata::for_gpu(os, &gpu_vendor, &gpu_renderer);
+        let display = Self::build_display(&fingerprint);
+        let audio = self.build_audio(&fingerprint);
+        let media_devices = MediaDeviceMetadata::synthetic(self.seed, os);
+        let battery = Self::build_battery(&fingerprint);
+        let network = Self::build_network(&fingerprint);
+        let fonts = self.build_fonts(&fingerprint);
 
-        // Produce a verified core Fingerprint
-        let fingerprint = Fingerprint::randomized_with_major(self.os, self.seed, self.major);
+        let mut profile = ProfileFingerprint::from_fingerprint(&fingerprint);
+        profile.webgl_extensions.clone_from(&gpu_extensions);
+        if profile.fonts.is_empty() {
+            profile.fonts.clone_from(&fonts);
+        }
+
+        let user_agent = profile.user_agent.clone().unwrap_or_default();
+        let client_hints = profile
+            .client_hints
+            .clone()
+            .unwrap_or_else(|| ClientHintsHighEntropy::for_safari(os));
+        let headers = Self::generate_headers(
+            &fingerprint,
+            &user_agent,
+            profile.client_hints.as_ref(),
+            &profile.languages,
+        );
 
         GeneratedFingerprint {
             profile,
@@ -1661,238 +1968,173 @@ impl FingerprintGenerator {
         }
     }
 
-    fn generate_headers(
-        &self,
-        user_agent: &str,
-        client_hints: &ClientHintsHighEntropy,
-    ) -> BTreeMap<String, String> {
-        let mut headers = BTreeMap::new();
-        headers.insert("User-Agent".to_owned(), user_agent.to_owned());
-        headers.insert("Accept-Language".to_owned(), "en-US,en;q=0.9".to_owned());
-        headers.insert(
-            "Sec-CH-UA".to_owned(),
-            format!(
-                "\"Not_A Brand\";v=\"8\", \"Chromium\";v=\"{m}\", \"Google Chrome\";v=\"{m}\"",
-                m = self.major
-            ),
-        );
-        headers.insert(
-            "Sec-CH-UA-Mobile".to_owned(),
-            if client_hints.mobile {
-                "?1".to_owned()
-            } else {
-                "?0".to_owned()
-            },
-        );
-        headers.insert(
-            "Sec-CH-UA-Platform".to_owned(),
-            format!("\"{}\"", client_hints.platform),
-        );
-        headers.insert(
-            "Sec-CH-UA-Platform-Version".to_owned(),
-            format!("\"{}\"", client_hints.platform_version),
-        );
-        headers.insert(
-            "Sec-CH-UA-Arch".to_owned(),
-            format!("\"{}\"", client_hints.architecture),
-        );
-        headers.insert(
-            "Sec-CH-UA-Bitness".to_owned(),
-            format!("\"{}\"", client_hints.bitness),
-        );
-        headers.insert(
-            "Sec-CH-UA-Model".to_owned(),
-            format!("\"{}\"", client_hints.model),
-        );
-        headers.insert(
-            "Sec-CH-UA-Full-Version-List".to_owned(),
-            format!(
-                "\"Not_A Brand\";v=\"8.0.0.0\", \"Chromium\";v=\"{m}.0.7163.0\", \"Google Chrome\";v=\"{m}.0.7163.0\"",
-                m = self.major
-            ),
-        );
-        headers
-    }
-
-    fn generate_navigator(&self) -> (String, String) {
-        match self.os {
-            OsType::Macos => (
-                format!(
-                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{}.0.0.0 Safari/537.36",
-                    self.major
-                ),
-                "MacIntel".to_owned(),
-            ),
-            OsType::Linux => (
-                format!(
-                    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{}.0.0.0 Safari/537.36",
-                    self.major
-                ),
-                "Linux x86_64".to_owned(),
-            ),
-            OsType::Android => (
-                format!(
-                    "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{}.0.0.0 Mobile Safari/537.36",
-                    self.major
-                ),
-                "Linux armv8l".to_owned(),
-            ),
-            OsType::Ios => (
-                "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1".to_string(),
-                "iPhone".to_owned(),
-            ),
-            _ => (
-                format!(
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{}.0.0.0 Safari/537.36",
-                    self.major
-                ),
-                "Win32".to_owned(),
-            ),
-        }
-    }
-
-    fn generate_gpu(&self) -> (String, String, Vec<String>, WebGlParameters) {
-        let (vendor, renderer, extensions) = match self.os {
-            OsType::Macos => (
-                "Apple".to_owned(),
-                "Apple M2".to_owned(),
-                APPLE_WEBGL_EXTENSIONS
-                    .iter()
-                    .map(|&s| s.to_owned())
-                    .collect(),
-            ),
-            OsType::Windows => (
-                "Google Inc. (NVIDIA)".to_owned(),
-                "ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Direct3D11 vs_5_0 ps_5_0, D3D11)"
-                    .to_owned(),
-                COMMON_WEBGL_EXTENSIONS
-                    .iter()
-                    .map(|&s| s.to_owned())
-                    .collect(),
-            ),
-            OsType::Linux => (
-                "Google Inc. (Intel)".to_owned(),
-                "Mesa Intel(R) UHD Graphics 630 (CFL GT2), OpenGL 4.6".to_owned(),
-                COMMON_WEBGL_EXTENSIONS
-                    .iter()
-                    .map(|&s| s.to_owned())
-                    .collect(),
-            ),
-            OsType::Android => (
-                "Google Inc. (Qualcomm)".to_owned(),
-                "Adreno (TM) 730".to_owned(),
-                COMMON_WEBGL_EXTENSIONS
-                    .iter()
-                    .map(|&s| s.to_owned())
-                    .collect(),
-            ),
-            OsType::Ios => (
-                "Apple".to_owned(),
-                "Apple GPU".to_owned(),
-                APPLE_WEBGL_EXTENSIONS
-                    .iter()
-                    .map(|&s| s.to_owned())
-                    .collect(),
-            ),
-            _ => (
-                "Google Inc. (NVIDIA)".to_owned(),
-                "ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Direct3D11 vs_5_0 ps_5_0, D3D11)"
-                    .to_owned(),
-                COMMON_WEBGL_EXTENSIONS
-                    .iter()
-                    .map(|&s| s.to_owned())
-                    .collect(),
-            ),
-        };
-
-        let params = WebGlParameters::for_gpu(self.os, &vendor, &renderer);
-        (vendor, renderer, extensions, params)
-    }
-
-    fn generate_display(&self) -> DisplayMetadata {
-        let is_apple = matches!(self.os, OsType::Macos | OsType::Ios);
-        let gamut = self.color_gamut.unwrap_or(if is_apple {
+    fn build_core_fingerprint(&self) -> Fingerprint {
+        let base_fp = Fingerprint::randomized_with_major(self.os, self.seed, self.major);
+        let default_gamut = if matches!(self.os, OsType::Macos | OsType::Ios) {
             ColorGamut::P3
         } else {
             ColorGamut::Srgb
-        });
-        let hdr = self.hdr.map_or(
-            if is_apple {
-                HdrMode::High
-            } else {
-                HdrMode::Standard
-            },
-            |h| if h { HdrMode::High } else { HdrMode::Standard },
-        );
+        };
+        let base_mf = base_fp
+            .media_features()
+            .value()
+            .copied()
+            .unwrap_or_else(|| MediaFeatures::new(default_gamut));
+        let gamut = self.color_gamut.unwrap_or(base_mf.color_gamut);
+        let hdr_enabled = self
+            .hdr
+            .unwrap_or(matches!(self.os, OsType::Macos | OsType::Ios));
+        let mut updated_mf = base_mf;
+        updated_mf.color_gamut = gamut;
+        updated_mf.dynamic_range = if hdr_enabled {
+            DynamicRange::High
+        } else {
+            DynamicRange::Standard
+        };
 
-        match self.os {
-            OsType::Macos => DisplayMetadata {
-                width: 1440,
-                height: 900,
-                avail_width: 1440,
-                avail_height: 875,
-                pixel_ratio: 2.0,
-                color_depth: 30,
-                color_gamut: gamut,
-                hdr,
-                orientation: ScreenOrientation {
-                    orientation_type: ScreenOrientationType::LandscapePrimary,
-                    angle: 0,
-                },
+        let mut builder = base_fp
+            .to_builder()
+            .canvas_noise(self.canvas_noise)
+            .audio_noise(self.audio_noise)
+            .webrtc_policy(self.webrtc_policy)
+            .media_features(updated_mf);
+
+        if base_fp.avail_screen().is_natural()
+            && let Some(screen) = base_fp.screen().value()
+        {
+            let lost = if self.os.is_mobile() { 0 } else { 40 };
+            builder = builder.avail_screen((screen.width, screen.height.saturating_sub(lost)));
+        }
+        if let Some(rate) = self.audio_sample_rate {
+            builder = builder.audio_sample_rate(rate);
+        }
+        if let Some(fonts) = &self.fonts {
+            builder = builder.fonts(fonts.clone());
+        }
+
+        builder.build().unwrap_or(base_fp)
+    }
+
+    fn build_gpu(fp: &Fingerprint) -> (String, String, Vec<String>, WebGlParameters) {
+        let os = fp.os_type();
+        let webgl = fp.webgl().value();
+        let (fallback_vendor, fallback_renderer) = match os {
+            OsType::Macos => (
+                "Google Inc. (Apple)",
+                "ANGLE (Apple, ANGLE Metal Renderer: Apple M2, Unspecified Version)",
+            ),
+            OsType::Linux => (
+                "Google Inc. (Intel)",
+                "ANGLE (Intel, Mesa Intel(R) UHD Graphics 630 (CFL GT2), OpenGL 4.6)",
+            ),
+            OsType::Android => ("Qualcomm", "Adreno (TM) 740"),
+            OsType::Ios => ("Apple Inc.", "Apple GPU"),
+            _ => (
+                "Google Inc. (NVIDIA)",
+                "ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Direct3D11 vs_5_0 ps_5_0, D3D11)",
+            ),
+        };
+
+        let vendor = webgl
+            .and_then(|gl| gl.vendor.clone())
+            .unwrap_or_else(|| fallback_vendor.to_owned());
+        let renderer = webgl
+            .and_then(|gl| gl.renderer.clone())
+            .unwrap_or_else(|| fallback_renderer.to_owned());
+
+        let is_mobile = os.is_mobile()
+            || renderer.contains("Adreno")
+            || renderer.contains("Mali")
+            || renderer.contains("PowerVR");
+        let extensions =
+            if let Some(exts) = webgl.map(|gl| &gl.extensions).filter(|e| !e.is_empty()) {
+                exts.clone()
+            } else if is_mobile {
+                MOBILE_WEBGL_EXTENSIONS
+                    .iter()
+                    .map(|&s| s.to_owned())
+                    .collect()
+            } else if os == OsType::Macos {
+                APPLE_WEBGL_EXTENSIONS
+                    .iter()
+                    .map(|&s| s.to_owned())
+                    .collect()
+            } else {
+                COMMON_WEBGL_EXTENSIONS
+                    .iter()
+                    .map(|&s| s.to_owned())
+                    .collect()
+            };
+
+        let max_tex = webgl.and_then(|gl| gl.max_texture_size);
+        let params = WebGlParameters::for_gpu_with_max_texture(os, &vendor, &renderer, max_tex);
+        (vendor, renderer, extensions, params)
+    }
+
+    fn build_display(fp: &Fingerprint) -> DisplayMetadata {
+        let os = fp.os_type();
+        let (width, height) = fp
+            .screen()
+            .value()
+            .map_or_else(|| os.default_screen(), |s| (s.width, s.height));
+        let (avail_width, avail_height) = fp.avail_screen().value().map_or_else(
+            || {
+                let lost = if os.is_mobile() { 0 } else { 40 };
+                (width, height.saturating_sub(lost))
             },
-            OsType::Android => DisplayMetadata {
-                width: 412,
-                height: 915,
-                avail_width: 412,
-                avail_height: 915,
-                pixel_ratio: 2.625,
-                color_depth: 24,
-                color_gamut: gamut,
-                hdr,
-                orientation: ScreenOrientation {
-                    orientation_type: ScreenOrientationType::PortraitPrimary,
-                    angle: 0,
-                },
+            |a| (a.width, a.height),
+        );
+        let pixel_ratio = fp
+            .pixel_ratio()
+            .value()
+            .copied()
+            .unwrap_or(if os.is_mobile() { 3.0 } else { 1.0 });
+        let color_depth = fp.color_depth().value().copied().unwrap_or(24);
+        let mf = fp.media_features().value();
+        let color_gamut = mf.map_or(
+            if matches!(os, OsType::Macos | OsType::Ios) {
+                ColorGamut::P3
+            } else {
+                ColorGamut::Srgb
             },
-            OsType::Ios => DisplayMetadata {
-                width: 390,
-                height: 844,
-                avail_width: 390,
-                avail_height: 844,
-                pixel_ratio: 3.0,
-                color_depth: 30,
-                color_gamut: gamut,
-                hdr,
-                orientation: ScreenOrientation {
-                    orientation_type: ScreenOrientationType::PortraitPrimary,
-                    angle: 0,
-                },
-            },
-            _ => DisplayMetadata {
-                width: 1920,
-                height: 1080,
-                avail_width: 1920,
-                avail_height: 1040,
-                pixel_ratio: 1.0,
-                color_depth: 24,
-                color_gamut: gamut,
-                hdr,
-                orientation: ScreenOrientation {
-                    orientation_type: ScreenOrientationType::LandscapePrimary,
-                    angle: 0,
-                },
+            |m| m.color_gamut,
+        );
+        let hdr = if mf.is_some_and(|m| matches!(m.dynamic_range, DynamicRange::High)) {
+            HdrMode::High
+        } else {
+            HdrMode::Standard
+        };
+        let orientation_type = if height > width || os.is_mobile() {
+            ScreenOrientationType::PortraitPrimary
+        } else {
+            ScreenOrientationType::LandscapePrimary
+        };
+
+        DisplayMetadata {
+            width,
+            height,
+            avail_width,
+            avail_height,
+            pixel_ratio,
+            color_depth,
+            color_gamut,
+            hdr,
+            orientation: ScreenOrientation {
+                orientation_type,
+                angle: 0,
             },
         }
     }
 
-    fn generate_audio(&self) -> AudioMetadata {
-        let rate = self.audio_sample_rate.unwrap_or(
-            if matches!(self.os, OsType::Macos | OsType::Ios | OsType::Android) {
+    fn build_audio(&self, fp: &Fingerprint) -> AudioMetadata {
+        let rate = self
+            .audio_sample_rate
+            .or_else(|| fp.audio_sample_rate())
+            .unwrap_or(if matches!(fp.os_type(), OsType::Linux | OsType::Android) {
                 44100
             } else {
                 48000
-            },
-        );
+            });
 
         AudioMetadata {
             sample_rate: rate,
@@ -1903,42 +2145,115 @@ impl FingerprintGenerator {
         }
     }
 
-    fn generate_battery(&self) -> BatteryMetadata {
-        match self.os {
-            OsType::Android | OsType::Ios => BatteryMetadata {
-                charging: false,
-                charging_time: f64::INFINITY,
-                discharging_time: 18000.0,
-                level: 0.85,
-            },
-            _ => BatteryMetadata {
-                charging: true,
-                charging_time: 0.0,
-                discharging_time: f64::INFINITY,
-                level: 1.0,
-            },
+    fn build_battery(fp: &Fingerprint) -> BatteryMetadata {
+        if let Some(b) = fp.battery().value() {
+            BatteryMetadata {
+                charging: b.charging,
+                charging_time: b.charging_time,
+                discharging_time: b.discharging_time,
+                level: b.level,
+            }
+        } else {
+            BatteryMetadata::default()
         }
     }
 
-    fn generate_network() -> NetworkMetadata {
-        NetworkMetadata {
-            downlink: 10.0,
-            effective_type: "4g".to_string(),
-            rtt: 50,
-            save_data: false,
+    fn build_network(fp: &Fingerprint) -> NetworkMetadata {
+        if let Some(c) = fp.connection().value() {
+            NetworkMetadata {
+                downlink: c.downlink,
+                effective_type: c.effective_type.clone(),
+                rtt: c.rtt,
+                save_data: c.save_data,
+            }
+        } else {
+            NetworkMetadata::default()
         }
     }
 
-    fn generate_fonts(&self) -> Vec<String> {
+    fn build_fonts(&self, fp: &Fingerprint) -> Vec<String> {
         if let Some(custom) = &self.fonts {
             return custom.clone();
         }
-
-        match self.os {
+        if let Some(fp_fonts) = fp.fonts().value().filter(|f| !f.is_empty()) {
+            return fp_fonts.clone();
+        }
+        match fp.os_type() {
             OsType::Windows => WINDOWS_FONTS.iter().map(|&f| f.to_owned()).collect(),
-            OsType::Macos => MACOS_FONTS.iter().map(|&f| f.to_owned()).collect(),
+            OsType::Macos | OsType::Ios => MACOS_FONTS.iter().map(|&f| f.to_owned()).collect(),
+            OsType::Android => ANDROID_FONTS.iter().map(|&f| f.to_owned()).collect(),
             _ => LINUX_FONTS.iter().map(|&f| f.to_owned()).collect(),
         }
+    }
+
+    fn format_brand_list_header(brands: &[BrandVersion]) -> String {
+        brands
+            .iter()
+            .map(|entry| {
+                let escaped = entry.brand.replace('\\', "\\\\").replace('"', "\\\"");
+                format!("\"{escaped}\";v=\"{}\"", entry.version)
+            })
+            .collect::<Vec<_>>()
+            .join(", ")
+    }
+
+    fn generate_headers(
+        fp: &Fingerprint,
+        user_agent: &str,
+        client_hints: Option<&ClientHintsHighEntropy>,
+        languages: &[String],
+    ) -> BTreeMap<String, String> {
+        let mut headers = BTreeMap::new();
+        headers.insert("User-Agent".to_owned(), user_agent.to_owned());
+
+        let accept_lang = fp
+            .accept_languages()
+            .as_str()
+            .map(ToOwned::to_owned)
+            .or_else(|| Locale::accept_language_list(languages))
+            .unwrap_or_else(|| "en-US,en;q=0.9".to_owned());
+        headers.insert("Accept-Language".to_owned(), accept_lang);
+
+        if let Some(ch) = client_hints {
+            if !ch.brands.is_empty() {
+                headers.insert(
+                    "Sec-CH-UA".to_owned(),
+                    Self::format_brand_list_header(&ch.brands),
+                );
+            }
+            headers.insert(
+                "Sec-CH-UA-Mobile".to_owned(),
+                if ch.mobile {
+                    "?1".to_owned()
+                } else {
+                    "?0".to_owned()
+                },
+            );
+            headers.insert(
+                "Sec-CH-UA-Platform".to_owned(),
+                format!("\"{}\"", ch.platform),
+            );
+            headers.insert(
+                "Sec-CH-UA-Platform-Version".to_owned(),
+                format!("\"{}\"", ch.platform_version),
+            );
+            headers.insert(
+                "Sec-CH-UA-Arch".to_owned(),
+                format!("\"{}\"", ch.architecture),
+            );
+            headers.insert(
+                "Sec-CH-UA-Bitness".to_owned(),
+                format!("\"{}\"", ch.bitness),
+            );
+            headers.insert("Sec-CH-UA-Model".to_owned(), format!("\"{}\"", ch.model));
+            if !ch.full_version_list.is_empty() {
+                headers.insert(
+                    "Sec-CH-UA-Full-Version-List".to_owned(),
+                    Self::format_brand_list_header(&ch.full_version_list),
+                );
+            }
+        }
+        headers
     }
 }
 
@@ -1969,144 +2284,6 @@ pub struct GeneratedFingerprint {
     pub network: NetworkMetadata,
     /// Enumerated font list.
     pub fonts: Vec<String>,
-}
-
-impl GeneratedFingerprint {
-    /// Serializes this bundle into a JSON structure compatible with Scrapfly's
-    /// `fingerprint-generator` output format.
-    #[must_use]
-    pub fn to_scrapfly_json(&self) -> serde_json::Value {
-        serde_json::json!({
-            "browser": match self.profile.browser.unwrap_or_default() {
-                BrowserType::Firefox => "Firefox",
-                BrowserType::MobileSafari => "Safari",
-                _ => "Chrome",
-            },
-            "os": match self.profile.os.unwrap_or_default() {
-                OsType::Macos => "macOS",
-                OsType::Linux => "Linux",
-                OsType::Android => "Android",
-                OsType::Ios => "iOS",
-                _ => "Windows",
-            },
-            "headers": self.headers,
-            "navigator": {
-                "userAgent": self.profile.user_agent,
-                "platform": self.profile.platform,
-                "languages": self.profile.languages,
-                "language": self.profile.languages.first().cloned().unwrap_or_default(),
-                "hardwareConcurrency": self.profile.hardware_concurrency,
-                "deviceMemory": self.profile.device_memory,
-                "maxTouchPoints": if self.profile.os.is_some_and(|os| os.is_mobile()) { 5 } else { 0 },
-            },
-            "screen": {
-                "width": self.display.width,
-                "height": self.display.height,
-                "availWidth": self.display.avail_width,
-                "availHeight": self.display.avail_height,
-                "colorDepth": self.display.color_depth,
-                "pixelRatio": self.display.pixel_ratio,
-                "colorGamut": match self.display.color_gamut {
-                    ColorGamut::Srgb => "srgb",
-                    ColorGamut::P3 => "p3",
-                    ColorGamut::Rec2020 => "rec2020",
-                },
-                "hdr": self.display.hdr.media_value(),
-                "orientation": {
-                    "type": self.display.orientation.orientation_type.as_str(),
-                    "angle": self.display.orientation.angle,
-                },
-            },
-            "gpu": {
-                "vendor": self.gpu.vendor,
-                "renderer": self.gpu.renderer,
-                "unmaskedVendor": self.gpu.vendor,
-                "unmaskedRenderer": self.gpu.renderer,
-                "extensions": self.gpu.extensions,
-                "parameters": self.gpu.parameters,
-            },
-            "webgpu": {
-                "vendor": self.webgpu.vendor,
-                "architecture": self.webgpu.architecture,
-                "description": self.webgpu.description,
-                "features": self.webgpu.features,
-                "limits": self.webgpu.limits,
-            },
-            "audio": {
-                "sampleRate": self.audio.sample_rate,
-                "maxChannelCount": self.audio.max_channel_count,
-                "outputLatency": self.audio.output_latency,
-            },
-            "mediaDevices": self.media_devices.devices,
-            "battery": self.battery,
-            "network": self.network,
-            "fonts": self.fonts,
-        })
-    }
-
-    /// Serializes this bundle into a JSON structure compatible with Browserforge.
-    #[must_use]
-    pub fn to_browserforge_json(&self) -> serde_json::Value {
-        serde_json::json!({
-            "screen": {
-                "width": self.display.width,
-                "height": self.display.height,
-                "availWidth": self.display.avail_width,
-                "availHeight": self.display.avail_height,
-                "colorDepth": self.display.color_depth,
-                "pixelDepth": self.display.color_depth,
-                "devicePixelRatio": self.display.pixel_ratio,
-            },
-            "navigator": {
-                "userAgent": self.profile.user_agent,
-                "platform": self.profile.platform,
-                "languages": self.profile.languages,
-                "hardwareConcurrency": self.profile.hardware_concurrency,
-                "deviceMemory": self.profile.device_memory,
-            },
-            "headers": self.headers,
-            "videoCard": {
-                "vendor": self.gpu.vendor,
-                "renderer": self.gpu.renderer,
-            },
-            "battery": self.battery,
-        })
-    }
-
-    /// Serializes this bundle into a JSON structure compatible with Apify fingerprint-suite.
-    #[must_use]
-    pub fn to_apify_json(&self) -> serde_json::Value {
-        serde_json::json!({
-            "fingerprint": {
-                "screen": {
-                    "width": self.display.width,
-                    "height": self.display.height,
-                    "availWidth": self.display.avail_width,
-                    "availHeight": self.display.avail_height,
-                    "colorDepth": self.display.color_depth,
-                    "pixelDepth": self.display.color_depth,
-                    "devicePixelRatio": self.display.pixel_ratio,
-                },
-                "navigator": {
-                    "userAgent": self.profile.user_agent,
-                    "platform": self.profile.platform,
-                    "languages": self.profile.languages,
-                    "hardwareConcurrency": self.profile.hardware_concurrency,
-                    "deviceMemory": self.profile.device_memory,
-                },
-                "webgl": {
-                    "vendor": self.gpu.vendor,
-                    "renderer": self.gpu.renderer,
-                    "parameters": self.gpu.parameters,
-                },
-                "audio": {
-                    "sampleRate": self.audio.sample_rate,
-                },
-                "battery": self.battery,
-            },
-            "headers": self.headers,
-        })
-    }
 }
 
 #[cfg(test)]
@@ -2193,20 +2370,157 @@ mod tests {
     }
 
     #[test]
-    fn generator_creates_coherent_scrapfly_output() {
-        let generator = FingerprintGenerator::new(42).os(OsType::Macos).major(157);
-        let bundle = generator.generate();
+    fn generator_uses_correlated_core_fingerprint_fields_without_hardcoded_gpu_or_display() {
+        let mut windows_renderers = std::collections::HashSet::new();
+        let mut mac_renderers = std::collections::HashSet::new();
+        for seed in 1..20 {
+            let win_bundle = FingerprintGenerator::new(seed)
+                .os(OsType::Windows)
+                .major(157)
+                .generate();
+            assert_eq!(win_bundle.profile.os, Some(OsType::Windows));
+            assert_eq!(
+                win_bundle.profile.webgl_renderer.as_deref(),
+                win_bundle.fingerprint.webgl_renderer()
+            );
+            assert_eq!(
+                win_bundle.gpu.renderer,
+                win_bundle.fingerprint.webgl_renderer().unwrap()
+            );
+            assert_eq!(
+                win_bundle.profile.hardware_concurrency,
+                win_bundle
+                    .fingerprint
+                    .hardware_concurrency()
+                    .value()
+                    .copied()
+            );
+            assert_eq!(
+                win_bundle.profile.device_memory,
+                win_bundle.fingerprint.device_memory().value().copied()
+            );
+            assert_eq!(
+                win_bundle.profile.timezone.as_deref(),
+                win_bundle.fingerprint.timezone().as_str()
+            );
+            let screen = win_bundle.fingerprint.screen().value().unwrap();
+            let avail = win_bundle.fingerprint.avail_screen().value().unwrap();
+            assert_eq!(win_bundle.display.width, screen.width);
+            assert_eq!(win_bundle.display.height, screen.height);
+            assert_eq!(win_bundle.display.avail_width, avail.width);
+            assert_eq!(win_bundle.display.avail_height, avail.height);
+            assert!(win_bundle
+                .profile
+                .languages
+                .iter()
+                .all(|l| !l.contains(";q=")));
+            assert!(win_bundle.fingerprint.validate().is_coherent());
+            windows_renderers.insert(win_bundle.gpu.renderer);
 
-        assert_eq!(bundle.profile.os, Some(OsType::Macos));
-        assert_eq!(bundle.display.color_gamut, ColorGamut::P3);
-        assert_eq!(bundle.audio.sample_rate, 44100);
-        assert_ne!(bundle.gpu.extensions.len(), 0);
-        assert!(bundle.fonts.contains(&"Helvetica Neue".to_string()));
+            let mac_bundle = FingerprintGenerator::new(seed)
+                .os(OsType::Macos)
+                .major(156)
+                .generate();
+            assert_eq!(mac_bundle.profile.os, Some(OsType::Macos));
+            assert_eq!(mac_bundle.display.color_gamut, ColorGamut::P3);
+            assert_eq!(mac_bundle.webgpu.vendor, "apple");
+            assert_eq!(mac_bundle.webgpu.architecture, "metal-3");
+            assert_eq!(
+                mac_bundle.gpu.renderer,
+                mac_bundle.fingerprint.webgl_renderer().unwrap()
+            );
+            assert!(mac_bundle.fonts.contains(&"Helvetica Neue".to_string()));
+            mac_renderers.insert(mac_bundle.gpu.renderer);
+        }
+        assert!(windows_renderers.len() > 1, "GPU must vary by seed");
+        assert!(mac_renderers.len() > 1, "Mac GPU must vary by seed");
+    }
 
-        let scrapfly_json = bundle.to_scrapfly_json();
-        assert_eq!(scrapfly_json["os"], "macOS");
-        assert_eq!(scrapfly_json["screen"]["colorGamut"], "p3");
-        assert_eq!(scrapfly_json["audio"]["sampleRate"], 44100);
+    #[test]
+    fn generator_creates_genuine_grease_and_known_chromium_builds() {
+        for (major, expected_full, expected_grease) in [
+            (155, "155.0.8059.40", "Not(A:Brand"),
+            (156, "156.0.8078.35", "Not:A-Brand"),
+            (157, "157.0.8103.39", "Not-A.Brand"),
+        ] {
+            let bundle = FingerprintGenerator::new(101)
+                .os(OsType::Windows)
+                .major(major)
+                .generate();
+            assert_eq!(
+                known_full_version(major).map(|k| k.full_version),
+                Some(expected_full)
+            );
+            assert_eq!(bundle.client_hints.ua_full_version, expected_full);
+            assert!(
+                bundle
+                    .client_hints
+                    .brands
+                    .iter()
+                    .any(|b| b.brand == expected_grease),
+                "expected GREASE brand {expected_grease} in {:?}",
+                bundle.client_hints.brands
+            );
+            assert!(bundle
+                .client_hints
+                .full_version_list
+                .iter()
+                .any(|b| b.brand == "Google Chrome" && b.version == expected_full));
+            let sec_ch_ua = bundle.headers.get("Sec-CH-UA").expect("Sec-CH-UA");
+            assert!(sec_ch_ua.contains(expected_grease), "{sec_ch_ua}");
+            let full_list = bundle
+                .headers
+                .get("Sec-CH-UA-Full-Version-List")
+                .expect("Sec-CH-UA-Full-Version-List");
+            assert!(full_list.contains(expected_full), "{full_list}");
+            assert!(
+                !full_list.contains("7163"),
+                "no fake 7163 build: {full_list}"
+            );
+        }
+
+        let edge = edge_hints(157);
+        assert!(edge.brands.iter().any(|b| b.brand == "Microsoft Edge"));
+        assert!(!edge.brands.iter().any(|b| b.brand == "Google Chrome"));
+    }
+
+    #[test]
+    fn from_fingerprint_reads_actual_client_hints_version_avail_screen_and_media_features() {
+        let fp = Fingerprint::builder()
+            .os_type(OsType::Macos)
+            .core_version(155)
+            .user_agent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36")
+            .screen(1512, 982)
+            .avail_screen((1512, 940))
+            .audio_sample_rate(44100)
+            .media_features(MediaFeatures {
+                color_gamut: ColorGamut::P3,
+                dynamic_range: DynamicRange::High,
+                ..MediaFeatures::new(ColorGamut::P3)
+            })
+            .build()
+            .expect("valid fingerprint");
+
+        let profile = ProfileFingerprint::from_fingerprint(&fp);
+        assert_eq!(profile.avail_width, Some(1512));
+        assert_eq!(profile.avail_height, Some(940));
+        assert_eq!(profile.color_gamut, Some(ColorGamut::P3));
+        assert_eq!(profile.hdr, Some(true));
+        assert_eq!(profile.audio_sample_rate, Some(44100));
+        let ch = profile
+            .client_hints
+            .as_ref()
+            .expect("Chromium client hints");
+        assert_eq!(ch.ua_full_version, "155.0.8059.40");
+        assert!(ch.brands.iter().any(|b| b.brand == "Not(A:Brand"));
+
+        let ios_fp = Fingerprint::randomized(OsType::Ios, 7);
+        let ios_profile = ProfileFingerprint::from_fingerprint(&ios_fp);
+        assert_eq!(ios_profile.browser, Some(BrowserType::MobileSafari));
+        assert!(ios_profile.client_hints.is_none());
+        assert!(ios_profile.battery.is_none());
+        assert!(ios_profile.network.is_none());
+        assert!(ios_profile.device_memory.is_none());
     }
 
     #[test]
@@ -2218,14 +2532,71 @@ mod tests {
 
         assert_eq!(bundle.gpu.parameters.max_texture_size, 16384);
         assert_eq!(bundle.gpu.parameters.max_viewport_dims, [16384, 16384]);
-        assert_eq!(bundle.webgpu.vendor, "nvidia");
+        assert_eq!(bundle.gpu.parameters.max_array_texture_layers, 2048);
+        assert_eq!(bundle.gpu.parameters.max_uniform_block_size, 65536);
+        assert_eq!(bundle.gpu.parameters.max_uniform_buffer_bindings, 84);
         assert_eq!(bundle.webgpu.limits.max_texture_dimension_2d, 16384);
-        assert_eq!(bundle.display.avail_height, 1040);
+        assert_eq!(
+            bundle.display.avail_height,
+            bundle.display.height.saturating_sub(40)
+        );
         assert_eq!(
             bundle.display.orientation.orientation_type,
             ScreenOrientationType::LandscapePrimary
         );
         assert_eq!(bundle.media_devices.devices.len(), 3);
         assert_eq!(bundle.client_hints.platform, "Windows");
+        assert_ne!(bundle.webgpu.vendor, "");
+
+        let android = FingerprintGenerator::new(77)
+            .os(OsType::Android)
+            .major(157)
+            .generate();
+        assert!(!android
+            .gpu
+            .extensions
+            .iter()
+            .any(|e| e.contains("s3tc") || e.contains("bptc") || e.contains("rgtc")));
+        assert!(android.client_hints.mobile);
+        assert_eq!(android.display.avail_height, android.display.height);
+
+        let linux = FingerprintGenerator::new(55)
+            .os(OsType::Linux)
+            .major(157)
+            .generate();
+        assert_eq!(linux.audio.sample_rate, 44100);
+        assert!(linux.fingerprint.validate().is_coherent());
+    }
+
+    #[test]
+    fn profile_to_fingerprint_roundtrip_preserves_metadata() {
+        let generated = FingerprintGenerator::new(33)
+            .os(OsType::Macos)
+            .major(155)
+            .hdr(true)
+            .audio_sample_rate(48000)
+            .generate();
+        let rebuilt = generated
+            .profile
+            .to_fingerprint()
+            .expect("roundtrip fingerprint builds");
+        assert!(rebuilt.validate().is_coherent());
+        assert_eq!(rebuilt.seed(), generated.fingerprint.seed());
+        assert_eq!(rebuilt.audio_sample_rate(), Some(48000));
+        assert_eq!(
+            rebuilt.avail_screen().value(),
+            generated.fingerprint.avail_screen().value()
+        );
+        assert_eq!(
+            rebuilt.media_features().value().map(|m| m.dynamic_range),
+            Some(DynamicRange::High)
+        );
+        assert_eq!(
+            rebuilt
+                .client_hints()
+                .value()
+                .map(|c| c.ua_full_version.as_str()),
+            Some("155.0.8059.40")
+        );
     }
 }

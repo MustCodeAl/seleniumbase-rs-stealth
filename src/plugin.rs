@@ -5,7 +5,7 @@
 
 use std::sync::Arc;
 
-use seleniumbase_rs::evasion::fingerprint::Fingerprint;
+use seleniumbase_rs::evasion::fingerprint::{Fingerprint, OsType};
 use seleniumbase_rs::plugin_api::{
     async_trait, Capability, Category, HostScope, LaunchSettings, Metadata, PageHandle, Plugin,
     Requirements, Result as PluginResult,
@@ -61,10 +61,16 @@ impl StealthPlugin {
         }
     }
 
-    /// Creates a randomized stealth plugin seeded by `seed`.
+    /// Creates a randomized stealth plugin seeded by `seed` for Windows.
     #[must_use]
     pub fn randomized(seed: u64) -> Self {
-        let generated = FingerprintGenerator::new(seed).generate();
+        Self::randomized_for(OsType::Windows, seed)
+    }
+
+    /// Creates a randomized stealth plugin for `os` seeded by `seed`.
+    #[must_use]
+    pub fn randomized_for(os: OsType, seed: u64) -> Self {
+        let generated = FingerprintGenerator::new(seed).os(os).generate();
         Self::from_generated(generated)
     }
 
@@ -154,6 +160,7 @@ impl Plugin for StealthPlugin {
     fn metadata(&self) -> Metadata {
         Metadata::new(Category::Privacy)
             .capability(Capability::LaunchArgs)
+            .capability(Capability::LaunchNetwork)
             .capability(Capability::PageScript(HostScope::Everywhere))
     }
 
@@ -166,15 +173,27 @@ impl Plugin for StealthPlugin {
     }
 
     async fn before_launch(&self, launch: &mut LaunchSettings) -> PluginResult<()> {
-        launch
+        if !launch
             .args
-            .push("--disable-blink-features=AutomationControlled".to_string());
+            .iter()
+            .any(|arg| arg.starts_with("--disable-blink-features=AutomationControlled"))
+        {
+            launch
+                .args
+                .push("--disable-blink-features=AutomationControlled".to_string());
+        }
 
         if let Some(profile) = &self.profile {
             if let Some(ua) = &profile.user_agent {
                 launch.args.push(format!("--user-agent={ua}"));
             }
-            if let Some(first_lang) = profile.languages.first() {
+            if let Some(first_lang) = profile
+                .languages
+                .first()
+                .and_then(|l| l.split(';').next())
+                .map(str::trim)
+                .filter(|l| !l.is_empty())
+            {
                 launch.args.push(format!("--lang={first_lang}"));
             }
             if let (Some(w), Some(h)) = (profile.screen_width, profile.screen_height) {
@@ -187,7 +206,14 @@ impl Plugin for StealthPlugin {
             if let Some(ua) = fp.user_agent().value() {
                 launch.args.push(format!("--user-agent={ua}"));
             }
-            if let Some(lang) = fp.languages().value() {
+            if let Some(lang) = fp.locale().value().map(String::as_str).or_else(|| {
+                fp.languages()
+                    .value()
+                    .and_then(|s| s.split(',').next())
+                    .and_then(|s| s.split(';').next())
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+            }) {
                 launch.args.push(format!("--lang={lang}"));
             }
             if let Some(s) = fp.screen().value() {
@@ -211,7 +237,7 @@ impl Plugin for StealthPlugin {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use seleniumbase_rs::evasion::fingerprint::OsType;
+    use seleniumbase_rs::plugin_api::PluginSet;
 
     #[test]
     fn plugin_initializes_with_fingerprint() {
@@ -230,5 +256,39 @@ mod tests {
 
         assert_eq!(plugin.name(), "stealth");
         assert!(plugin.bundle().script().contains("webdriver"));
+    }
+
+    #[test]
+    fn plugin_before_launch_passes_capability_checks_and_sets_clean_args() {
+        let plugin = StealthPlugin::randomized_for(OsType::Macos, 77);
+        let meta = plugin.metadata();
+        assert!(meta.capabilities.covers(&Capability::LaunchArgs));
+        assert!(meta.capabilities.covers(&Capability::LaunchNetwork));
+        assert!(meta
+            .capabilities
+            .covers(&Capability::PageScript(HostScope::Everywhere)));
+
+        let set = PluginSet::new().with(plugin).expect("valid plugin set");
+        let mut settings = LaunchSettings::default();
+        let rt = seleniumbase_rs::tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("tokio runtime");
+        rt.block_on(set.before_launch(&mut settings))
+            .expect("before_launch passes capability checks");
+
+        assert!(settings
+            .args
+            .iter()
+            .any(|a| a == "--disable-blink-features=AutomationControlled"));
+        assert!(settings.args.iter().any(|a| a.starts_with("--user-agent=")));
+        let lang_arg = settings
+            .args
+            .iter()
+            .find(|a| a.starts_with("--lang="))
+            .expect("--lang arg present");
+        assert!(!lang_arg.contains(','), "single tag only: {lang_arg}");
+        assert!(!lang_arg.contains(";q="), "no q-values: {lang_arg}");
+        assert!(settings.webrtc_policy.is_some());
     }
 }

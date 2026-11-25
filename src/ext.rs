@@ -44,13 +44,10 @@ pub trait StealthPageExt {
 impl StealthPageExt for Page {
     async fn apply_profile(&self, profile: &ProfileFingerprint) -> Result<(), SeleniumBaseError> {
         let bundle = StealthScriptBundle::from_profile(profile);
-        self.apply_stealth(&bundle).await?;
-
         if let Ok(fp) = profile.to_fingerprint() {
-            let _ = self.apply_fingerprint(&fp).await;
+            self.apply_fingerprint(&fp).await?;
         }
-
-        Ok(())
+        self.apply_stealth(&bundle).await
     }
 
     async fn apply_stealth(&self, bundle: &StealthScriptBundle) -> Result<(), SeleniumBaseError> {
@@ -67,9 +64,8 @@ impl StealthPageExt for Page {
         fingerprint: &Fingerprint,
     ) -> Result<(), SeleniumBaseError> {
         let bundle = StealthScriptBundle::new(fingerprint);
-        self.apply_stealth(&bundle).await?;
         self.apply_fingerprint(fingerprint).await?;
-        Ok(())
+        self.apply_stealth(&bundle).await
     }
 
     async fn apply_generated(
@@ -77,9 +73,8 @@ impl StealthPageExt for Page {
         generated: &GeneratedFingerprint,
     ) -> Result<(), SeleniumBaseError> {
         let bundle = StealthScriptBundle::from_generated(generated);
-        self.apply_stealth(&bundle).await?;
         self.apply_fingerprint(&generated.fingerprint).await?;
-        Ok(())
+        self.apply_stealth(&bundle).await
     }
 }
 
@@ -163,10 +158,17 @@ impl StealthBaseCaseExt for BaseCase {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::fingerprint::FingerprintGenerator;
     use seleniumbase_rs::evasion::fingerprint::OsType;
 
+    fn assert_page_ext<T: StealthPageExt>() {}
+    fn assert_base_case_ext<T: StealthBaseCaseExt>() {}
+
     #[test]
-    fn traits_are_object_safe_or_callable() {
+    fn traits_are_implemented_for_cdp_page_and_webdriver_base_case() {
+        assert_page_ext::<Page>();
+        assert_base_case_ext::<BaseCase>();
+
         let profile = ProfileFingerprint::default();
         let bundle = StealthScriptBundle::from_profile(&profile);
         assert!(bundle.script().contains("navigator"));
@@ -174,5 +176,9 @@ mod tests {
         let fp = Fingerprint::randomized(OsType::Windows, 999);
         let bundle_fp = StealthScriptBundle::new(&fp);
         assert!(bundle_fp.script().contains("webdriver"));
+
+        let generated = FingerprintGenerator::new(999).os(OsType::Macos).generate();
+        let bundle_gen = StealthScriptBundle::from_generated(&generated);
+        assert!(bundle_gen.script().contains(&generated.gpu.renderer));
     }
 }
