@@ -5,6 +5,20 @@ All notable changes to the unified `seleniumbase-rs-stealth` facade and its
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). The crates are experimental
 and not published to crates.io, so their types and paths may change between commits.
 
+## [0.9.3] - 2026-11-25
+
+### Fixed
+
+- **HTTP/3 profile resolution**: `Http3Options::for_version()` now caps the Chromium major
+  version to the highest available `phantom-http 0.6.0` profile (`chrome-156-*`). Previously,
+  versions above 156 (e.g. 157) produced invalid profile strings that caused immediate
+  `HelperMissing` errors. `for_fingerprint()` now passes `u32::MAX` when no version is set,
+  so it always resolves to the highest available profile rather than a hardcoded fallback.
+
+### Added
+
+- `Http3Options::for_version()` documents the `MAX_CHROME_MAJOR` ceiling and fallback strategy.
+
 ## [Unreleased]
 
 The workspace follows the fingerprint API v2 of seleniumbase-rs: one `Spoof<T>`

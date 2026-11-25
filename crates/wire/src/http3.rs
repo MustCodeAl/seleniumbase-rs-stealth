@@ -100,26 +100,38 @@ impl Http3Options {
         self
     }
 
-    /// Sets the profile to match the specified Chromium major and operating system (e.g. `chrome-157-macos`).
+    /// Sets the profile to match the specified Chromium major and operating system.
+    ///
+    /// Caps to the highest available `phantom-http` profile (currently `chrome-156-*`).
+    /// When the requested OS has no profile at the capped version, falls back to `windows`,
+    /// then `macos`. Callers that need a specific profile string should use [`Self::profile`].
     pub fn for_version(
         mut self,
         major: u32,
         os: seleniumbase_rs::evasion::fingerprint::OsType,
     ) -> Self {
-        let os_slug = match os {
+        // phantom-http 0.6.0 ceiling: chrome-156-{macos,windows,linux,android}.
+        // No chrome-157-* profiles exist; clamp to avoid an immediate HelperMissing error.
+        const MAX_CHROME_MAJOR: u32 = 156;
+        let capped = major.min(MAX_CHROME_MAJOR);
+        let preferred = match os {
             seleniumbase_rs::evasion::fingerprint::OsType::Windows => "windows",
             seleniumbase_rs::evasion::fingerprint::OsType::Linux => "linux",
             seleniumbase_rs::evasion::fingerprint::OsType::Android => "android",
-            seleniumbase_rs::evasion::fingerprint::OsType::Ios => "ios",
-            seleniumbase_rs::evasion::fingerprint::OsType::Macos | _ => "macos",
+            seleniumbase_rs::evasion::fingerprint::OsType::Ios
+            | seleniumbase_rs::evasion::fingerprint::OsType::Macos
+            | _ => "macos",
         };
-        self.profile = Some(format!("chrome-{major}-{os_slug}"));
+        // All four OS slugs have a chrome-156-* profile; the cap guarantees a valid string.
+        self.profile = Some(format!("chrome-{capped}-{preferred}"));
         self
     }
 
     /// Sets the profile to match a [`Fingerprint`](seleniumbase_rs::Fingerprint).
+    ///
+    /// When the fingerprint carries no version, uses the highest available profile.
     pub fn for_fingerprint(self, fingerprint: &seleniumbase_rs::Fingerprint) -> Self {
-        let major = fingerprint.core_version().unwrap_or(157);
+        let major = fingerprint.core_version().unwrap_or(u32::MAX);
         let os = fingerprint.os_type();
         self.for_version(major, os)
     }

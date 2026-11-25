@@ -1989,3 +1989,7 @@ dependencies = [
  "cc",
  "pkg-config",
 ]
+
+[[patch.unused]]
+name = "seleniumbase-rs"
+version = "0.9.3"
