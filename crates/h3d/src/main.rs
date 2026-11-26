@@ -135,6 +135,7 @@ fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Options, String>
 
 fn client(options: &Options) -> Result<Client, String> {
     let profile = profile_for(&options.profile, RequestTemplateKind::Navigation)
+        .or_else(|_| profile_for(DEFAULT_PROFILE, RequestTemplateKind::Navigation))
         .map_err(|error| format!("profile {}: {error}", options.profile))?;
     let mut builder =
         Client::builder(profile).request_timeouts(RequestTimeouts::new().total(MAX_TIMEOUT));
