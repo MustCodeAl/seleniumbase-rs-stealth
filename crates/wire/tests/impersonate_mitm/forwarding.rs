@@ -396,9 +396,9 @@ async fn absolute_form_http_requests_are_forwarded_after_the_token_check() {
     let (mitm, _sink) = start_mitm(None, options).await;
     let port = origin.addr().port();
     let request = |auth: Option<String>| {
-        let auth = auth
-            .map(|value| format!("Proxy-Authorization: {value}\r\n"))
-            .unwrap_or_default();
+        let auth = auth.map_or_else(String::new, |value| {
+            format!("Proxy-Authorization: {value}\r\n")
+        });
         format!("GET http://plain.test:{port}/ HTTP/1.1\r\nHost: plain.test:{port}\r\n{auth}\r\n")
     };
     let mut tcp = TcpStream::connect(mitm.local_addr())

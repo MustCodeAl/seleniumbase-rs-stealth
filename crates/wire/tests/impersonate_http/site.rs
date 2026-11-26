@@ -305,8 +305,7 @@ async fn respond(
     let body = body
         .collect()
         .await
-        .map(http_body_util::Collected::to_bytes)
-        .unwrap_or_default();
+        .map_or_else(|_| bytes::Bytes::new(), http_body_util::Collected::to_bytes);
     let headers: Vec<(String, String)> = parts
         .headers
         .iter()
@@ -320,8 +319,9 @@ async fn respond(
     let host = headers
         .iter()
         .find(|(name, _)| name == "host")
-        .map(|(_, value)| value.split(':').next().unwrap_or_default().to_owned())
-        .unwrap_or_default();
+        .map_or_else(String::new, |(_, value)| {
+            value.split(':').next().unwrap_or_default().to_owned()
+        });
     let record = Seen {
         host,
         port,

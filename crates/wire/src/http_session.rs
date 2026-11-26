@@ -120,7 +120,15 @@ struct Inner {
     /// The protocol each origin settled on, so the next request carries the headers of that
     /// protocol (the `priority` header is for HTTP/2 only).
     protocols: Mutex<HashMap<String, WireProtocol>>,
+    #[cfg_attr(
+        not(feature = "http3"),
+        allow(dead_code, reason = "forwarded to Http3Options when http3 is enabled")
+    )]
     resolve: Vec<(String, SocketAddr)>,
+    #[cfg_attr(
+        not(feature = "http3"),
+        allow(dead_code, reason = "forwarded to Http3Options when http3 is enabled")
+    )]
     root_cert_der: Option<PathBuf>,
     http3_alt_svc: bool,
     alt_svc_h3: Mutex<HashMap<String, u64>>,

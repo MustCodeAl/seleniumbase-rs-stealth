@@ -356,6 +356,77 @@ impl Http3Request {
         self
     }
 
+    /// Appends multiple request headers.
+    pub fn headers<I, K, V>(mut self, headers: I) -> Self
+    where
+        I: IntoIterator<Item = (K, V)>,
+        K: Into<String>,
+        V: Into<String>,
+    {
+        self.headers
+            .extend(headers.into_iter().map(|(k, v)| (k.into(), v.into())));
+        self
+    }
+
+    /// Sets an `authorization: Bearer <token>` header.
+    pub fn bearer_auth(self, token: impl AsRef<str>) -> Self {
+        self.header("authorization", format!("Bearer {}", token.as_ref()))
+    }
+
+    /// Sets the `referer` request header.
+    pub fn referer(self, referer: impl Into<String>) -> Self {
+        self.header("referer", referer)
+    }
+
+    /// Sets the `origin` request header.
+    pub fn origin(self, origin: impl Into<String>) -> Self {
+        self.header("origin", origin)
+    }
+
+    /// Sets the `accept-language` request header.
+    pub fn accept_language(self, value: impl Into<String>) -> Self {
+        self.header("accept-language", value)
+    }
+
+    /// Sets the `cookie` request header.
+    pub fn cookie(self, cookie: impl Into<String>) -> Self {
+        self.header("cookie", cookie)
+    }
+
+    /// Appends URL-encoded query parameters to the request URL.
+    pub fn query<I, K, V>(mut self, params: I) -> Self
+    where
+        I: IntoIterator<Item = (K, V)>,
+        K: AsRef<str>,
+        V: AsRef<str>,
+    {
+        let encoded = encode_form_pairs(params);
+        if !encoded.is_empty() {
+            let sep = if self.url.contains('?') { '&' } else { '?' };
+            self.url.push(sep);
+            self.url.push_str(&encoded);
+        }
+        self
+    }
+
+    /// Sets an `application/x-www-form-urlencoded` body and matching `content-type` header.
+    pub fn form<I, K, V>(mut self, params: I) -> Self
+    where
+        I: IntoIterator<Item = (K, V)>,
+        K: AsRef<str>,
+        V: AsRef<str>,
+    {
+        let encoded = encode_form_pairs(params);
+        self.body = Some(encoded.into_bytes());
+        self.headers
+            .retain(|(k, _)| !k.eq_ignore_ascii_case("content-type"));
+        self.headers.push((
+            "content-type".to_owned(),
+            "application/x-www-form-urlencoded".to_owned(),
+        ));
+        self
+    }
+
     /// The request body; set its `content-type` with [`header`](Self::header).
     pub fn body(mut self, body: impl Into<Vec<u8>>) -> Self {
         self.body = Some(body.into());
@@ -428,6 +499,52 @@ impl Http3Response {
             .map(|(_, value)| value.as_str())
     }
 
+    /// All values of the header `name`, compared without case.
+    #[must_use]
+    pub fn headers_all(&self, name: &str) -> Vec<&str> {
+        self.headers
+            .iter()
+            .filter(|(header, _)| header.eq_ignore_ascii_case(name))
+            .map(|(_, value)| value.as_str())
+            .collect()
+    }
+
+    /// All `Set-Cookie` header values from the response.
+    #[must_use]
+    pub fn cookies(&self) -> Vec<&str> {
+        self.headers_all("set-cookie")
+    }
+
+    /// The response `Content-Type` header value, if present.
+    #[must_use]
+    pub fn content_type(&self) -> Option<&str> {
+        self.header("content-type")
+    }
+
+    /// Returns `true` if the status code is in `200..=299`.
+    #[must_use]
+    pub fn is_success(&self) -> bool {
+        (200..=299).contains(&self.status)
+    }
+
+    /// Returns `true` if the status code is in `300..=399`.
+    #[must_use]
+    pub fn is_redirect(&self) -> bool {
+        (300..=399).contains(&self.status)
+    }
+
+    /// Returns `true` if the status code is in `400..=499`.
+    #[must_use]
+    pub fn is_client_error(&self) -> bool {
+        (400..=499).contains(&self.status)
+    }
+
+    /// Returns `true` if the status code is in `500..=599`.
+    #[must_use]
+    pub fn is_server_error(&self) -> bool {
+        (500..=599).contains(&self.status)
+    }
+
     /// The response body.
     #[must_use]
     pub fn body(&self) -> &[u8] {
@@ -457,6 +574,39 @@ impl Http3Response {
     pub fn json<T: serde::de::DeserializeOwned>(&self) -> Result<T, serde_json::Error> {
         serde_json::from_slice(&self.body)
     }
+}
+
+/// Percent-encodes `key=value` pairs for query strings and `application/x-www-form-urlencoded` bodies.
+fn encode_form_pairs<I, K, V>(params: I) -> String
+where
+    I: IntoIterator<Item = (K, V)>,
+    K: AsRef<str>,
+    V: AsRef<str>,
+{
+    fn pct(input: &str, out: &mut String) {
+        use std::fmt::Write as _;
+        for b in input.bytes() {
+            match b {
+                b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                    out.push(char::from(b));
+                }
+                b' ' => out.push('+'),
+                other => {
+                    let _ = write!(out, "%{other:02X}");
+                }
+            }
+        }
+    }
+    let mut out = String::new();
+    for (idx, (k, v)) in params.into_iter().enumerate() {
+        if idx > 0 {
+            out.push('&');
+        }
+        pct(k.as_ref(), &mut out);
+        out.push('=');
+        pct(v.as_ref(), &mut out);
+    }
+    out
 }
 
 /// A request line, as `sbrs-h3d` reads it.

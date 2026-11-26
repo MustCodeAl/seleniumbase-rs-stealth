@@ -13,8 +13,9 @@ pub use seleniumbase_rs::*;
 
 pub mod fingerprint;
 pub use fingerprint::{
-    ConnectionOverride, FingerprintGenerator, FingerprintOptions, FingerprintOptionsBuilder,
-    GeneratedFingerprint, ProfileFingerprint, ScreenConstraints,
+    BatteryOverride, ColorScheme, ConnectionOverride, FingerprintGenerator, FingerprintOptions,
+    FingerprintOptionsBuilder, GeneratedFingerprint, ProfileFingerprint, ReducedMotion,
+    ScreenConstraints, SpeechVoice,
 };
 
 pub mod script;

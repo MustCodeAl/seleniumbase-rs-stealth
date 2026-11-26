@@ -579,7 +579,7 @@ mod tests {
         let mut wire = Vec::new();
         write_frame(&mut wire, 0x01, b"abcdef");
         let (frames, used) = parse_frames(&wire[..wire.len() - 1]);
-        assert!(frames.is_empty());
+        assert_eq!(frames, []);
         assert_eq!(used, 0);
     }
 }

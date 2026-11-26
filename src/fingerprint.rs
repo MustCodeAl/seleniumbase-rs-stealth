@@ -1277,6 +1277,38 @@ pub struct ProfileFingerprint {
     /// Whether WebGPU spoofing is enabled.
     #[serde(default = "default_true")]
     pub webgpu_enabled: bool,
+
+    /// `navigator.maxTouchPoints` override.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_touch_points: Option<u32>,
+
+    /// `navigator.doNotTrack` override (`"1"`, `"0"`, `"unspecified"`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub do_not_track: Option<String>,
+
+    /// `navigator.pdfViewerEnabled` override.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pdf_viewer_enabled: Option<bool>,
+
+    /// CSS `prefers-color-scheme` media feature override.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color_scheme: Option<ColorScheme>,
+
+    /// CSS `prefers-reduced-motion` media feature override.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reduced_motion: Option<ReducedMotion>,
+
+    /// Synthetic `window.speechSynthesis.getVoices()` entries.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub speech_voices: Vec<SpeechVoice>,
+
+    /// Deterministic sub-millisecond jitter amplitude for `performance.now()`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub performance_jitter_ms: Option<f64>,
+
+    /// Whether `Worker` / `SharedWorker` navigator consistency spoofing is enabled.
+    #[serde(default = "default_true")]
+    pub worker_spoofing: bool,
 }
 
 const fn default_true() -> bool {
@@ -1320,6 +1352,14 @@ impl Default for ProfileFingerprint {
             dom_rect_jitter: None,
             font_metrics_jitter: None,
             webgpu_enabled: true,
+            max_touch_points: None,
+            do_not_track: None,
+            pdf_viewer_enabled: None,
+            color_scheme: None,
+            reduced_motion: None,
+            speech_voices: Vec::new(),
+            performance_jitter_ms: None,
+            worker_spoofing: true,
         }
     }
 }
@@ -1496,6 +1536,10 @@ impl ProfileFingerprint {
 
     /// Creates a [`ProfileFingerprint`] extracted from a built [`Fingerprint`].
     #[must_use]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "maps all core Fingerprint fields into a complete ProfileFingerprint"
+    )]
     pub fn from_fingerprint(fp: &Fingerprint) -> Self {
         let os = fp.os_type();
         let screen = fp.screen().value();
@@ -1599,6 +1643,14 @@ impl ProfileFingerprint {
             dom_rect_jitter: None,
             font_metrics_jitter: None,
             webgpu_enabled: true,
+            max_touch_points: fp.max_touch_points().value().copied(),
+            do_not_track: None,
+            pdf_viewer_enabled: Some(true),
+            color_scheme: None,
+            reduced_motion: None,
+            speech_voices: SpeechVoice::defaults_for(os),
+            performance_jitter_ms: None,
+            worker_spoofing: true,
         }
     }
 
@@ -1957,6 +2009,148 @@ impl ConnectionOverride {
     }
 }
 
+/// Synthetic `window.speechSynthesis.getVoices()` entry.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SpeechVoice {
+    /// Voice display name (e.g. `"Microsoft David - English (United States)"`).
+    pub name: String,
+    /// BCP 47 language tag (e.g. `"en-US"`).
+    pub lang: String,
+    /// Voice URI (defaults to `name`).
+    pub voice_uri: String,
+    /// Whether the voice is a local OS voice.
+    pub local_service: bool,
+    /// Whether this voice is the default voice.
+    pub default: bool,
+}
+
+impl SpeechVoice {
+    /// Creates a local speech synthesis voice with `voice_uri` equal to `name`.
+    #[must_use]
+    pub fn new(name: impl Into<String>, lang: impl Into<String>) -> Self {
+        let name = name.into();
+        Self {
+            voice_uri: name.clone(),
+            name,
+            lang: lang.into(),
+            local_service: true,
+            default: false,
+        }
+    }
+
+    /// Returns a realistic OS-matched default voice list.
+    #[must_use]
+    pub fn defaults_for(os: OsType) -> Vec<Self> {
+        let mut voices = match os {
+            OsType::Macos | OsType::Ios => vec![
+                Self::new("Samantha", "en-US"),
+                Self::new("Alex", "en-US"),
+                Self::new("Victoria", "en-US"),
+                Self::new("Daniel", "en-GB"),
+            ],
+            OsType::Windows => vec![
+                Self::new("Microsoft David - English (United States)", "en-US"),
+                Self::new("Microsoft Zira - English (United States)", "en-US"),
+                Self::new("Microsoft Mark - English (United States)", "en-US"),
+                Self::new("Google US English", "en-US"),
+            ],
+            OsType::Linux | OsType::Android | _ => vec![
+                Self::new("Google US English", "en-US"),
+                Self::new("Google UK English Female", "en-GB"),
+                Self::new("Google UK English Male", "en-GB"),
+            ],
+        };
+        if let Some(first) = voices.first_mut() {
+            first.default = true;
+        }
+        voices
+    }
+}
+
+/// CSS `prefers-color-scheme` media feature value.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ColorScheme {
+    /// Light theme (`(prefers-color-scheme: light)`).
+    Light,
+    /// Dark theme (`(prefers-color-scheme: dark)`).
+    Dark,
+    /// No explicit preference (`(prefers-color-scheme: no-preference)`).
+    NoPreference,
+}
+
+impl ColorScheme {
+    /// Returns the CSS media query token.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Light => "light",
+            Self::Dark => "dark",
+            Self::NoPreference => "no-preference",
+        }
+    }
+}
+
+/// CSS `prefers-reduced-motion` media feature value.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ReducedMotion {
+    /// Standard animations (`(prefers-reduced-motion: no-preference)`).
+    NoPreference,
+    /// Reduced motion (`(prefers-reduced-motion: reduce)`).
+    Reduce,
+}
+
+impl ReducedMotion {
+    /// Returns the CSS media query token.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::NoPreference => "no-preference",
+            Self::Reduce => "reduce",
+        }
+    }
+}
+
+/// Explicit `navigator.getBattery()` override for [`FingerprintOptions`].
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct BatteryOverride {
+    /// Whether the battery is currently charging.
+    pub charging: bool,
+    /// Battery charge level in `0.0..=1.0`.
+    pub level: f64,
+    /// Seconds until fully charged (`0.0` when full, `f64::INFINITY` when discharging).
+    pub charging_time: f64,
+    /// Seconds until discharged (`f64::INFINITY` when charging).
+    pub discharging_time: f64,
+}
+
+impl BatteryOverride {
+    /// Creates a battery override with coherent charging/discharging times.
+    #[must_use]
+    pub fn new(charging: bool, level: f64) -> Self {
+        let clamped = level.clamp(0.0, 1.0);
+        Self {
+            charging,
+            level: clamped,
+            charging_time: if charging {
+                if clamped >= 0.999 {
+                    0.0
+                } else {
+                    1800.0
+                }
+            } else {
+                f64::INFINITY
+            },
+            discharging_time: if charging {
+                f64::INFINITY
+            } else {
+                (clamped * 18_000.0).max(600.0)
+            },
+        }
+    }
+}
+
 /// Rich configuration options for [`FingerprintGenerator::generate_with`].
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct FingerprintOptions {
@@ -1978,22 +2172,50 @@ pub struct FingerprintOptions {
     pub screen: Option<ScreenConstraints>,
     /// Explicit `(vendor, renderer)` WebGL strings.
     pub webgl_override: Option<(String, String)>,
+    /// Explicit WebGL 1/2 `getParameter()` limits override.
+    pub webgl_params: Option<WebGlParameters>,
     /// Whether WebGPU spoofing is enabled.
     pub webgpu_enabled: bool,
     /// `navigator.hardwareConcurrency` override.
     pub hardware_concurrency: Option<u32>,
     /// `navigator.deviceMemory` override in GiB.
     pub device_memory: Option<u32>,
+    /// `navigator.maxTouchPoints` override.
+    pub max_touch_points: Option<u32>,
+    /// `navigator.doNotTrack` override (`"1"`, `"0"`, `"unspecified"`).
+    pub do_not_track: Option<String>,
+    /// `navigator.pdfViewerEnabled` override.
+    pub pdf_viewer_enabled: Option<bool>,
     /// Canvas noise amplitude override.
     pub canvas_noise_amplitude: Option<f64>,
     /// Audio noise amplitude override.
     pub audio_noise_amplitude: Option<f64>,
     /// Web Audio `AudioContext.sampleRate` override.
     pub audio_sample_rate: Option<u32>,
+    /// Web Audio `DynamicsCompressorNode` parameter override.
+    pub audio_compressor: Option<AudioDynamicsCompressor>,
     /// `DOMRect` jitter amplitude override.
     pub dom_rect_jitter: Option<f64>,
     /// Font metrics jitter amplitude override.
     pub font_metrics_jitter: Option<f64>,
+    /// Explicit installed font list override.
+    pub fonts: Option<Vec<String>>,
+    /// Explicit `navigator.getBattery()` override.
+    pub battery: Option<BatteryOverride>,
+    /// Explicit `window.speechSynthesis.getVoices()` override.
+    pub speech_voices: Option<Vec<SpeechVoice>>,
+    /// CSS `prefers-color-scheme` override.
+    pub color_scheme: Option<ColorScheme>,
+    /// CSS `prefers-reduced-motion` override.
+    pub reduced_motion: Option<ReducedMotion>,
+    /// CSS `color-gamut` override.
+    pub color_gamut: Option<ColorGamut>,
+    /// CSS `dynamic-range` HDR mode override.
+    pub hdr_mode: Option<HdrMode>,
+    /// Deterministic sub-millisecond `performance.now()` jitter amplitude.
+    pub performance_jitter_ms: Option<f64>,
+    /// Whether `Worker` / `SharedWorker` navigator consistency spoofing is enabled.
+    pub worker_spoofing: bool,
     /// WebRTC IP handling policy.
     pub webrtc_policy: Option<WebRtcPolicy>,
     /// `NetworkInformation` connection override.
@@ -2016,14 +2238,28 @@ impl Default for FingerprintOptions {
             geolocation: None,
             screen: None,
             webgl_override: None,
+            webgl_params: None,
             webgpu_enabled: true,
             hardware_concurrency: None,
             device_memory: None,
+            max_touch_points: None,
+            do_not_track: None,
+            pdf_viewer_enabled: None,
             canvas_noise_amplitude: None,
             audio_noise_amplitude: None,
             audio_sample_rate: None,
+            audio_compressor: None,
             dom_rect_jitter: None,
             font_metrics_jitter: None,
+            fonts: None,
+            battery: None,
+            speech_voices: None,
+            color_scheme: None,
+            reduced_motion: None,
+            color_gamut: None,
+            hdr_mode: None,
+            performance_jitter_ms: None,
+            worker_spoofing: true,
             webrtc_policy: None,
             connection: None,
             media_devices: None,
@@ -2182,11 +2418,96 @@ impl FingerprintOptionsBuilder {
         self
     }
 
+    /// Sets explicit installed font names.
+    pub fn fonts(mut self, fonts: Vec<String>) -> Self {
+        self.inner.fonts = Some(fonts);
+        self
+    }
+
+    /// Sets explicit `navigator.getBattery()` parameters.
+    pub fn battery(mut self, battery: BatteryOverride) -> Self {
+        self.inner.battery = Some(battery);
+        self
+    }
+
+    /// Sets explicit `window.speechSynthesis.getVoices()` entries.
+    pub fn speech_voices(mut self, voices: Vec<SpeechVoice>) -> Self {
+        self.inner.speech_voices = Some(voices);
+        self
+    }
+
+    /// Sets `navigator.maxTouchPoints`.
+    pub fn max_touch_points(mut self, points: u32) -> Self {
+        self.inner.max_touch_points = Some(points);
+        self
+    }
+
+    /// Sets `navigator.doNotTrack` (`"1"`, `"0"`, or `"unspecified"`).
+    pub fn do_not_track(mut self, value: impl Into<String>) -> Self {
+        self.inner.do_not_track = Some(value.into());
+        self
+    }
+
+    /// Sets `navigator.pdfViewerEnabled`.
+    pub fn pdf_viewer_enabled(mut self, enabled: bool) -> Self {
+        self.inner.pdf_viewer_enabled = Some(enabled);
+        self
+    }
+
+    /// Sets CSS `prefers-color-scheme`.
+    pub fn color_scheme(mut self, scheme: ColorScheme) -> Self {
+        self.inner.color_scheme = Some(scheme);
+        self
+    }
+
+    /// Sets CSS `prefers-reduced-motion`.
+    pub fn reduced_motion(mut self, motion: ReducedMotion) -> Self {
+        self.inner.reduced_motion = Some(motion);
+        self
+    }
+
+    /// Sets CSS `color-gamut`.
+    pub fn color_gamut(mut self, gamut: ColorGamut) -> Self {
+        self.inner.color_gamut = Some(gamut);
+        self
+    }
+
+    /// Sets CSS `dynamic-range` HDR mode.
+    pub fn hdr_mode(mut self, hdr: HdrMode) -> Self {
+        self.inner.hdr_mode = Some(hdr);
+        self
+    }
+
+    /// Sets deterministic sub-millisecond `performance.now()` jitter amplitude in ms.
+    pub fn performance_jitter_ms(mut self, jitter_ms: f64) -> Self {
+        self.inner.performance_jitter_ms = Some(jitter_ms);
+        self
+    }
+
+    /// Enables or disables `Worker` / `SharedWorker` navigator consistency spoofing.
+    pub fn worker_spoofing(mut self, enabled: bool) -> Self {
+        self.inner.worker_spoofing = enabled;
+        self
+    }
+
+    /// Sets explicit WebGL 1/2 parameter limits.
+    pub fn webgl_params(mut self, params: WebGlParameters) -> Self {
+        self.inner.webgl_params = Some(params);
+        self
+    }
+
+    /// Sets explicit Web Audio `DynamicsCompressorNode` parameters.
+    pub fn audio_compressor(mut self, compressor: AudioDynamicsCompressor) -> Self {
+        self.inner.audio_compressor = Some(compressor);
+        self
+    }
+
     /// Validates constraints and builds [`FingerprintOptions`].
     ///
     /// # Errors
     ///
-    /// Returns [`FingerprintError`] if `min_version > max_version` or `screen.min_width > screen.max_width`.
+    /// Returns [`FingerprintError`] if `min_version > max_version`, `screen.min_width > screen.max_width`,
+    /// `battery.level` is outside `0.0..=1.0`, or `performance_jitter_ms` is negative/non-finite.
     pub fn build(self) -> Result<FingerprintOptions, FingerprintError> {
         if let (Some(min_v), Some(max_v)) = (self.inner.min_version, self.inner.max_version)
             && min_v > max_v
@@ -2203,6 +2524,22 @@ impl FingerprintOptionsBuilder {
             return Err(FingerprintError::Incoherent {
                 setting: "screen",
                 reason: "screen min_width cannot exceed max_width".to_owned(),
+            });
+        }
+        if let Some(bat) = self.inner.battery
+            && (!bat.level.is_finite() || !(0.0..=1.0).contains(&bat.level))
+        {
+            return Err(FingerprintError::Incoherent {
+                setting: "battery",
+                reason: "battery level must be finite and within 0.0..=1.0".to_owned(),
+            });
+        }
+        if let Some(jitter) = self.inner.performance_jitter_ms
+            && (!jitter.is_finite() || jitter < 0.0)
+        {
+            return Err(FingerprintError::Incoherent {
+                setting: "performance_jitter_ms",
+                reason: "performance_jitter_ms must be finite and non-negative".to_owned(),
             });
         }
         Ok(self.inner)
@@ -2237,8 +2574,15 @@ impl FingerprintGenerator {
         if let Some(policy) = options.webrtc_policy {
             generator = generator.webrtc_policy(policy);
         }
-        if let Some(screen) = options.screen
-            && let Some(hdr) = screen.hdr_mode
+        if let Some(fonts) = &options.fonts {
+            generator = generator.fonts(fonts.clone());
+        }
+        if let Some(gamut) = options.color_gamut {
+            generator = generator.color_gamut(gamut);
+        }
+        if let Some(hdr) = options
+            .hdr_mode
+            .or_else(|| options.screen.and_then(|s| s.hdr_mode))
         {
             generator = generator.hdr(hdr == HdrMode::High);
         }
@@ -2302,10 +2646,17 @@ impl FingerprintGenerator {
         }
         base_fp = builder.build().unwrap_or(base_fp);
 
-        let (gpu_vendor, gpu_renderer, gpu_extensions, webgl_params) = Self::build_gpu(&base_fp);
+        let (gpu_vendor, gpu_renderer, gpu_extensions, mut webgl_params) =
+            Self::build_gpu(&base_fp);
+        if let Some(ref params_override) = options.webgl_params {
+            webgl_params = params_override.clone();
+        }
         let webgpu = WebGpuMetadata::for_gpu(os, &gpu_vendor, &gpu_renderer);
         let display = Self::build_display(&base_fp);
-        let audio = generator.build_audio(&base_fp);
+        let mut audio = generator.build_audio(&base_fp);
+        if let Some(comp) = options.audio_compressor {
+            audio.compressor = comp;
+        }
         let media_devices = if let Some((cams, mics, spks)) = options.media_devices {
             let mut devices = Vec::with_capacity((cams + mics + spks) as usize);
             let mut push_kind = |kind: &str, count: u32, prefix: &str| {
@@ -2325,20 +2676,57 @@ impl FingerprintGenerator {
         } else {
             MediaDeviceMetadata::synthetic(seed, os)
         };
-        let battery = Self::build_battery(&base_fp);
+        let battery = if let Some(bat) = options.battery {
+            BatteryMetadata {
+                charging: bat.charging,
+                charging_time: bat.charging_time,
+                discharging_time: bat.discharging_time,
+                level: bat.level,
+            }
+        } else {
+            Self::build_battery(&base_fp)
+        };
         let network = Self::build_network(&base_fp);
-        let fonts = generator.build_fonts(&base_fp);
+        let fonts = options
+            .fonts
+            .clone()
+            .unwrap_or_else(|| generator.build_fonts(&base_fp));
 
         let mut profile = ProfileFingerprint::from_fingerprint(&base_fp);
         profile.webgl_extensions.clone_from(&gpu_extensions);
-        if profile.fonts.is_empty() {
-            profile.fonts.clone_from(&fonts);
-        }
+        profile.fonts.clone_from(&fonts);
+        profile.battery = Some(battery);
         profile.canvas_noise_amplitude = options.canvas_noise_amplitude;
         profile.audio_noise_amplitude = options.audio_noise_amplitude;
         profile.dom_rect_jitter = options.dom_rect_jitter;
         profile.font_metrics_jitter = options.font_metrics_jitter;
         profile.webgpu_enabled = options.webgpu_enabled;
+        if let Some(points) = options.max_touch_points {
+            profile.max_touch_points = Some(points);
+        }
+        if let Some(dnt) = &options.do_not_track {
+            profile.do_not_track = Some(dnt.clone());
+        }
+        if let Some(pdf) = options.pdf_viewer_enabled {
+            profile.pdf_viewer_enabled = Some(pdf);
+        }
+        if let Some(scheme) = options.color_scheme {
+            profile.color_scheme = Some(scheme);
+        }
+        if let Some(motion) = options.reduced_motion {
+            profile.reduced_motion = Some(motion);
+        }
+        if let Some(gamut) = options.color_gamut {
+            profile.color_gamut = Some(gamut);
+        }
+        if let Some(hdr) = options.hdr_mode {
+            profile.hdr = Some(hdr == HdrMode::High);
+        }
+        if let Some(voices) = &options.speech_voices {
+            profile.speech_voices.clone_from(voices);
+        }
+        profile.performance_jitter_ms = options.performance_jitter_ms;
+        profile.worker_spoofing = options.worker_spoofing;
 
         let user_agent = profile.user_agent.clone().unwrap_or_default();
         let client_hints = profile

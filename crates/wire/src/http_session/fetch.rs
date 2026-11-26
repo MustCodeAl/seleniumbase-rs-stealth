@@ -46,7 +46,13 @@ struct Answer {
 
 enum HopBody {
     Wreq(Box<wreq::Response>),
-    #[cfg_attr(not(feature = "http3"), allow(dead_code))]
+    #[cfg_attr(
+        not(feature = "http3"),
+        allow(
+            dead_code,
+            reason = "constructed only when the http3 feature is enabled"
+        )
+    )]
     Direct(Bytes),
 }
 
