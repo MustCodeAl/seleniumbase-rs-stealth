@@ -1,7 +1,7 @@
 # seleniumbase-rs-stealth
 
-The experimental stealth layer of [seleniumbase-rs](https://github.com/MustCodeAl/seleniumbase-rs),
-the Rust port of SeleniumBase, packaged with a unified root facade crate (`seleniumbase-rs-stealth`) and three workspace crates of their own.
+The experimental stealth and evasion layer of [seleniumbase-rs](https://github.com/MustCodeAl/seleniumbase-rs),
+the Rust port of SeleniumBase, packaged with a unified root facade crate (`seleniumbase-rs-stealth`) and four workspace crates of their own.
 
 Documentation: <https://mustcodeal-seleniumbase-rs.docs7.io>. Start with
 [Stealthy scraping](https://mustcodeal-seleniumbase-rs.docs7.io/scraping/stealthy/overview),
@@ -17,12 +17,13 @@ Documentation: <https://mustcodeal-seleniumbase-rs.docs7.io>. Start with
 
 | Crate | What it is |
 |---|---|
-| `seleniumbase-rs-stealth` (root `.`) | Unified facade crate: re-exports all of `seleniumbase-rs` (including `sb_cdp` and `evasion`) alongside `codec`, `scrape` (enabled by default), and `wire` (with `features = ["wire"]`) so downstream projects need only one dependency. |
-| `seleniumbase-rs-codec` (`crates/codec`) | Pure wire formats, no I/O: a TLS `ClientHello` parser, JA3, JA4 and peetprint, the Akamai HTTP/2 fingerprint, HTTP/2 frame and HPACK reading, the TLS, HTTP/2 and header specs, and the measured browser table (`emulation`) embedded from `src/measured/*.json`. |
+| `seleniumbase-rs-stealth` (root `.`) | Unified facade crate: re-exports all of `seleniumbase-rs` (including `sb_cdp` and `undetected`) alongside `evasion`, `codec`, `scrape` (enabled by default), and `wire` (with `features = ["wire"]`) so downstream projects need only one dependency. |
+| `seleniumbase-rs-evasion` (`crates/evasion`) | Browser fingerprinting, JS evasion providers, and identity injection (moved from `seleniumbase-rs` core in v0.10.0): `Fingerprint`, `Spoof`, `StealthPolicy`, `mimic` specimens, `profile_payloads`, `capture` / consistency diagnostics, 32 built-in `EvasionProvider`s, and the `identity` bridge (`StealthPlan`, `FingerprintPlugin`, `LaunchOptionsFingerprintExt`, `PageFingerprintExt`, `BaseCaseFingerprintExt`). Also re-exports core-owned `patcher`, `dprocess`, `reactor`, `behavior`, `humanize`, and `cdp`. |
+| `seleniumbase-rs-codec` (`crates/codec`) | Pure wire formats, no I/O: a TLS `ClientHello` parser, JA3, JA4 and peetprint, the Akamai HTTP/2 fingerprint, HTTP/2 frame and HPACK reading, the TLS, HTTP/2, HTTP/3 and header specs, and the measured browser table (`emulation`) embedded from `src/measured/*.json`. |
 | `seleniumbase-rs-scrape` (`crates/scrape`) | Stealth scraping without TLS spoofing, over the pure CDP engine of seleniumbase-rs. Pure modules for challenge detection and the mitigation policy, egress (proxy pool, geo locale, URL redaction), an RFC 6265 cookie jar, the per-site ledger and its events, and the stealth identity with its session policy; the `runtime` module holds the I/O: `BrowserScraper`, `ProxySwitch`, `JsonLedger`, the identity file, the tracing sink and the capture tools. No TLS spoofing and no BoringSSL. |
-| `seleniumbase-rs-wire` (`crates/wire`) | Browser-identical TLS and HTTP/2 through wreq and BoringSSL: `WireFormat` and `WireFormatBuilder`, `HttpSession` (plain HTTP that continues a browser's session), `MitmProxy` (a loopback proxy that gives a real Chrome the measured TLS), `StealthSession` (moves between plain HTTP and Chrome), `EphemeralCa`, and the HTTP/2 capture tool. Builds BoringSSL, so it needs `cmake` and a C/C++ toolchain. |
+| `seleniumbase-rs-wire` (`crates/wire`) | Browser-identical TLS, HTTP/2, and HTTP/3 through wreq and BoringSSL: `WireFormat` and `WireFormatBuilder`, `HttpSession` (plain HTTP that continues a browser's session), `MitmProxy` (a loopback proxy that gives a real Chrome the measured TLS), `StealthSession` (moves between plain HTTP and Chrome), `EphemeralCa`, and the HTTP/2 capture tool. Builds BoringSSL, so it needs `cmake` and a C/C++ toolchain. |
 
-`wire` depends on `scrape`, which depends on `codec`; all three depend on `seleniumbase-rs`, and the root `seleniumbase-rs-stealth` crate re-exports them all.
+`wire` depends on `scrape`, which depends on `codec` and `evasion`; all four depend on `seleniumbase-rs`, and the root `seleniumbase-rs-stealth` crate re-exports them all.
 
 ## Status
 
@@ -44,10 +45,7 @@ maintainers' words. So:
 
 - **They cover only what the core lacks.** A job seleniumbase-rs already does is not done again
   here.
-- **They are built on the core's types and names**: the core's `Fingerprint`, `StealthPolicy`,
-  `ProxyList`, `SolveOptions`, `SessionStore` and so on. A stealth type takes a core type where
-  one fits (the scrape crate's `Identity` carries a core `Fingerprint`) and the core's words
-  where it names the same thing.
+- **They own the evasion and wire layers on top of core.** In v0.10.0, `Fingerprint`, `StealthPolicy`, `EvasionProvider`s, and `StealthPlan` moved into `seleniumbase-rs-evasion` here (`seleniumbase_rs_stealth::evasion`), while core `seleniumbase-rs` retains `ProxyList`, `SolveOptions`, `SessionStore`, `undetected`, and `sb_cdp::human`.
 - **Another way of doing a job stays.** When a crate here does a job the core also does, with
   another algorithm or strategy that can give different results, it is kept as another way of
   doing it, not removed.
@@ -143,10 +141,10 @@ adds only `Network`.
 
 ### Stealth overrides in the page
 
-A set of built-in evasion providers (`seleniumbase_rs::evasion::providers`)
+A set of built-in evasion providers (`seleniumbase_rs_stealth::evasion::providers`, in `crates/evasion`)
 writes one script that runs before any page script
-(`Page.addScriptToEvaluateOnNewDocument`), applied by `Page::apply_fingerprint`
-or `LaunchOptionsBuilder::fingerprint`. Replaced methods go on their prototype
+(`Page.addScriptToEvaluateOnNewDocument`), applied by `PageFingerprintExt::apply_fingerprint`
+or `LaunchOptionsFingerprintExt::with_fingerprint` (via `FingerprintPlugin`). Replaced methods go on their prototype
 and replaced getters on the prototype that owns them, so
 `Object.getOwnPropertyNames` is unchanged. `Function.prototype.toString` is
 masked (`NativeToStringProvider`) so patched functions report `[native code]`.

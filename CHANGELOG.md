@@ -5,7 +5,7 @@ All notable changes to the unified `seleniumbase-rs-stealth` facade and its
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). The crates are experimental
 and not published to crates.io, so their types and paths may change between commits.
 
-## [0.10.0] - unreleased
+## [0.10.0] - 2026-11-26
 
 ### Added
 
