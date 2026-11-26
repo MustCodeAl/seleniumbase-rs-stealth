@@ -118,6 +118,8 @@ pub struct Http3Options {
     root_cert_der: Option<PathBuf>,
     resolve: Vec<(String, IpAddr)>,
     proxy: Option<String>,
+    default_headers: Vec<(String, String)>,
+    default_timeout: Option<Duration>,
 }
 
 impl Default for Http3Options {
@@ -130,6 +132,8 @@ impl Default for Http3Options {
             root_cert_der: None,
             resolve: Vec::new(),
             proxy: None,
+            default_headers: Vec::new(),
+            default_timeout: None,
         }
     }
 }
@@ -267,6 +271,35 @@ impl Http3Options {
         self
     }
 
+    /// Adds a default header merged into every request sent by clients created from these options.
+    pub fn default_header(mut self, name: impl Into<String>, value: impl Into<String>) -> Self {
+        self.default_headers.push((name.into(), value.into()));
+        self
+    }
+
+    /// Adds multiple default headers merged into every request.
+    pub fn default_headers<I, K, V>(mut self, headers: I) -> Self
+    where
+        I: IntoIterator<Item = (K, V)>,
+        K: Into<String>,
+        V: Into<String>,
+    {
+        self.default_headers
+            .extend(headers.into_iter().map(|(k, v)| (k.into(), v.into())));
+        self
+    }
+
+    /// Sets a default `user-agent` header for every request.
+    pub fn user_agent(self, ua: impl Into<String>) -> Self {
+        self.default_header("user-agent", ua)
+    }
+
+    /// Sets a default per-request timeout applied when a request does not specify its own.
+    pub fn default_timeout(mut self, timeout: Duration) -> Self {
+        self.default_timeout = Some(timeout);
+        self
+    }
+
     /// Builds a reusable [`Http3Pool`] retaining up to `max_idle` helper processes for these options.
     #[must_use]
     pub fn pool(self, max_idle: usize) -> Http3Pool {
@@ -371,6 +404,12 @@ impl Http3Request {
     /// Sets an `authorization: Bearer <token>` header.
     pub fn bearer_auth(self, token: impl AsRef<str>) -> Self {
         self.header("authorization", format!("Bearer {}", token.as_ref()))
+    }
+
+    /// Sets an `authorization: Basic <base64>` header from username and password.
+    pub fn basic_auth(self, username: impl AsRef<str>, password: impl AsRef<str>) -> Self {
+        let raw = format!("{}:{}", username.as_ref(), password.as_ref());
+        self.header("authorization", format!("Basic {}", STANDARD.encode(raw)))
     }
 
     /// Sets the `referer` request header.
@@ -661,6 +700,8 @@ pub struct Http3Client {
     stdin: ChildStdin,
     stdout: Lines<BufReader<ChildStdout>>,
     next_id: u64,
+    default_headers: Vec<(String, String)>,
+    default_timeout: Option<Duration>,
 }
 
 impl Http3Client {
@@ -689,7 +730,34 @@ impl Http3Client {
             stdin,
             stdout: BufReader::new(stdout).lines(),
             next_id: 1,
+            default_headers: options.default_headers.clone(),
+            default_timeout: options.default_timeout,
         })
+    }
+
+    /// Sends a `GET` request for `url` using this client's defaults.
+    ///
+    /// # Errors
+    ///
+    /// See [`Self::send`].
+    pub async fn get(&mut self, url: impl Into<String>) -> Result<Http3Response, Http3Error> {
+        self.send(Http3Request::get(url)).await
+    }
+
+    /// Serializes `payload` as JSON and sends a `POST` request to `url`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Http3Error::Reply`] on JSON serialization failure or any [`Self::send`] error.
+    pub async fn post_json<T: serde::Serialize>(
+        &mut self,
+        url: impl Into<String>,
+        payload: &T,
+    ) -> Result<Http3Response, Http3Error> {
+        let req = Http3Request::post(url)
+            .json(payload)
+            .map_err(|e| Http3Error::Reply(e.to_string()))?;
+        self.send(req).await
     }
 
     /// Whether the helper process is still running.
@@ -709,14 +777,26 @@ impl Http3Client {
     pub async fn send(&mut self, request: Http3Request) -> Result<Http3Response, Http3Error> {
         let id = self.next_id;
         self.next_id += 1;
+        let mut merged_headers =
+            Vec::with_capacity(self.default_headers.len() + request.headers.len());
+        for (k, v) in &self.default_headers {
+            if !request
+                .headers
+                .iter()
+                .any(|(rk, _)| rk.eq_ignore_ascii_case(k))
+            {
+                merged_headers.push((k.clone(), v.clone()));
+            }
+        }
+        merged_headers.extend(request.headers);
+        let effective_timeout = request.timeout.or(self.default_timeout);
         let line = Line {
             id,
             method: &request.method,
             url: &request.url,
-            headers: &request.headers,
+            headers: &merged_headers,
             body: request.body.as_deref().map(|body| STANDARD.encode(body)),
-            timeout_ms: request
-                .timeout
+            timeout_ms: effective_timeout
                 .map(|timeout| u64::try_from(timeout.as_millis()).unwrap_or(u64::MAX)),
             proxy: request.proxy.as_deref(),
         };
@@ -848,6 +928,31 @@ impl Http3Pool {
             self.release(client).await;
         }
         res
+    }
+
+    /// Sends a `GET` request for `url` using a pooled client.
+    ///
+    /// # Errors
+    ///
+    /// See [`Self::send`].
+    pub async fn get(&self, url: impl Into<String>) -> Result<Http3Response, Http3Error> {
+        self.send(Http3Request::get(url)).await
+    }
+
+    /// Serializes `payload` as JSON and sends a `POST` request to `url` using a pooled client.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Http3Error::Reply`] on JSON serialization failure or any [`Self::send`] error.
+    pub async fn post_json<T: serde::Serialize>(
+        &self,
+        url: impl Into<String>,
+        payload: &T,
+    ) -> Result<Http3Response, Http3Error> {
+        let req = Http3Request::post(url)
+            .json(payload)
+            .map_err(|e| Http3Error::Reply(e.to_string()))?;
+        self.send(req).await
     }
 }
 
@@ -1056,5 +1161,125 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(50)).await;
         pool.release(client).await;
         assert_eq!(pool.clients.lock().await.len(), 0);
+    }
+
+    #[test]
+    fn request_builder_helpers_set_headers_query_form_and_text_body() {
+        let req = Http3Request::get("https://example.com/search")
+            .headers([("x-one", "1"), ("x-two", "2")])
+            .bearer_auth("tok-123")
+            .referer("https://example.com/")
+            .origin("https://example.com")
+            .accept_language("en-US,en;q=0.9")
+            .cookie("sid=abc")
+            .query([("q", "hello world"), ("page", "2")]);
+
+        assert_eq!(req.url, "https://example.com/search?q=hello+world&page=2");
+        assert!(req.headers.contains(&("x-one".to_owned(), "1".to_owned())));
+        assert!(req.headers.contains(&("x-two".to_owned(), "2".to_owned())));
+        assert!(req
+            .headers
+            .contains(&("authorization".to_owned(), "Bearer tok-123".to_owned())));
+        assert!(req
+            .headers
+            .contains(&("referer".to_owned(), "https://example.com/".to_owned())));
+        assert!(req
+            .headers
+            .contains(&("origin".to_owned(), "https://example.com".to_owned())));
+        assert!(req
+            .headers
+            .contains(&("accept-language".to_owned(), "en-US,en;q=0.9".to_owned())));
+        assert!(req
+            .headers
+            .contains(&("cookie".to_owned(), "sid=abc".to_owned())));
+
+        let basic = Http3Request::post("https://example.com/login")
+            .basic_auth("alice", "secret")
+            .form([("user", "alice"), ("role", "admin user")]);
+        assert!(basic.headers.contains(&(
+            "authorization".to_owned(),
+            format!("Basic {}", STANDARD.encode("alice:secret"))
+        )));
+        assert_eq!(
+            basic.body.as_deref(),
+            Some(&b"user=alice&role=admin+user"[..])
+        );
+        assert!(basic.headers.contains(&(
+            "content-type".to_owned(),
+            "application/x-www-form-urlencoded".to_owned()
+        )));
+
+        let text = Http3Request::post("https://example.com/note").text_body("hello");
+        assert_eq!(text.body.as_deref(), Some(&b"hello"[..]));
+        assert!(text.headers.contains(&(
+            "content-type".to_owned(),
+            "text/plain; charset=utf-8".to_owned()
+        )));
+    }
+
+    #[test]
+    fn response_helpers_inspect_headers_cookies_and_status_classes() {
+        let resp = Http3Response {
+            status: 201,
+            protocol: "h3".to_owned(),
+            headers: vec![
+                ("Content-Type".to_owned(), "application/json".to_owned()),
+                ("Set-Cookie".to_owned(), "a=1; Path=/".to_owned()),
+                ("set-cookie".to_owned(), "b=2; HttpOnly".to_owned()),
+            ],
+            body: br#"{"ok":true}"#.to_vec(),
+        };
+        assert_eq!(resp.content_type(), Some("application/json"));
+        assert_eq!(
+            resp.headers_all("set-cookie"),
+            vec!["a=1; Path=/", "b=2; HttpOnly"]
+        );
+        assert_eq!(resp.cookies(), vec!["a=1; Path=/", "b=2; HttpOnly"]);
+        assert!(resp.is_success());
+        assert!(!resp.is_redirect());
+        assert!(!resp.is_client_error());
+        assert!(!resp.is_server_error());
+
+        let redir = Http3Response {
+            status: 302,
+            ..resp.clone()
+        };
+        assert!(redir.is_redirect());
+        let client_err = Http3Response {
+            status: 404,
+            ..resp.clone()
+        };
+        assert!(client_err.is_client_error());
+        let server_err = Http3Response {
+            status: 503,
+            ..resp
+        };
+        assert!(server_err.is_server_error());
+    }
+
+    #[tokio::test]
+    async fn pool_get_and_post_json_shorthands_work() {
+        let dir = tempfile::tempdir().expect("a folder");
+        let program = fake_helper(
+            dir.path(),
+            &[
+                r#"{"id":1,"status":200,"protocol":"h3","headers":[],"body":"b2s="}"#,
+                r#"{"id":2,"status":201,"protocol":"h3","headers":[],"body":"eyJvayI6dHJ1ZX0="}"#,
+            ],
+        );
+        let pool = Http3Options::new().program(&program).pool(2);
+        let r1 = pool.get("https://localhost/ping").await.expect("get ok");
+        assert_eq!(r1.status(), 200);
+        assert_eq!(r1.text().expect("utf8"), "ok");
+
+        let r2 = pool
+            .post_json("https://localhost/items", &serde_json::json!({"x": 1}))
+            .await
+            .expect("post_json ok");
+        assert_eq!(r2.status(), 201);
+        assert_eq!(
+            r2.json::<serde_json::Value>().expect("json"),
+            serde_json::json!({"ok": true})
+        );
     }
 }

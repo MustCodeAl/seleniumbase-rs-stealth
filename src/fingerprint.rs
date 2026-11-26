@@ -2188,6 +2188,14 @@ pub struct FingerprintOptions {
     pub os: Option<OsType>,
     /// Browser family persona.
     pub browser: Option<BrowserType>,
+    /// Explicit User-Agent string override.
+    pub user_agent: Option<String>,
+    /// Explicit `navigator.platform` override.
+    pub platform: Option<String>,
+    /// Explicit screen `(width, height)` shorthand override.
+    pub window_size: Option<(u32, u32)>,
+    /// Additional HTTP headers merged into [`GeneratedFingerprint::headers`].
+    pub custom_headers: BTreeMap<String, String>,
     /// Minimum Chromium major version.
     pub min_version: Option<u32>,
     /// Maximum Chromium major version.
@@ -2273,6 +2281,10 @@ impl Default for FingerprintOptions {
         Self {
             os: None,
             browser: None,
+            user_agent: None,
+            platform: None,
+            window_size: None,
+            custom_headers: BTreeMap::new(),
             min_version: None,
             max_version: None,
             locales: None,
@@ -2404,6 +2416,30 @@ impl FingerprintOptionsBuilder {
     /// Sets the browser family persona.
     pub fn browser(mut self, browser: BrowserType) -> Self {
         self.inner.browser = Some(browser);
+        self
+    }
+
+    /// Sets an explicit `User-Agent` string override.
+    pub fn user_agent(mut self, ua: impl Into<String>) -> Self {
+        self.inner.user_agent = Some(ua.into());
+        self
+    }
+
+    /// Sets an explicit `navigator.platform` override.
+    pub fn platform(mut self, platform: impl Into<String>) -> Self {
+        self.inner.platform = Some(platform.into());
+        self
+    }
+
+    /// Sets an explicit screen `(width, height)` shorthand override.
+    pub fn window_size(mut self, width: u32, height: u32) -> Self {
+        self.inner.window_size = Some((width, height));
+        self
+    }
+
+    /// Adds a custom HTTP header merged into [`GeneratedFingerprint::headers`].
+    pub fn custom_header(mut self, name: impl Into<String>, value: impl Into<String>) -> Self {
+        self.inner.custom_headers.insert(name.into(), value.into());
         self
     }
 
@@ -2735,6 +2771,17 @@ impl FingerprintGenerator {
         if let Some(browser) = options.browser {
             builder = builder.browser_type(browser);
         }
+        if let Some(ua) = &options.user_agent {
+            builder = builder.user_agent(ua.as_str());
+        }
+        if let Some(platform) = &options.platform {
+            builder = builder.platform(platform.as_str());
+        }
+        if let Some((w, h)) = options.window_size {
+            builder = builder.screen(w, h);
+            let lost = if os.is_mobile() { 0 } else { 40 };
+            builder = builder.avail_screen((w, h.saturating_sub(lost)));
+        }
         if let Some(locales) = &options.locales
             && !locales.is_empty()
         {
@@ -2884,12 +2931,15 @@ impl FingerprintGenerator {
             .client_hints
             .clone()
             .unwrap_or_else(|| ClientHintsHighEntropy::for_safari(os));
-        let headers = Self::generate_headers(
+        let mut headers = Self::generate_headers(
             &base_fp,
             &user_agent,
             profile.client_hints.as_ref(),
             &profile.languages,
         );
+        for (k, v) in &options.custom_headers {
+            headers.insert(k.clone(), v.clone());
+        }
 
         GeneratedFingerprint {
             profile,

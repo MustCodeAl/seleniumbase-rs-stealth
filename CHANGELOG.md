@@ -12,12 +12,13 @@ and not published to crates.io, so their types and paths may change between comm
 - **HTTP/3 proxy routing, request kinds, and catalog resolution**:
   - `sbrs-h3d` now wires `Options.proxy` and per-request `Request.proxy` into `phantom::Route` (`socks5://` / `socks5h://` UDP relay and `connect-udp://` / MASQUE `https://`), rejecting TCP-only `http://` CONNECT proxies with a clear error.
   - `sbrs-h3d` adds `--request-kind navigation|subresource` and smart catalog profile resolution (`resolve_profile`) across Chrome, Edge, Firefox, Brave, Opera, and Safari entries.
-  - `crates/wire/src/http3.rs` adds `Http3RequestKind`, `Http3Options::for_browser()`, `request_kind()`, `socks5()`, `connect_udp()`, `pool(max_idle)`, and `Http3Client::is_alive()` checks in `Http3Pool::acquire()` / `release()`.
+  - `crates/wire/src/http3.rs` adds `Http3RequestKind`, `Http3Options::for_browser()`, `request_kind()`, `socks5()`, `connect_udp()`, `default_header()`, `default_headers()`, `user_agent()`, `default_timeout()`, `pool(max_idle)`, `Http3Client::{is_alive, get, post_json}`, `Http3Pool::{get, post_json}`, `Http3Request::{headers, bearer_auth, basic_auth, referer, origin, accept_language, cookie, query, form, text_body, json}`, and `Http3Response::{headers_all, cookies, content_type, is_success, is_redirect, is_client_error, is_server_error, text, text_lossy, json}`.
 - **`HttpSession` HTTP/3 pooling and `Alt-Svc` discovery**:
   - `HttpSession` now pools `sbrs-h3d` helpers via `Http3Pool` keyed by effective `Http3Options`, forwarding `resolve`, `root_cert_der`, proxy route, and `RequestShape`.
   - Added `HttpSessionOptions::http3_alt_svc(bool)` and `HttpSessionOptions::root_cert_der(path)`, with `Alt-Svc` (`h3`, `ma=`, `clear`) parsing and clean fallback to HTTP/2 on opportunistic failures.
-- **Advanced fingerprinting options and selective script injection**:
+- **Advanced fingerprinting options, Bayesian sampling, and selective script injection**:
   - Added `FingerprintOptions`, `FingerprintOptionsBuilder`, `ScreenConstraints`, `ConnectionOverride`, and `FingerprintGenerator::generate_with(&FingerprintOptions)`.
+  - Added `BayesianSampler` (`sample`, `sample_batch`, `sample_with_headers`), `HeaderGenerator`, `FingerprintConverter` (`to_cdp_commands`, `to_chromium_launch_args`, `to_playwright_context_options`, `to_json_pretty`), and `audit_coherence`.
   - Added `StealthScriptOptions`, `StealthScriptBundle::from_profile_with`, `StealthScriptBundle::from_generated_with`, and `StealthPlugin::with_script_options`.
 
 ## [0.9.3] - 2026-11-25

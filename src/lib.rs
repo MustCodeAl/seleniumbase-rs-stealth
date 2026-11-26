@@ -18,6 +18,12 @@ pub use fingerprint::{
     ScreenConstraints, SpeechVoice,
 };
 
+pub mod bayesian;
+pub use bayesian::{
+    audit_coherence, BayesianSampler, CoherenceReport, DeviceCategory, FingerprintConverter,
+    HeaderGenerator, RequestContext, SampleConstraints,
+};
+
 pub mod script;
 pub use script::{StealthScriptBundle, StealthScriptOptions};
 

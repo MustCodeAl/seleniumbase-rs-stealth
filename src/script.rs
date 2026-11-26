@@ -109,6 +109,12 @@ pub struct StealthScriptOptions {
     pub keyboard_layout: bool,
     /// Ensure `navigator.clipboard` exposes native-looking methods consistently.
     pub clipboard_guard: bool,
+    /// Report `document.fullscreenEnabled = true` consistently (anti-headless check).
+    pub fullscreen_guard: bool,
+    /// Align `matchMedia('(pointer: fine)')` and `matchMedia('(hover: hover)')` with desktop vs mobile OS.
+    pub pointer_capabilities: bool,
+    /// Optionally neutralize `navigator.sendBeacon` telemetry beacons (off by default).
+    pub beacon_guard: bool,
 }
 
 impl Default for StealthScriptOptions {
@@ -190,6 +196,9 @@ impl StealthScriptOptions {
             media_capabilities: true,
             keyboard_layout: true,
             clipboard_guard: true,
+            fullscreen_guard: true,
+            pointer_capabilities: true,
+            beacon_guard: false,
         }
     }
 
@@ -237,6 +246,9 @@ impl StealthScriptOptions {
             media_capabilities: false,
             keyboard_layout: false,
             clipboard_guard: false,
+            fullscreen_guard: false,
+            pointer_capabilities: false,
+            beacon_guard: false,
         }
     }
 
@@ -517,6 +529,27 @@ impl StealthScriptOptions {
     #[must_use]
     pub const fn clipboard_guard(mut self, enabled: bool) -> Self {
         self.clipboard_guard = enabled;
+        self
+    }
+
+    /// Enables or disables `document.fullscreenEnabled` consistency guard.
+    #[must_use]
+    pub const fn fullscreen_guard(mut self, enabled: bool) -> Self {
+        self.fullscreen_guard = enabled;
+        self
+    }
+
+    /// Enables or disables `matchMedia` pointer/hover capability alignment.
+    #[must_use]
+    pub const fn pointer_capabilities(mut self, enabled: bool) -> Self {
+        self.pointer_capabilities = enabled;
+        self
+    }
+
+    /// Enables or disables `navigator.sendBeacon` telemetry neutralization.
+    #[must_use]
+    pub const fn beacon_guard(mut self, enabled: bool) -> Self {
+        self.beacon_guard = enabled;
         self
     }
 }
@@ -1081,6 +1114,15 @@ impl ScriptParams {
         }
         if options.clipboard_guard {
             Self::push_clipboard_guard(&mut out);
+        }
+        if options.fullscreen_guard {
+            Self::push_fullscreen_guard(&mut out);
+        }
+        if options.pointer_capabilities {
+            self.push_pointer_capabilities(&mut out);
+        }
+        if options.beacon_guard {
+            Self::push_beacon_guard(&mut out);
         }
         if options.chrome_runtime || options.permissions {
             self.push_chrome_and_permissions(&mut out);
@@ -2906,6 +2948,63 @@ impl ScriptParams {
         writeText: makeNative(() => Promise.resolve(), 'writeText')
       };
       defineGetter(navProto, 'clipboard', () => fakeClipboard);
+    }
+  } catch (_) {}
+",
+        );
+    }
+
+    fn push_fullscreen_guard(out: &mut String) {
+        out.push_str(
+            r"  // 36. Document.fullscreenEnabled Guard
+  try {
+    const docProto = typeof Document !== 'undefined' ? Document.prototype : Object.getPrototypeOf(document);
+    if (docProto && !document.fullscreenEnabled) {
+      defineGetter(docProto, 'fullscreenEnabled', () => true);
+    }
+  } catch (_) {}
+",
+        );
+    }
+
+    fn push_pointer_capabilities(&self, out: &mut String) {
+        let is_mobile = self.os.is_mobile();
+        let _ = writeln!(
+            out,
+            r"  // 37. Pointer & Hover Media Query Capabilities
+  try {{
+    const isMobile = {is_mobile};
+    if (typeof window.matchMedia === 'function') {{
+      const origMm = window.matchMedia;
+      window.matchMedia = makeNative(function matchMedia(query) {{
+        const mql = origMm.apply(this, arguments);
+        const q = String(query || '').toLowerCase();
+        let ov = null;
+        if (q.includes('pointer: fine') || q.includes('any-pointer: fine')) ov = !isMobile;
+        else if (q.includes('pointer: coarse') || q.includes('any-pointer: coarse')) ov = isMobile;
+        else if (q.includes('hover: hover') || q.includes('any-hover: hover')) ov = !isMobile;
+        else if (q.includes('hover: none') || q.includes('any-hover: none')) ov = isMobile;
+        if (ov !== null) {{
+          try {{ Object.defineProperty(mql, 'matches', {{ get: () => ov, configurable: true }}); }} catch (_) {{}}
+        }}
+        return mql;
+      }}, 'matchMedia', origMm);
+    }}
+  }} catch (_) {{}}
+",
+        );
+    }
+
+    fn push_beacon_guard(out: &mut String) {
+        out.push_str(
+            r"  // 38. Navigator.sendBeacon Telemetry Guard
+  try {
+    const navProto = typeof Navigator !== 'undefined' ? Navigator.prototype : Object.getPrototypeOf(navigator);
+    if (navProto && navProto.sendBeacon) {
+      const origBeacon = navProto.sendBeacon;
+      navProto.sendBeacon = makeNative(function sendBeacon() {
+        return true;
+      }, 'sendBeacon', origBeacon);
     }
   } catch (_) {}
 ",

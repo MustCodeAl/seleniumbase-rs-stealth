@@ -45,6 +45,12 @@ assert_eq!(response.protocol(), "h3");
   proxies (`Http3Options::socks5`, `Http3Options::connect_udp`, `Http3Request::proxy`), as well as
   `--request-kind navigation|subresource` (`Http3Options::request_kind`). TCP-only `http://` CONNECT
   proxies are rejected because QUIC requires UDP.
+- `Http3Pool` reuses live `sbrs-h3d` helper processes (`Http3Options::pool(max_idle)`) and exposes
+  `get(url)` and `post_json(url, &payload)` shorthands alongside `send(Http3Request)`.
+- `Http3Request` provides ergonomic builders (`headers`, `bearer_auth`, `basic_auth`, `referer`,
+  `origin`, `accept_language`, `cookie`, `query`, `form`, `text_body`, `json`) and `Http3Response`
+  provides inspection helpers (`headers_all`, `cookies`, `content_type`, `is_success`,
+  `is_redirect`, `is_client_error`, `is_server_error`, `text`, `text_lossy`, `json`).
 
 ## What matches Chrome, and what does not
 
