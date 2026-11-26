@@ -1235,9 +1235,11 @@ impl ScriptParams {
   } catch (_) {}
 
   try {
-    try { delete navigator.webdriver; } catch (_) {}
-    const navProto = typeof Navigator !== 'undefined' ? Navigator.prototype : Object.getPrototypeOf(navigator);
-    defineGetter(navProto, 'webdriver', () => false);
+    if (navigator.webdriver !== false) {
+      try { delete navigator.webdriver; } catch (_) {}
+      const navProto = typeof Navigator !== 'undefined' ? Navigator.prototype : Object.getPrototypeOf(navigator);
+      defineGetter(navProto, 'webdriver', () => false);
+    }
     if (typeof HTMLIFrameElement !== 'undefined') {
       const cwDesc = Object.getOwnPropertyDescriptor(HTMLIFrameElement.prototype, 'contentWindow');
       if (cwDesc && cwDesc.get) {
@@ -3246,5 +3248,157 @@ mod tests {
             .performance_jitter_ms(-0.1)
             .build()
             .is_err());
+    }
+
+    const V8_STEALTH_HARNESS: &str = r"
+const vm = require('vm');
+const chunks = [];
+process.stdin.on('data', c => chunks.push(c));
+process.stdin.on('end', () => {
+  const cases = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+  for (const c of cases) {
+    // 1. Parse strictly as JS script in V8.
+    const compiled = new vm.Script(c.js, { filename: c.label + '.js' });
+    // 2. Execute inside a realistic browser-like global sandbox.
+    const runCase = (initialWebdriver) => {
+      function Navigator() {}
+      const navigator = Object.create(Navigator.prototype);
+      const origWebdriverGetter = function webdriver() { return initialWebdriver; };
+      Object.defineProperty(Navigator.prototype, 'webdriver', { get: origWebdriverGetter, configurable: true, enumerable: true });
+      function Screen() {}
+      const screen = Object.create(Screen.prototype);
+      function History() {}
+      const history = Object.create(History.prototype);
+      Object.defineProperty(History.prototype, 'length', { get() { return 1; }, configurable: true });
+      function Performance() {}
+      Performance.prototype.now = () => 100.0;
+      const performance = Object.create(Performance.prototype);
+      const ctx = {
+        Navigator, navigator, Screen, screen, History, history, Performance, performance,
+        document: { visibilityState: 'visible', hidden: false, createElement: () => ({}), fonts: { check: () => true } },
+        console: { debug: () => {}, log: () => {}, warn: () => {}, error: () => {} },
+        matchMedia: (q) => ({ matches: false, media: q, onchange: null, addListener() {}, removeListener() {}, addEventListener() {}, removeEventListener() {}, dispatchEvent() { return false; } }),
+        outerWidth: 1920, outerHeight: 1080, innerWidth: 1920, innerHeight: 1000, devicePixelRatio: 1,
+        Intl, Date, Error, Function, Object, Proxy, Reflect, WeakMap, Map, Set, Symbol, Promise, Array, Uint8Array, Float32Array, Number, String, Boolean, Math, RegExp, JSON,
+        URL: { createObjectURL: () => 'blob:mock' },
+        Blob: class Blob { constructor(p) { this.parts = p; } },
+        Worker: class Worker { constructor(u) { this.url = u; } },
+        SharedWorker: class SharedWorker { constructor(u) { this.url = u; } },
+        Notification: { permission: 'default' },
+        Permissions: { prototype: { query: async () => ({ state: 'prompt' }) } },
+        RTCPeerConnection: class RTCPeerConnection { addIceCandidate() { return Promise.resolve(); } },
+        StorageManager: { prototype: { estimate: async () => ({ quota: 1e9, usage: 0 }) } },
+        MediaCapabilities: { prototype: { decodingInfo: async () => ({ supported: true, smooth: true, powerEfficient: true }) } },
+        Keyboard: { prototype: { getLayoutMap: async () => new Map() } },
+        MouseEvent: { prototype: {} },
+        HTMLIFrameElement: { prototype: {} },
+        HTMLCanvasElement: { prototype: { toDataURL: () => 'data:image/png;base64,', toBlob: (cb) => cb(null) } },
+        CanvasRenderingContext2D: { prototype: { getImageData: () => ({ data: new Uint8ClampedArray(16) }), measureText: () => ({ width: 10 }) } },
+        Element: { prototype: { getBoundingClientRect: () => ({ x: 0, y: 0, width: 10, height: 10, top: 0, right: 10, bottom: 10, left: 0 }), getClientRects: () => [] } },
+        Range: { prototype: { getBoundingClientRect: () => ({ x: 0, y: 0, width: 10, height: 10, top: 0, right: 10, bottom: 10, left: 0 }), getClientRects: () => [] } },
+        AudioBuffer: { prototype: { getChannelData: () => new Float32Array(4), copyFromChannel: () => {} } },
+        AnalyserNode: { prototype: { getFloatFrequencyData: () => {}, getByteFrequencyData: () => {}, getFloatTimeDomainData: () => {}, getByteTimeDomainData: () => {} } },
+        AudioDestinationNode: { prototype: {} },
+        SVGTextContentElement: { prototype: { getComputedTextLength: () => 10 } },
+        HTMLMediaElement: { prototype: { canPlayType: () => 'probably' } },
+        setTimeout, clearTimeout,
+      };
+      ctx.window = ctx;
+      ctx.self = ctx;
+      ctx.globalThis = ctx;
+      vm.createContext(ctx);
+      compiled.runInContext(ctx);
+      if (ctx.navigator.webdriver !== false) {
+        throw new Error(c.label + ': navigator.webdriver was ' + ctx.navigator.webdriver);
+      }
+      const desc = Object.getOwnPropertyDescriptor(ctx.Navigator.prototype, 'webdriver');
+      if (initialWebdriver === false) {
+        if (desc.get !== origWebdriverGetter) {
+          throw new Error(c.label + ': native webdriver=false getter was unnecessarily replaced');
+        }
+      } else {
+        const toStr = ctx.Function.prototype.toString.call(desc.get);
+        if (!toStr.includes('[native code]')) {
+          throw new Error(c.label + ': webdriver getter toString leaked: ' + toStr);
+        }
+      }
+      if (c.expected_platform && ctx.navigator.platform !== c.expected_platform) {
+        throw new Error(c.label + ': platform mismatch ' + ctx.navigator.platform + ' != ' + c.expected_platform);
+      }
+      if (c.expected_cores && ctx.navigator.hardwareConcurrency !== c.expected_cores) {
+        throw new Error(c.label + ': cores mismatch ' + ctx.navigator.hardwareConcurrency + ' != ' + c.expected_cores);
+      }
+      if (c.expected_width && ctx.screen.width !== c.expected_width) {
+        throw new Error(c.label + ': screen.width mismatch ' + ctx.screen.width + ' != ' + c.expected_width);
+      }
+    };
+    runCase(true);
+    runCase(false);
+  }
+  console.log('VERIFIED ' + cases.length + ' STEALTH BUNDLES IN V8 (both webdriver=true and native webdriver=false)');
+});
+";
+
+    #[test]
+    fn generated_stealth_scripts_parse_and_execute_cleanly_in_v8() {
+        use crate::fingerprint::FingerprintOptions;
+        use std::io::Write as _;
+        use std::process::{Command, Stdio};
+
+        if Command::new("node").arg("--version").output().is_err() {
+            return;
+        }
+
+        let os_presets = [
+            ("windows_chrome", FingerprintOptions::windows_chrome()),
+            ("macos_chrome", FingerprintOptions::macos_chrome()),
+            ("linux_chrome", FingerprintOptions::linux_chrome()),
+            ("android_chrome", FingerprintOptions::android_chrome()),
+            ("ios_safari", FingerprintOptions::ios_safari()),
+        ];
+        let script_presets = [
+            ("all", StealthScriptOptions::all()),
+            ("strict", StealthScriptOptions::strict()),
+            ("balanced", StealthScriptOptions::balanced()),
+            ("minimal", StealthScriptOptions::minimal()),
+        ];
+
+        let mut payload = Vec::new();
+        for (os_name, opts) in &os_presets {
+            let generated = FingerprintGenerator::generate_with(opts);
+            for (preset_name, script_opts) in &script_presets {
+                let js =
+                    StealthScriptBundle::from_generated_with(&generated, script_opts).into_script();
+                payload.push(serde_json::json!({
+                    "label": format!("{os_name}/{preset_name}"),
+                    "js": js,
+                    "expected_platform": &generated.profile.platform,
+                    "expected_cores": generated.profile.hardware_concurrency,
+                    "expected_width": script_opts.screen_geometry.then_some(generated.display.width),
+                }));
+            }
+        }
+
+        let mut child = Command::new("node")
+            .arg("-e")
+            .arg(V8_STEALTH_HARNESS)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .expect("spawn node");
+        child
+            .stdin
+            .as_mut()
+            .expect("stdin")
+            .write_all(serde_json::to_string(&payload).expect("json").as_bytes())
+            .expect("write payload");
+        let output = child.wait_with_output().expect("wait node");
+        assert!(
+            output.status.success(),
+            "V8 validation failed:\nstdout: {}\nstderr: {}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
 }
