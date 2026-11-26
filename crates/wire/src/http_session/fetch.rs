@@ -46,7 +46,13 @@ struct Answer {
 
 enum HopBody {
     Wreq(Box<wreq::Response>),
-    #[cfg_attr(not(feature = "http3"), allow(dead_code))]
+    #[cfg_attr(
+        not(feature = "http3"),
+        allow(
+            dead_code,
+            reason = "constructed only when the http3 feature is enabled"
+        )
+    )]
     Direct(Bytes),
 }
 
@@ -126,6 +132,24 @@ async fn exchange(
         });
     }
 
+    #[cfg(feature = "http3")]
+    if hop.protocol.is_none()
+        && hop.url.scheme() == "https"
+        && session.inner().http3_alt_svc
+        && has_alt_svc_h3(session, &hop.url)
+    {
+        match exchange_http3(session, hop, shape, deadline).await {
+            Ok(answer) => return Ok(answer),
+            Err(error) => {
+                tracing::debug!(
+                    ?error,
+                    "opportunistic Alt-Svc HTTP/3 failed; falling back to HTTP/2"
+                );
+                clear_alt_svc_h3(session, &hop.url);
+            }
+        }
+    }
+
     let inner = session.inner();
     if let Some(pacer) = &inner.pacer {
         pacer.acquire(&site_name(&hop.url)).await;
@@ -148,6 +172,9 @@ async fn exchange(
     remember(session, &hop.url, protocol);
     let headers = headers_of(response.headers());
     store_cookies(session, &hop.url, &headers);
+    if inner.http3_alt_svc {
+        record_alt_svc(session, &hop.url, &headers);
+    }
     Ok(Answer {
         status: response.status().as_u16(),
         headers,
@@ -163,7 +190,7 @@ async fn exchange_http3(
     shape: RequestShape,
     deadline: Instant,
 ) -> Result<Answer, HttpError> {
-    use crate::http3::{Http3Client, Http3Options, Http3Request};
+    use crate::http3::{Http3Options, Http3Pool, Http3Request, Http3RequestKind};
     let inner = session.inner();
     if let Some(pacer) = &inner.pacer {
         pacer.acquire(&site_name(&hop.url)).await;
@@ -188,17 +215,46 @@ async fn exchange_http3(
     };
     req = req.timeout(timeout);
 
-    let profile = &session.inner().profile;
-    let options = Http3Options::new().for_version(profile.major(), profile.os());
-    let mut client = Http3Client::start(&options).map_err(|_err| HttpError::Client {
-        kind: "http3 helper missing or failed to start",
-    })?;
-    let resp = client
+    let profile = &inner.profile;
+    let request_kind = match shape {
+        RequestShape::Document => Http3RequestKind::Navigation,
+        RequestShape::Fetch | _ => Http3RequestKind::Subresource,
+    };
+    let mut options = Http3Options::new()
+        .for_version(profile.major(), profile.os())
+        .request_kind(request_kind);
+    if let Some(cert_path) = &inner.root_cert_der {
+        options = options.root_cert_der(cert_path);
+    }
+    for (host, addr) in &inner.resolve {
+        options = options.resolve(host, addr.ip());
+    }
+    if let Some(egress) = &inner.egress {
+        options = options.proxy(egress.key().to_string());
+    }
+
+    let pool = {
+        let mut pools = crate::sync::locked(&inner.http3_pools);
+        if let Some(existing) = pools.get(&options) {
+            existing.clone()
+        } else {
+            let created = Http3Pool::new(options.clone());
+            if pools.len() >= MAX_REMEMBERED_ORIGINS {
+                pools.clear();
+            }
+            pools.insert(options, created.clone());
+            created
+        }
+    };
+    let resp = pool
         .send(req)
         .await
         .map_err(|_err| failure(&hop.url, "http3 send failed"))?;
     let headers = ResponseHeaders::new(resp.headers().to_vec());
     store_cookies(session, &hop.url, &headers);
+    if inner.http3_alt_svc {
+        record_alt_svc(session, &hop.url, &headers);
+    }
     remember(session, &hop.url, WireProtocol::Http3);
     Ok(Answer {
         status: resp.status(),
@@ -206,6 +262,94 @@ async fn exchange_http3(
         protocol: WireProtocol::Http3,
         body_source: HopBody::Direct(Bytes::from(resp.body().to_vec())),
     })
+}
+
+/// Default `Alt-Svc` lifetime when `ma=` is omitted (RFC 7838 section 3.1: 24 hours).
+const DEFAULT_ALT_SVC_MAX_AGE_SECS: u64 = 86_400;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum AltSvcH3 {
+    None,
+    Clear,
+    Advertised { max_age_secs: u64 },
+}
+
+fn parse_alt_svc_h3(header_value: &str) -> AltSvcH3 {
+    let trimmed = header_value.trim();
+    if trimmed.eq_ignore_ascii_case("clear") {
+        return AltSvcH3::Clear;
+    }
+    for entry in trimmed.split(',') {
+        let mut parts = entry.split(';');
+        let Some(proto_alt) = parts.next().map(str::trim) else {
+            continue;
+        };
+        let Some((proto, _alt)) = proto_alt.split_once('=') else {
+            continue;
+        };
+        if !proto.trim().eq_ignore_ascii_case("h3") {
+            continue;
+        }
+        let mut max_age = DEFAULT_ALT_SVC_MAX_AGE_SECS;
+        for param in parts {
+            if let Some((k, v)) = param.trim().split_once('=')
+                && k.trim().eq_ignore_ascii_case("ma")
+            {
+                let v_clean = v.trim().trim_matches('"');
+                if let Ok(parsed) = v_clean.parse::<u64>() {
+                    max_age = parsed;
+                }
+            }
+        }
+        return AltSvcH3::Advertised {
+            max_age_secs: max_age,
+        };
+    }
+    AltSvcH3::None
+}
+
+fn record_alt_svc(session: &HttpSession, url: &Url, headers: &ResponseHeaders) {
+    if url.scheme() != "https" {
+        return;
+    }
+    let now = session.now();
+    for value in headers.get_all("alt-svc") {
+        match parse_alt_svc_h3(value) {
+            AltSvcH3::Clear => clear_alt_svc_h3(session, url),
+            AltSvcH3::Advertised { max_age_secs } => {
+                if max_age_secs == 0 {
+                    clear_alt_svc_h3(session, url);
+                } else {
+                    let mut table = crate::sync::locked(&session.inner().alt_svc_h3);
+                    if table.len() >= MAX_REMEMBERED_ORIGINS {
+                        table.clear();
+                    }
+                    table.insert(origin_key(url), now.saturating_add(max_age_secs));
+                }
+            }
+            AltSvcH3::None => {}
+        }
+    }
+}
+
+#[cfg(feature = "http3")]
+fn has_alt_svc_h3(session: &HttpSession, url: &Url) -> bool {
+    let now = session.now();
+    let mut table = crate::sync::locked(&session.inner().alt_svc_h3);
+    let key = origin_key(url);
+    match table.get(&key).copied() {
+        Some(expires_at) if expires_at > now => true,
+        Some(_) => {
+            table.remove(&key);
+            false
+        }
+        None => false,
+    }
+}
+
+fn clear_alt_svc_h3(session: &HttpSession, url: &Url) {
+    let mut table = crate::sync::locked(&session.inner().alt_svc_h3);
+    table.remove(&origin_key(url));
 }
 
 /// The headers of a response with lower-case names; a value that is not UTF-8 is read with the
@@ -381,5 +525,26 @@ fn classify(error: &wreq::Error) -> &'static str {
         "the request could not be built"
     } else {
         "the request failed"
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn alt_svc_parser_extracts_h3_max_age_and_clear() {
+        assert_eq!(parse_alt_svc_h3("clear"), AltSvcH3::Clear);
+        assert_eq!(
+            parse_alt_svc_h3(r#"h3=":443""#),
+            AltSvcH3::Advertised {
+                max_age_secs: DEFAULT_ALT_SVC_MAX_AGE_SECS
+            }
+        );
+        assert_eq!(
+            parse_alt_svc_h3(r#"h3-29=":443"; ma=3600, h3=":443"; ma=7200"#),
+            AltSvcH3::Advertised { max_age_secs: 7200 }
+        );
+        assert_eq!(parse_alt_svc_h3(r#"h2=":443"; ma=3600"#), AltSvcH3::None);
     }
 }

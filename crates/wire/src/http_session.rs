@@ -69,6 +69,8 @@ mod request;
 
 use std::collections::HashMap;
 use std::fmt;
+use std::net::SocketAddr;
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -118,6 +120,20 @@ struct Inner {
     /// The protocol each origin settled on, so the next request carries the headers of that
     /// protocol (the `priority` header is for HTTP/2 only).
     protocols: Mutex<HashMap<String, WireProtocol>>,
+    #[cfg_attr(
+        not(feature = "http3"),
+        allow(dead_code, reason = "forwarded to Http3Options when http3 is enabled")
+    )]
+    resolve: Vec<(String, SocketAddr)>,
+    #[cfg_attr(
+        not(feature = "http3"),
+        allow(dead_code, reason = "forwarded to Http3Options when http3 is enabled")
+    )]
+    root_cert_der: Option<PathBuf>,
+    http3_alt_svc: bool,
+    alt_svc_h3: Mutex<HashMap<String, u64>>,
+    #[cfg(feature = "http3")]
+    http3_pools: Mutex<HashMap<crate::http3::Http3Options, crate::http3::Http3Pool>>,
 }
 
 /// Plain HTTP requests that continue a browser's session; see the [module](self) documentation.
@@ -226,6 +242,12 @@ impl HttpSession {
                 sink: options.sink,
                 clock: options.clock,
                 protocols: Mutex::new(HashMap::new()),
+                resolve: options.resolve,
+                root_cert_der: options.root_cert_der,
+                http3_alt_svc: options.http3_alt_svc,
+                alt_svc_h3: Mutex::new(HashMap::new()),
+                #[cfg(feature = "http3")]
+                http3_pools: Mutex::new(HashMap::new()),
             }),
         })
     }

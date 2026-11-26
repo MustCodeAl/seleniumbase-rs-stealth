@@ -14,13 +14,545 @@ use seleniumbase_rs::evasion::fingerprint::{
 use seleniumbase_rs::evasion::randomize::PRESET_CHROMIUM_MAJOR;
 
 use crate::fingerprint::{
-    AudioMetadata, BatteryMetadata, ClientHintsHighEntropy, DisplayMetadata, GeneratedFingerprint,
-    GpuMetadata, MediaDeviceMetadata, NetworkMetadata, ProfileFingerprint, WebGlParameters,
-    WebGpuMetadata,
+    AudioMetadata, BatteryMetadata, ClientHintsHighEntropy, ColorScheme, DisplayMetadata,
+    GeneratedFingerprint, GpuMetadata, MediaDeviceMetadata, NetworkMetadata, ProfileFingerprint,
+    ReducedMotion, WebGlParameters, WebGpuMetadata,
 };
 
 const AUDIO_SEED_MASK: u64 = 0x5DEE_CE66;
 const DOM_SEED_MASK: u64 = 0xA5A5_5A5A;
+
+/// Selective injection toggles for [`StealthScriptBundle`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[allow(
+    clippy::struct_excessive_bools,
+    reason = "each boolean directly toggles one independent WebIDL/JS evasion surface"
+)]
+pub struct StealthScriptOptions {
+    /// Clean automation markers and spoof `navigator.webdriver = false`.
+    pub webdriver: bool,
+    /// Inject `window.chrome` (`app`, `csi`, `loadTimes`, `runtime`) for Chromium personas.
+    pub chrome_runtime: bool,
+    /// Align `Notification.permission` and `Permissions.prototype.query`.
+    pub permissions: bool,
+    /// Spoof `navigator.plugins` and `navigator.mimeTypes`.
+    pub plugins_mime: bool,
+    /// Spoof WebGL 1 & 2 parameters, extensions, and `readPixels` LSB jitter.
+    pub webgl: bool,
+    /// Spoof `navigator.gpu` WebGPU adapter info and limits.
+    pub webgpu: bool,
+    /// Inject deterministic canvas 2D noise.
+    pub canvas_noise: bool,
+    /// Inject deterministic `OffscreenCanvas` noise.
+    pub offscreen_canvas: bool,
+    /// Inject Web Audio context and signal noise.
+    pub audio_noise: bool,
+    /// Inject `Element.getBoundingClientRect` / `Range.getClientRects` jitter.
+    pub dom_rect_noise: bool,
+    /// Spoof `screen` and `window.devicePixelRatio` geometry.
+    pub screen_geometry: bool,
+    /// Spoof `navigator.userAgentData` high-entropy Client Hints.
+    pub client_hints: bool,
+    /// Spoof `navigator.mediaDevices.enumerateDevices`.
+    pub media_devices: bool,
+    /// Propagate `navigator.webdriver` spoofing into `HTMLIFrameElement.contentWindow`.
+    pub iframe_content_window: bool,
+    /// Scrub automation/CDP evaluation frames from `Error.prototype.stack`.
+    pub error_stack_scrub: bool,
+    /// Spoof `navigator.getBattery()`.
+    pub battery: bool,
+    /// Spoof `window.speechSynthesis.getVoices()`.
+    pub speech_voices: bool,
+    /// Spoof `navigator.doNotTrack`, `navigator.pdfViewerEnabled`, and `navigator.connection`.
+    pub navigator_extras: bool,
+    /// Spoof `window.matchMedia()` for `prefers-color-scheme`, `prefers-reduced-motion`, `color-gamut`, and `dynamic-range`.
+    pub css_media_queries: bool,
+    /// Inject deterministic sub-millisecond jitter into `performance.now()`.
+    pub performance_jitter: bool,
+    /// Propagate navigator and high-entropy Client Hints into `Worker` and `SharedWorker` scopes.
+    pub worker_spoofing: bool,
+    /// Spoof `document.fonts.check()` and `CanvasRenderingContext2D.measureText()` font metrics.
+    pub fonts: bool,
+    /// Align `Intl.DateTimeFormat`/`NumberFormat`/`Collator` `resolvedOptions()` with profile timezone and locale.
+    pub intl_timezone: bool,
+    /// Filter local ICE candidates (`typ host`) in `RTCPeerConnection` per `webrtc_policy`.
+    pub webrtc_guard: bool,
+    /// Inject deterministic sub-pixel jitter into `SVGTextContentElement` and `SVGGraphicsElement` metrics.
+    pub svg_noise: bool,
+    /// Keep `window.outerWidth`/`outerHeight` coherent with `innerWidth`/`innerHeight` (defeats headless 0x0 and fullscreen checks).
+    pub window_geometry: bool,
+    /// Mask incognito/headless `navigator.storage.estimate()` quota caps.
+    pub storage_quota: bool,
+    /// Align `navigator.getGamepads()` and hardware API surfaces with desktop Chromium.
+    pub hardware_apis: bool,
+    /// Keep `document.visibilityState === 'visible'` and `document.hidden === false` in background tabs.
+    pub visibility_guard: bool,
+    /// Defuse `console.debug(new Error())` `Runtime.stack.access` CDP canary probes.
+    pub console_debug_guard: bool,
+    /// Offset `MouseEvent.prototype.screenX`/`screenY` by window origin + chrome height to prevent `Input.cordinatesLeak`.
+    pub mouse_coord_guard: bool,
+    /// Report realistic H.264/AAC/AV1/WebM support in `HTMLMediaElement.canPlayType` and `MediaSource.isTypeSupported`.
+    pub codec_support: bool,
+    /// Align `Date.prototype.getTimezoneOffset()` with the profile's IANA timezone (DST-aware).
+    pub timezone_offset: bool,
+    /// Propagate `webdriver` and `toString` patches into newly created `about:blank` / `srcdoc` iframe sandboxes.
+    pub iframe_srcdoc_guard: bool,
+    /// Keep `window.history.length` realistic (`>= 2`) on fresh browser sessions.
+    pub history_length_guard: bool,
+    /// Extend deterministic canvas noise to `HTMLCanvasElement.prototype.toBlob` and `OffscreenCanvas.convertToBlob`.
+    pub canvas_toblob_guard: bool,
+    /// Spoof `WebGLRenderingContext`/`WebGL2RenderingContext.getShaderPrecisionFormat` against `SwiftShader` tells.
+    pub webgl_shader_precision: bool,
+    /// Spoof `navigator.mediaCapabilities.decodingInfo()` hardware-accelerated video decoding support.
+    pub media_capabilities: bool,
+    /// Spoof `navigator.keyboard.getLayoutMap()` with a realistic QWERTY layout map.
+    pub keyboard_layout: bool,
+    /// Ensure `navigator.clipboard` exposes native-looking methods consistently.
+    pub clipboard_guard: bool,
+    /// Report `document.fullscreenEnabled = true` consistently (anti-headless check).
+    pub fullscreen_guard: bool,
+    /// Align `matchMedia('(pointer: fine)')` and `matchMedia('(hover: hover)')` with desktop vs mobile OS.
+    pub pointer_capabilities: bool,
+    /// Optionally neutralize `navigator.sendBeacon` telemetry beacons (off by default).
+    pub beacon_guard: bool,
+}
+
+impl Default for StealthScriptOptions {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl StealthScriptOptions {
+    /// Creates options with all evasions enabled.
+    #[must_use]
+    pub const fn all() -> Self {
+        Self::new()
+    }
+
+    /// Creates strict options with all evasions enabled (alias for [`Self::all`]).
+    #[must_use]
+    pub const fn strict() -> Self {
+        Self::new()
+    }
+
+    /// Creates balanced options: all core, worker, console, mouse, WebRTC, Intl, and media guards
+    /// enabled while disabling pixel/audio/SVG noise for visual fidelity.
+    #[must_use]
+    pub const fn balanced() -> Self {
+        Self {
+            canvas_noise: false,
+            offscreen_canvas: false,
+            canvas_toblob_guard: false,
+            audio_noise: false,
+            dom_rect_noise: false,
+            svg_noise: false,
+            performance_jitter: false,
+            ..Self::new()
+        }
+    }
+
+    /// Creates options with all evasions enabled.
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            webdriver: true,
+            chrome_runtime: true,
+            permissions: true,
+            plugins_mime: true,
+            webgl: true,
+            webgpu: true,
+            canvas_noise: true,
+            offscreen_canvas: true,
+            audio_noise: true,
+            dom_rect_noise: true,
+            screen_geometry: true,
+            client_hints: true,
+            media_devices: true,
+            iframe_content_window: true,
+            error_stack_scrub: true,
+            battery: true,
+            speech_voices: true,
+            navigator_extras: true,
+            css_media_queries: true,
+            performance_jitter: true,
+            worker_spoofing: true,
+            fonts: true,
+            intl_timezone: true,
+            webrtc_guard: true,
+            svg_noise: true,
+            window_geometry: true,
+            storage_quota: true,
+            hardware_apis: true,
+            visibility_guard: true,
+            console_debug_guard: true,
+            mouse_coord_guard: true,
+            codec_support: true,
+            timezone_offset: true,
+            iframe_srcdoc_guard: true,
+            history_length_guard: true,
+            canvas_toblob_guard: true,
+            webgl_shader_precision: true,
+            media_capabilities: true,
+            keyboard_layout: true,
+            clipboard_guard: true,
+            fullscreen_guard: true,
+            pointer_capabilities: true,
+            beacon_guard: false,
+        }
+    }
+
+    /// Creates minimal options enabling only `webdriver`, `chrome_runtime`, `permissions`, and `error_stack_scrub`.
+    #[must_use]
+    pub const fn minimal() -> Self {
+        Self {
+            webdriver: true,
+            chrome_runtime: true,
+            permissions: true,
+            plugins_mime: false,
+            webgl: false,
+            webgpu: false,
+            canvas_noise: false,
+            offscreen_canvas: false,
+            audio_noise: false,
+            dom_rect_noise: false,
+            screen_geometry: false,
+            client_hints: false,
+            media_devices: false,
+            iframe_content_window: false,
+            error_stack_scrub: true,
+            battery: false,
+            speech_voices: false,
+            navigator_extras: false,
+            css_media_queries: false,
+            performance_jitter: false,
+            worker_spoofing: false,
+            fonts: false,
+            intl_timezone: false,
+            webrtc_guard: false,
+            svg_noise: false,
+            window_geometry: false,
+            storage_quota: false,
+            hardware_apis: false,
+            visibility_guard: false,
+            console_debug_guard: false,
+            mouse_coord_guard: false,
+            codec_support: false,
+            timezone_offset: false,
+            iframe_srcdoc_guard: false,
+            history_length_guard: false,
+            canvas_toblob_guard: false,
+            webgl_shader_precision: false,
+            media_capabilities: false,
+            keyboard_layout: false,
+            clipboard_guard: false,
+            fullscreen_guard: false,
+            pointer_capabilities: false,
+            beacon_guard: false,
+        }
+    }
+
+    /// Enables or disables `webdriver` and automation marker cleanup.
+    #[must_use]
+    pub const fn webdriver(mut self, enabled: bool) -> Self {
+        self.webdriver = enabled;
+        self
+    }
+
+    /// Enables or disables `window.chrome` runtime spoofing.
+    #[must_use]
+    pub const fn chrome_runtime(mut self, enabled: bool) -> Self {
+        self.chrome_runtime = enabled;
+        self
+    }
+
+    /// Enables or disables `Notification` / `Permissions` alignment.
+    #[must_use]
+    pub const fn permissions(mut self, enabled: bool) -> Self {
+        self.permissions = enabled;
+        self
+    }
+
+    /// Enables or disables `navigator.plugins` / `mimeTypes` spoofing.
+    #[must_use]
+    pub const fn plugins_mime(mut self, enabled: bool) -> Self {
+        self.plugins_mime = enabled;
+        self
+    }
+
+    /// Enables or disables WebGL parameter and `readPixels` spoofing.
+    #[must_use]
+    pub const fn webgl(mut self, enabled: bool) -> Self {
+        self.webgl = enabled;
+        self
+    }
+
+    /// Enables or disables `navigator.gpu` WebGPU spoofing.
+    #[must_use]
+    pub const fn webgpu(mut self, enabled: bool) -> Self {
+        self.webgpu = enabled;
+        self
+    }
+
+    /// Enables or disables 2D canvas noise.
+    #[must_use]
+    pub const fn canvas_noise(mut self, enabled: bool) -> Self {
+        self.canvas_noise = enabled;
+        self
+    }
+
+    /// Enables or disables `OffscreenCanvas` noise.
+    #[must_use]
+    pub const fn offscreen_canvas(mut self, enabled: bool) -> Self {
+        self.offscreen_canvas = enabled;
+        self
+    }
+
+    /// Enables or disables Web Audio noise.
+    #[must_use]
+    pub const fn audio_noise(mut self, enabled: bool) -> Self {
+        self.audio_noise = enabled;
+        self
+    }
+
+    /// Enables or disables `DOMRect` jitter.
+    #[must_use]
+    pub const fn dom_rect_noise(mut self, enabled: bool) -> Self {
+        self.dom_rect_noise = enabled;
+        self
+    }
+
+    /// Enables or disables `screen` geometry spoofing.
+    #[must_use]
+    pub const fn screen_geometry(mut self, enabled: bool) -> Self {
+        self.screen_geometry = enabled;
+        self
+    }
+
+    /// Enables or disables `navigator.userAgentData` Client Hints spoofing.
+    #[must_use]
+    pub const fn client_hints(mut self, enabled: bool) -> Self {
+        self.client_hints = enabled;
+        self
+    }
+
+    /// Enables or disables `navigator.mediaDevices.enumerateDevices` spoofing.
+    #[must_use]
+    pub const fn media_devices(mut self, enabled: bool) -> Self {
+        self.media_devices = enabled;
+        self
+    }
+
+    /// Enables or disables `HTMLIFrameElement.contentWindow` webdriver propagation.
+    #[must_use]
+    pub const fn iframe_content_window(mut self, enabled: bool) -> Self {
+        self.iframe_content_window = enabled;
+        self
+    }
+
+    /// Enables or disables `Error.prototype.stack` CDP frame scrubbing.
+    #[must_use]
+    pub const fn error_stack_scrub(mut self, enabled: bool) -> Self {
+        self.error_stack_scrub = enabled;
+        self
+    }
+
+    /// Enables or disables `navigator.getBattery()` spoofing.
+    #[must_use]
+    pub const fn battery(mut self, enabled: bool) -> Self {
+        self.battery = enabled;
+        self
+    }
+
+    /// Enables or disables `window.speechSynthesis.getVoices()` spoofing.
+    #[must_use]
+    pub const fn speech_voices(mut self, enabled: bool) -> Self {
+        self.speech_voices = enabled;
+        self
+    }
+
+    /// Enables or disables `navigator.doNotTrack`, `pdfViewerEnabled`, and `connection` spoofing.
+    #[must_use]
+    pub const fn navigator_extras(mut self, enabled: bool) -> Self {
+        self.navigator_extras = enabled;
+        self
+    }
+
+    /// Enables or disables `window.matchMedia()` CSS media query spoofing.
+    #[must_use]
+    pub const fn css_media_queries(mut self, enabled: bool) -> Self {
+        self.css_media_queries = enabled;
+        self
+    }
+
+    /// Enables or disables deterministic `performance.now()` timing jitter.
+    #[must_use]
+    pub const fn performance_jitter(mut self, enabled: bool) -> Self {
+        self.performance_jitter = enabled;
+        self
+    }
+
+    /// Enables or disables `Worker` / `SharedWorker` navigator consistency spoofing.
+    #[must_use]
+    pub const fn worker_spoofing(mut self, enabled: bool) -> Self {
+        self.worker_spoofing = enabled;
+        self
+    }
+
+    /// Enables or disables font enumeration and `measureText` spoofing.
+    #[must_use]
+    pub const fn fonts(mut self, enabled: bool) -> Self {
+        self.fonts = enabled;
+        self
+    }
+
+    /// Enables or disables `Intl` timezone and locale consistency.
+    #[must_use]
+    pub const fn intl_timezone(mut self, enabled: bool) -> Self {
+        self.intl_timezone = enabled;
+        self
+    }
+
+    /// Enables or disables `RTCPeerConnection` host ICE candidate filtering.
+    #[must_use]
+    pub const fn webrtc_guard(mut self, enabled: bool) -> Self {
+        self.webrtc_guard = enabled;
+        self
+    }
+
+    /// Enables or disables `SVGTextContentElement` and `SVGGraphicsElement` sub-pixel noise.
+    #[must_use]
+    pub const fn svg_noise(mut self, enabled: bool) -> Self {
+        self.svg_noise = enabled;
+        self
+    }
+
+    /// Enables or disables `window.outerWidth`/`outerHeight` geometry coherence.
+    #[must_use]
+    pub const fn window_geometry(mut self, enabled: bool) -> Self {
+        self.window_geometry = enabled;
+        self
+    }
+
+    /// Enables or disables `navigator.storage.estimate()` incognito/headless quota masking.
+    #[must_use]
+    pub const fn storage_quota(mut self, enabled: bool) -> Self {
+        self.storage_quota = enabled;
+        self
+    }
+
+    /// Enables or disables `navigator.getGamepads()` and hardware API alignment.
+    #[must_use]
+    pub const fn hardware_apis(mut self, enabled: bool) -> Self {
+        self.hardware_apis = enabled;
+        self
+    }
+
+    /// Enables or disables `document.visibilityState` / `document.hidden` foreground masking.
+    #[must_use]
+    pub const fn visibility_guard(mut self, enabled: bool) -> Self {
+        self.visibility_guard = enabled;
+        self
+    }
+
+    /// Enables or disables `console.debug` `Runtime.stack.access` canary guard.
+    #[must_use]
+    pub const fn console_debug_guard(mut self, enabled: bool) -> Self {
+        self.console_debug_guard = enabled;
+        self
+    }
+
+    /// Enables or disables `MouseEvent.prototype.screenX`/`screenY` coordinate alignment.
+    #[must_use]
+    pub const fn mouse_coord_guard(mut self, enabled: bool) -> Self {
+        self.mouse_coord_guard = enabled;
+        self
+    }
+
+    /// Enables or disables media codec (`canPlayType` / `MediaSource.isTypeSupported`) spoofing.
+    #[must_use]
+    pub const fn codec_support(mut self, enabled: bool) -> Self {
+        self.codec_support = enabled;
+        self
+    }
+
+    /// Enables or disables DST-aware `Date.prototype.getTimezoneOffset()` alignment.
+    #[must_use]
+    pub const fn timezone_offset(mut self, enabled: bool) -> Self {
+        self.timezone_offset = enabled;
+        self
+    }
+
+    /// Enables or disables `about:blank` / `srcdoc` iframe sandbox propagation.
+    #[must_use]
+    pub const fn iframe_srcdoc_guard(mut self, enabled: bool) -> Self {
+        self.iframe_srcdoc_guard = enabled;
+        self
+    }
+
+    /// Enables or disables `window.history.length` fresh-session masking.
+    #[must_use]
+    pub const fn history_length_guard(mut self, enabled: bool) -> Self {
+        self.history_length_guard = enabled;
+        self
+    }
+
+    /// Enables or disables `HTMLCanvasElement.toBlob` / `OffscreenCanvas.convertToBlob` noise.
+    #[must_use]
+    pub const fn canvas_toblob_guard(mut self, enabled: bool) -> Self {
+        self.canvas_toblob_guard = enabled;
+        self
+    }
+
+    /// Enables or disables `WebGL` shader precision format alignment.
+    #[must_use]
+    pub const fn webgl_shader_precision(mut self, enabled: bool) -> Self {
+        self.webgl_shader_precision = enabled;
+        self
+    }
+
+    /// Enables or disables `navigator.mediaCapabilities.decodingInfo()` spoofing.
+    #[must_use]
+    pub const fn media_capabilities(mut self, enabled: bool) -> Self {
+        self.media_capabilities = enabled;
+        self
+    }
+
+    /// Enables or disables `navigator.keyboard.getLayoutMap()` spoofing.
+    #[must_use]
+    pub const fn keyboard_layout(mut self, enabled: bool) -> Self {
+        self.keyboard_layout = enabled;
+        self
+    }
+
+    /// Enables or disables `navigator.clipboard` consistency guard.
+    #[must_use]
+    pub const fn clipboard_guard(mut self, enabled: bool) -> Self {
+        self.clipboard_guard = enabled;
+        self
+    }
+
+    /// Enables or disables `document.fullscreenEnabled` consistency guard.
+    #[must_use]
+    pub const fn fullscreen_guard(mut self, enabled: bool) -> Self {
+        self.fullscreen_guard = enabled;
+        self
+    }
+
+    /// Enables or disables `matchMedia` pointer/hover capability alignment.
+    #[must_use]
+    pub const fn pointer_capabilities(mut self, enabled: bool) -> Self {
+        self.pointer_capabilities = enabled;
+        self
+    }
+
+    /// Enables or disables `navigator.sendBeacon` telemetry neutralization.
+    #[must_use]
+    pub const fn beacon_guard(mut self, enabled: bool) -> Self {
+        self.beacon_guard = enabled;
+        self
+    }
+}
 
 /// Bundle of JavaScript injection scripts for stealth evasions.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -39,6 +571,16 @@ impl StealthScriptBundle {
     /// Creates a stealth bundle from a complete [`GeneratedFingerprint`] bundle.
     #[must_use]
     pub fn from_generated(generated: &GeneratedFingerprint) -> Self {
+        Self::from_generated_with(generated, &StealthScriptOptions::default())
+    }
+
+    /// Creates a stealth bundle from a complete [`GeneratedFingerprint`] with selective
+    /// [`StealthScriptOptions`].
+    #[must_use]
+    pub fn from_generated_with(
+        generated: &GeneratedFingerprint,
+        options: &StealthScriptOptions,
+    ) -> Self {
         let params = ScriptParams::from_parts(
             &generated.profile,
             Some(&generated.gpu),
@@ -51,13 +593,20 @@ impl StealthScriptBundle {
             generated.profile.network.as_ref(),
         );
         Self {
-            script: params.render(),
+            script: params.render_with(options),
         }
     }
 
     /// Creates a stealth bundle from a [`ProfileFingerprint`].
     #[must_use]
     pub fn from_profile(profile: &ProfileFingerprint) -> Self {
+        Self::from_profile_with(profile, &StealthScriptOptions::default())
+    }
+
+    /// Creates a stealth bundle from a [`ProfileFingerprint`] with selective
+    /// [`StealthScriptOptions`].
+    #[must_use]
+    pub fn from_profile_with(profile: &ProfileFingerprint, options: &StealthScriptOptions) -> Self {
         let params = ScriptParams::from_parts(
             profile,
             None,
@@ -70,7 +619,7 @@ impl StealthScriptBundle {
             profile.network.as_ref(),
         );
         Self {
-            script: params.render(),
+            script: params.render_with(options),
         }
     }
 
@@ -297,11 +846,26 @@ struct ScriptParams {
     battery: Option<BatteryMetadata>,
     network: Option<NetworkMetadata>,
     fonts_json: String,
+    do_not_track: Option<String>,
+    pdf_viewer_enabled: Option<bool>,
+    color_scheme: Option<ColorScheme>,
+    reduced_motion: Option<ReducedMotion>,
+    color_gamut: Option<String>,
+    hdr: bool,
+    speech_voices_json: String,
+    performance_jitter_ms: f64,
+    worker_spoofing: bool,
+    timezone: Option<String>,
+    webrtc_policy: Option<seleniumbase_rs::WebRtcPolicy>,
+    storage_quota_gb: Option<u64>,
+    outer_chrome_height: u32,
+    history_min_length: u32,
 }
 
 impl ScriptParams {
     #[allow(
         clippy::too_many_arguments,
+        clippy::too_many_lines,
         reason = "aggregates optional metadata overrides with profile fallbacks"
     )]
     fn from_parts(
@@ -324,11 +888,13 @@ impl ScriptParams {
 
         let base_seed = profile.seed.unwrap_or_else(|| stable_profile_seed(profile));
         let canvas_mode = profile.canvas_noise.unwrap_or(CanvasNoise::Persistent);
-        let canvas_seed = if canvas_mode == CanvasNoise::Random {
-            base_seed ^ fresh_entropy()
-        } else {
-            base_seed
-        };
+        let canvas_seed = profile.canvas_seed.unwrap_or_else(|| {
+            if canvas_mode == CanvasNoise::Random {
+                base_seed ^ fresh_entropy()
+            } else {
+                base_seed
+            }
+        });
         let canvas_density = match canvas_mode {
             CanvasNoise::Natural => 0,
             CanvasNoise::Low => 8,
@@ -337,11 +903,13 @@ impl ScriptParams {
 
         let audio_mode = profile.audio_noise.unwrap_or(AudioNoise::Persistent);
         let audio_noise_enabled = audio_mode != AudioNoise::Natural;
-        let audio_seed = if audio_mode == AudioNoise::Random {
-            base_seed ^ AUDIO_SEED_MASK ^ fresh_entropy()
-        } else {
-            base_seed ^ AUDIO_SEED_MASK
-        };
+        let audio_seed = profile.audio_seed.unwrap_or_else(|| {
+            if audio_mode == AudioNoise::Random {
+                base_seed ^ AUDIO_SEED_MASK ^ fresh_entropy()
+            } else {
+                base_seed ^ AUDIO_SEED_MASK
+            }
+        });
 
         let languages = if profile.languages.is_empty() {
             vec!["en-US".to_owned(), "en".to_owned()]
@@ -397,7 +965,11 @@ impl ScriptParams {
             } else {
                 profile.device_memory.or(Some(8.0))
             },
-            max_touch_points: if os.is_mobile() { 5 } else { 0 },
+            max_touch_points: profile.max_touch_points.unwrap_or(if os.is_mobile() {
+                5
+            } else {
+                0
+            }),
             display: resolve_display(os, profile, display),
             graphics: resolve_graphics(os, profile, gpu, webgpu),
             client_hints: resolved_hints,
@@ -407,28 +979,154 @@ impl ScriptParams {
             battery: battery.copied(),
             network: network.cloned(),
             fonts_json: js_json(&profile.fonts, "[]"),
+            do_not_track: profile.do_not_track.clone(),
+            pdf_viewer_enabled: profile.pdf_viewer_enabled,
+            color_scheme: profile.color_scheme,
+            reduced_motion: profile.reduced_motion,
+            color_gamut: profile
+                .color_gamut
+                .map(|g| format!("{g:?}").to_ascii_lowercase()),
+            hdr: profile.hdr.unwrap_or(false),
+            speech_voices_json: js_json(&profile.speech_voices, "[]"),
+            performance_jitter_ms: profile.performance_jitter_ms.unwrap_or(0.05),
+            worker_spoofing: profile.worker_spoofing,
+            timezone: profile.timezone.clone(),
+            webrtc_policy: profile.webrtc_policy,
+            storage_quota_gb: profile.storage_quota_gb,
+            outer_chrome_height: profile.outer_chrome_height.unwrap_or(if os.is_mobile() {
+                0
+            } else {
+                88
+            }),
+            history_min_length: profile.history_min_length.unwrap_or(2),
         }
     }
 
-    fn render(&self) -> String {
-        let mut out = String::with_capacity(16 * 1024);
+    #[allow(
+        clippy::too_many_lines,
+        reason = "dispatches every enabled StealthScriptOptions evasion section in order"
+    )]
+    fn render_with(&self, options: &StealthScriptOptions) -> String {
+        let mut out = String::with_capacity(20 * 1024);
         out.push_str("(function() {\n  'use strict';\n\n");
         Self::push_native_helpers(&mut out);
-        Self::push_markers_webdriver_and_stack(&mut out);
+        if options.webdriver || options.iframe_content_window || options.error_stack_scrub {
+            Self::push_markers_webdriver_and_stack(&mut out);
+        }
         self.push_navigator(&mut out);
-        self.push_client_hints(&mut out);
-        self.push_screen(&mut out);
-        self.push_dom_rects(&mut out);
-        self.push_canvas_noise(&mut out);
-        self.push_offscreen_canvas_noise(&mut out);
-        self.push_fonts_and_measure_text(&mut out);
-        self.push_webgl_parameters(&mut out);
-        self.push_webgl_extras(&mut out);
-        self.push_webgpu(&mut out);
-        self.push_audio_context(&mut out);
-        self.push_audio_signal_noise(&mut out);
-        self.push_devices_battery_network(&mut out);
-        self.push_chrome_and_permissions(&mut out);
+        if options.navigator_extras {
+            self.push_navigator_extras(&mut out);
+        }
+        if options.client_hints {
+            self.push_client_hints(&mut out);
+        }
+        if options.screen_geometry {
+            self.push_screen(&mut out);
+        }
+        if options.css_media_queries {
+            self.push_css_media_queries(&mut out);
+        }
+        if options.dom_rect_noise {
+            self.push_dom_rects(&mut out);
+        }
+        if options.canvas_noise {
+            self.push_canvas_noise(&mut out);
+        }
+        if options.offscreen_canvas {
+            self.push_offscreen_canvas_noise(&mut out);
+        }
+        if options.fonts {
+            self.push_fonts_and_measure_text(&mut out);
+        }
+        if options.webgl {
+            self.push_webgl_parameters(&mut out);
+            self.push_webgl_extras(&mut out);
+        }
+        if options.webgpu {
+            self.push_webgpu(&mut out);
+        }
+        if options.audio_noise {
+            self.push_audio_context(&mut out);
+            self.push_audio_signal_noise(&mut out);
+        }
+        if options.media_devices || options.battery || options.navigator_extras {
+            self.push_devices_battery_network(&mut out);
+        }
+        if options.speech_voices {
+            self.push_speech_voices(&mut out);
+        }
+        if options.performance_jitter {
+            self.push_performance_jitter(&mut out);
+        }
+        if options.worker_spoofing && self.worker_spoofing {
+            self.push_worker_spoofing(&mut out);
+        }
+        if options.intl_timezone {
+            self.push_intl_timezone(&mut out);
+        }
+        if options.webrtc_guard {
+            self.push_webrtc_guard(&mut out);
+        }
+        if options.svg_noise {
+            self.push_svg_noise(&mut out);
+        }
+        if options.window_geometry {
+            self.push_window_geometry(&mut out);
+        }
+        if options.storage_quota {
+            self.push_storage_quota(&mut out);
+        }
+        if options.hardware_apis {
+            Self::push_hardware_apis(&mut out);
+        }
+        if options.visibility_guard {
+            Self::push_visibility_guard(&mut out);
+        }
+        if options.console_debug_guard {
+            Self::push_console_debug_guard(&mut out);
+        }
+        if options.mouse_coord_guard {
+            self.push_mouse_coord_guard(&mut out);
+        }
+        if options.codec_support {
+            Self::push_codec_support(&mut out);
+        }
+        if options.timezone_offset {
+            self.push_timezone_offset(&mut out);
+        }
+        if options.iframe_srcdoc_guard {
+            Self::push_iframe_srcdoc_guard(&mut out);
+        }
+        if options.history_length_guard {
+            self.push_history_length_guard(&mut out);
+        }
+        if options.canvas_toblob_guard {
+            Self::push_canvas_toblob_guard(&mut out);
+        }
+        if options.webgl_shader_precision {
+            Self::push_webgl_shader_precision(&mut out);
+        }
+        if options.media_capabilities {
+            Self::push_media_capabilities(&mut out);
+        }
+        if options.keyboard_layout {
+            Self::push_keyboard_layout(&mut out);
+        }
+        if options.clipboard_guard {
+            Self::push_clipboard_guard(&mut out);
+        }
+        if options.fullscreen_guard {
+            Self::push_fullscreen_guard(&mut out);
+        }
+        if options.pointer_capabilities {
+            self.push_pointer_capabilities(&mut out);
+        }
+        if options.beacon_guard {
+            Self::push_beacon_guard(&mut out);
+        }
+        if options.chrome_runtime || options.permissions {
+            self.push_chrome_and_permissions(&mut out);
+        }
         out.push_str("})();\n");
         out
     }
@@ -537,9 +1235,11 @@ impl ScriptParams {
   } catch (_) {}
 
   try {
-    try { delete navigator.webdriver; } catch (_) {}
-    const navProto = typeof Navigator !== 'undefined' ? Navigator.prototype : Object.getPrototypeOf(navigator);
-    defineGetter(navProto, 'webdriver', () => false);
+    if (navigator.webdriver !== false) {
+      try { delete navigator.webdriver; } catch (_) {}
+      const navProto = typeof Navigator !== 'undefined' ? Navigator.prototype : Object.getPrototypeOf(navigator);
+      defineGetter(navProto, 'webdriver', () => false);
+    }
     if (typeof HTMLIFrameElement !== 'undefined') {
       const cwDesc = Object.getOwnPropertyDescriptor(HTMLIFrameElement.prototype, 'contentWindow');
       if (cwDesc && cwDesc.get) {
@@ -1579,6 +2279,739 @@ impl ScriptParams {
 ",
         );
     }
+
+    fn push_navigator_extras(&self, out: &mut String) {
+        let dnt = self
+            .do_not_track
+            .as_deref()
+            .map_or_else(|| "null".to_owned(), js_str);
+        let pdf = self.pdf_viewer_enabled.unwrap_or(true);
+        let _ = writeln!(
+            out,
+            r"  // 13. Navigator Extras (doNotTrack, pdfViewerEnabled)
+  try {{
+    const navProto = typeof Navigator !== 'undefined' ? Navigator.prototype : Object.getPrototypeOf(navigator);
+    if ({has_dnt}) defineGetter(navProto, 'doNotTrack', () => {dnt});
+    defineGetter(navProto, 'pdfViewerEnabled', () => {pdf});
+  }} catch (_) {{}}
+",
+            has_dnt = self.do_not_track.is_some(),
+        );
+    }
+
+    fn push_speech_voices(&self, out: &mut String) {
+        let _ = writeln!(
+            out,
+            r"  // 14. SpeechSynthesis Voices
+  try {{
+    const syntheticVoices = {voices};
+    if (syntheticVoices.length && typeof window.speechSynthesis !== 'undefined') {{
+      const synthProto = Object.getPrototypeOf(window.speechSynthesis);
+      const origGetVoices = synthProto && synthProto.getVoices;
+      if (origGetVoices) {{
+        const voiceObjects = syntheticVoices.map((v) => Object.freeze({{
+          name: v.name,
+          lang: v.lang,
+          voiceURI: v.voice_uri,
+          localService: !!v.local_service,
+          default: !!v.default
+        }}));
+        synthProto.getVoices = makeNative(function getVoices() {{
+          return voiceObjects.slice();
+        }}, 'getVoices', origGetVoices);
+      }}
+    }}
+  }} catch (_) {{}}
+",
+            voices = self.speech_voices_json,
+        );
+    }
+
+    fn push_css_media_queries(&self, out: &mut String) {
+        let scheme = self
+            .color_scheme
+            .map_or_else(|| "null".to_owned(), |s| js_str(s.as_str()));
+        let motion = self
+            .reduced_motion
+            .map_or_else(|| "null".to_owned(), |m| js_str(m.as_str()));
+        let gamut = self
+            .color_gamut
+            .as_deref()
+            .map_or_else(|| "null".to_owned(), js_str);
+        let hdr = self.hdr;
+        let _ = writeln!(
+            out,
+            r"  // 15. CSS Media Queries (matchMedia overrides)
+  try {{
+    const targetScheme = {scheme};
+    const targetMotion = {motion};
+    const targetGamut = {gamut};
+    const targetHdr = {hdr};
+    if (typeof window.matchMedia === 'function') {{
+      const origMatchMedia = window.matchMedia;
+      window.matchMedia = makeNative(function matchMedia(query) {{
+        const mql = origMatchMedia.apply(this, arguments);
+        const q = String(query || '').toLowerCase();
+        let override = null;
+        if (targetScheme && q.includes('prefers-color-scheme')) {{
+          override = q.includes(targetScheme);
+        }} else if (targetMotion && q.includes('prefers-reduced-motion')) {{
+          override = q.includes(targetMotion);
+        }} else if (targetGamut && q.includes('color-gamut')) {{
+          override = q.includes(targetGamut) || (targetGamut === 'rec2020' && (q.includes('p3') || q.includes('srgb'))) || (targetGamut === 'p3' && q.includes('srgb'));
+        }} else if (q.includes('dynamic-range')) {{
+          override = q.includes('high') ? targetHdr : true;
+        }}
+        if (override !== null) {{
+          try {{
+            Object.defineProperty(mql, 'matches', {{ get: () => override, configurable: true }});
+          }} catch (_) {{}}
+        }}
+        return mql;
+      }}, 'matchMedia', origMatchMedia);
+    }}
+  }} catch (_) {{}}
+",
+        );
+    }
+
+    fn push_performance_jitter(&self, out: &mut String) {
+        if self.performance_jitter_ms <= 0.0 {
+            return;
+        }
+        let jitter = js_num(self.performance_jitter_ms);
+        let seed = self.dom_seed & 0xffff_ffff;
+        let _ = writeln!(
+            out,
+            r"  // 16. Performance.now() deterministic sub-millisecond timing jitter
+  try {{
+    if (typeof Performance !== 'undefined' && Performance.prototype.now) {{
+      const origNow = Performance.prototype.now;
+      let perfStep = 0;
+      let lastReturned = 0;
+      Performance.prototype.now = makeNative(function now() {{
+        const raw = origNow.apply(this, arguments);
+        const h = hashWithSeed({seed}, ++perfStep) / 4294967295;
+        const val = Math.max(lastReturned, raw + h * {jitter});
+        lastReturned = val;
+        return val;
+      }}, 'now', origNow);
+    }}
+  }} catch (_) {{}}
+",
+        );
+    }
+
+    fn push_worker_spoofing(&self, out: &mut String) {
+        let ua = self
+            .user_agent
+            .as_deref()
+            .map_or_else(|| "null".to_owned(), js_str);
+        let platform = js_str(&self.platform);
+        let hints_json = self
+            .client_hints
+            .as_ref()
+            .map_or_else(|| "null".to_owned(), |h| js_json(h, "null"));
+        let _ = writeln!(
+            out,
+            r#"  // 17. Worker & SharedWorker Navigator Consistency
+  try {{
+    const wCfg = {{
+      ua: {ua},
+      platform: {platform},
+      languages: {langs},
+      hw: {hw},
+      mem: {mem},
+      hints: {hints_json}
+    }};
+    const prelude = '(function(c){{try{{const np=Object.getPrototypeOf(self.navigator);const dg=(k,v)=>Object.defineProperty(np,k,{{get:()=>v,configurable:true}});if(c.ua)dg("userAgent",c.ua);dg("platform",c.platform);dg("languages",Object.freeze(c.languages));dg("language",c.languages[0]||"en-US");dg("hardwareConcurrency",c.hw);if(c.mem!==null)dg("deviceMemory",c.mem);dg("webdriver",false);if(c.hints&&self.navigator.userAgentData){{const uad=self.navigator.userAgentData;const orig=uad.getHighEntropyValues;if(orig)uad.getHighEntropyValues=function(h){{return orig.call(this,h).then((r)=>Object.assign({{}},r,{{architecture:c.hints.architecture,bitness:c.hints.bitness,model:c.hints.model,platform:c.hints.platform,platformVersion:c.hints.platform_version,uaFullVersion:c.hints.ua_full_version,fullVersionList:c.hints.full_version_list}}));}};}}}}catch(_){{}}}})(' + JSON.stringify(wCfg) + ');\n';
+    const wrapWorkerCtor = (Ctor, name) => {{
+      if (typeof Ctor !== 'function') return Ctor;
+      return new Proxy(Ctor, {{
+        construct(target, args, newTarget) {{
+          try {{
+            const urlArg = args[0];
+            const opts = args[1];
+            const isModule = opts && opts.type === 'module';
+            if (!isModule && typeof urlArg === 'string' && !urlArg.startsWith('data:')) {{
+              const abs = new URL(urlArg, location.href).href;
+              const code = prelude + 'importScripts(' + JSON.stringify(abs) + ');';
+              const blobUrl = URL.createObjectURL(new Blob([code], {{ type: 'application/javascript' }}));
+              const patchedArgs = [blobUrl].concat(args.slice(1));
+              return Reflect.construct(target, patchedArgs, newTarget);
+            }}
+          }} catch (_) {{}}
+          return Reflect.construct(target, args, newTarget);
+        }}
+      }});
+    }};
+    if (typeof window.Worker === 'function') window.Worker = wrapWorkerCtor(window.Worker, 'Worker');
+    if (typeof window.SharedWorker === 'function') window.SharedWorker = wrapWorkerCtor(window.SharedWorker, 'SharedWorker');
+  }} catch (_) {{}}
+"#,
+            langs = self.languages_json,
+            hw = self.hw_concurrency,
+            mem = self.device_memory.map_or_else(|| "null".to_owned(), js_num),
+        );
+    }
+
+    fn push_intl_timezone(&self, out: &mut String) {
+        let tz = self
+            .timezone
+            .as_deref()
+            .map_or_else(|| "null".to_owned(), js_str);
+        let locale = js_str(&self.primary_lang);
+        let _ = writeln!(
+            out,
+            r"  // 18. Intl Timezone & Locale Consistency
+  try {{
+    const targetTz = {tz};
+    const targetLocale = {locale};
+    if (typeof Intl !== 'undefined' && Intl.DateTimeFormat && Intl.DateTimeFormat.prototype.resolvedOptions) {{
+      const origResolved = Intl.DateTimeFormat.prototype.resolvedOptions;
+      Intl.DateTimeFormat.prototype.resolvedOptions = makeNative(function resolvedOptions() {{
+        const res = origResolved.apply(this, arguments);
+        if (targetTz && res && typeof res === 'object') res.timeZone = targetTz;
+        if (targetLocale && res && !res.locale) res.locale = targetLocale;
+        return res;
+      }}, 'resolvedOptions', origResolved);
+    }}
+  }} catch (_) {{}}
+",
+        );
+    }
+
+    fn push_webrtc_guard(&self, out: &mut String) {
+        use seleniumbase_rs::WebRtcPolicy;
+        let Some(policy) = self.webrtc_policy else {
+            return;
+        };
+        if matches!(policy, WebRtcPolicy::PublicAndPrivateInterfaces) {
+            return;
+        }
+        let block_all = false;
+        let _ = writeln!(
+            out,
+            r"  // 19. WebRTC Local ICE Candidate Guard
+  try {{
+    const blockAllRtc = {block_all};
+    const OrigRtc = window.RTCPeerConnection || window.webkitRTCPeerConnection;
+    if (typeof OrigRtc === 'function') {{
+      const stripHostLines = (sdp) => typeof sdp === 'string' ? sdp.split('\r\n').filter((l) => !(l.startsWith('a=candidate:') && l.includes(' typ host'))).join('\r\n') : sdp;
+      const WrappedRtc = new Proxy(OrigRtc, {{
+        construct(target, args, newTarget) {{
+          if (blockAllRtc) {{
+            throw new DOMException('RTCPeerConnection is disabled by policy', 'NotAllowedError');
+          }}
+          const pc = Reflect.construct(target, args, newTarget);
+          const origAdd = pc.addEventListener.bind(pc);
+          pc.addEventListener = makeNative(function addEventListener(type, listener, opts) {{
+            if (type === 'icecandidate' && typeof listener === 'function') {{
+              const filtered = function(ev) {{
+                if (ev && ev.candidate && typeof ev.candidate.candidate === 'string' && ev.candidate.candidate.includes(' typ host')) return;
+                return listener.call(this, ev);
+              }};
+              return origAdd(type, filtered, opts);
+            }}
+            return origAdd(type, listener, opts);
+          }}, 'addEventListener', pc.addEventListener);
+          const desc = Object.getOwnPropertyDescriptor(OrigRtc.prototype, 'localDescription');
+          if (desc && desc.get) {{
+            Object.defineProperty(pc, 'localDescription', {{
+              get() {{
+                const ld = desc.get.call(this);
+                if (!ld || !ld.sdp) return ld;
+                return {{ type: ld.type, sdp: stripHostLines(ld.sdp) }};
+              }},
+              configurable: true
+            }});
+          }}
+          return pc;
+        }}
+      }});
+      window.RTCPeerConnection = WrappedRtc;
+      if ('webkitRTCPeerConnection' in window) window.webkitRTCPeerConnection = WrappedRtc;
+    }}
+  }} catch (_) {{}}
+",
+        );
+    }
+
+    fn push_svg_noise(&self, out: &mut String) {
+        let seed = self.dom_seed & 0xffff_ffff;
+        let _ = writeln!(
+            out,
+            r"  // 20. SVG Text & BBox Sub-pixel Noise
+  try {{
+    if (typeof SVGTextContentElement !== 'undefined' && SVGTextContentElement.prototype.getComputedTextLength) {{
+      const origLen = SVGTextContentElement.prototype.getComputedTextLength;
+      SVGTextContentElement.prototype.getComputedTextLength = makeNative(function getComputedTextLength() {{
+        const raw = origLen.apply(this, arguments);
+        const delta = ((hashWithSeed({seed}, Math.round(raw * 100) + 17) / 4294967295) - 0.5) * 0.002;
+        return raw + delta;
+      }}, 'getComputedTextLength', origLen);
+    }}
+    if (typeof SVGGraphicsElement !== 'undefined' && SVGGraphicsElement.prototype.getBBox) {{
+      const origBBox = SVGGraphicsElement.prototype.getBBox;
+      SVGGraphicsElement.prototype.getBBox = makeNative(function getBBox() {{
+        const box = origBBox.apply(this, arguments);
+        if (box && typeof box.width === 'number') {{
+          const delta = ((hashWithSeed({seed}, Math.round(box.width * 100) + 31) / 4294967295) - 0.5) * 0.002;
+          try {{
+            Object.defineProperty(box, 'width', {{ value: box.width + delta, configurable: true }});
+          }} catch (_) {{}}
+        }}
+        return box;
+      }}, 'getBBox', origBBox);
+    }}
+  }} catch (_) {{}}
+",
+        );
+    }
+
+    fn push_window_geometry(&self, out: &mut String) {
+        let chrome_h = self.outer_chrome_height;
+        let _ = writeln!(
+            out,
+            r"  // 21. Window Outer/Inner Geometry Coherence
+  try {{
+    const chromeHeight = {chrome_h};
+    if (window.outerWidth === 0 || window.outerWidth < window.innerWidth) {{
+      defineGetter(window, 'outerWidth', () => Math.max(window.innerWidth, {sw}));
+    }}
+    if (window.outerHeight === 0 || window.outerHeight <= window.innerHeight) {{
+      defineGetter(window, 'outerHeight', () => Math.min({sh}, window.innerHeight + chromeHeight));
+    }}
+  }} catch (_) {{}}
+",
+            sw = self.display.screen_w,
+            sh = self.display.screen_h,
+        );
+    }
+
+    fn push_storage_quota(&self, out: &mut String) {
+        let quota_bytes: u64 = self.storage_quota_gb.map_or_else(
+            || {
+                if self.os.is_mobile() {
+                    64_424_509_440 // 60 GiB
+                } else {
+                    274_877_906_944 // 256 GiB
+                }
+            },
+            |gb| gb.saturating_mul(1_073_741_824),
+        );
+        let _ = writeln!(
+            out,
+            r"  // 22. StorageManager Quota (non-incognito realistic capacity)
+  try {{
+    if (typeof StorageManager !== 'undefined' && StorageManager.prototype.estimate) {{
+      const origEstimate = StorageManager.prototype.estimate;
+      StorageManager.prototype.estimate = makeNative(function estimate() {{
+        return origEstimate.apply(this, arguments).then((res) => {{
+          if (!res || typeof res.quota !== 'number' || res.quota < 2147483648) {{
+            return Object.assign({{}}, res || {{}}, {{ quota: {quota_bytes} }});
+          }}
+          return res;
+        }});
+      }}, 'estimate', origEstimate);
+    }}
+  }} catch (_) {{}}
+",
+        );
+    }
+
+    fn push_hardware_apis(out: &mut String) {
+        out.push_str(
+            r"  // 23. Hardware APIs (getGamepads desktop Chromium alignment)
+  try {
+    const navProto = typeof Navigator !== 'undefined' ? Navigator.prototype : Object.getPrototypeOf(navigator);
+    if (navProto && navProto.getGamepads) {
+      const origGamepads = navProto.getGamepads;
+      navProto.getGamepads = makeNative(function getGamepads() {
+        const pads = origGamepads.apply(this, arguments);
+        if (!pads || pads.length === 0) return [null, null, null, null];
+        return pads;
+      }, 'getGamepads', origGamepads);
+    }
+  } catch (_) {}
+",
+        );
+    }
+
+    fn push_visibility_guard(out: &mut String) {
+        out.push_str(
+            r"  // 24. Document Visibility Guard (prevent background-tab bot flags)
+  try {
+    const docProto = typeof Document !== 'undefined' ? Document.prototype : Object.getPrototypeOf(document);
+    if (docProto) {
+      defineGetter(docProto, 'visibilityState', () => 'visible');
+      defineGetter(docProto, 'hidden', () => false);
+    }
+  } catch (_) {}
+",
+        );
+    }
+
+    fn push_console_debug_guard(out: &mut String) {
+        out.push_str(
+            r"  // 25. Console Runtime.stack.access Canary Guard
+  try {
+    const hasGetterTrap = (arg) => {
+      if (!arg || (typeof arg !== 'object' && typeof arg !== 'function')) return false;
+      const desc = Object.getOwnPropertyDescriptor(arg, 'stack');
+      if (desc && typeof desc.get === 'function') return true;
+      const toStr = Object.getOwnPropertyDescriptor(arg, 'toString');
+      return !!(toStr && typeof toStr.get === 'function');
+    };
+    for (const method of ['debug', 'log', 'dir', 'table']) {
+      const orig = console && console[method];
+      if (typeof orig === 'function') {
+        console[method] = makeNative(function() {
+          for (let i = 0; i < arguments.length; i++) {
+            if (hasGetterTrap(arguments[i])) return undefined;
+          }
+          return orig.apply(this, arguments);
+        }, method, orig);
+      }
+    }
+  } catch (_) {}
+",
+        );
+    }
+
+    fn push_mouse_coord_guard(&self, out: &mut String) {
+        let chrome_h = self.outer_chrome_height;
+        let _ = writeln!(
+            out,
+            r"  // 26. MouseEvent screenX/screenY Coordinate Alignment
+  try {{
+    if (typeof MouseEvent !== 'undefined') {{
+      const sxDesc = Object.getOwnPropertyDescriptor(MouseEvent.prototype, 'screenX');
+      const syDesc = Object.getOwnPropertyDescriptor(MouseEvent.prototype, 'screenY');
+      const cxDesc = Object.getOwnPropertyDescriptor(MouseEvent.prototype, 'clientX');
+      const cyDesc = Object.getOwnPropertyDescriptor(MouseEvent.prototype, 'clientY');
+      if (sxDesc && sxDesc.get && syDesc && syDesc.get && cxDesc && cxDesc.get && cyDesc && cyDesc.get) {{
+        Object.defineProperty(MouseEvent.prototype, 'screenX', {{
+          get: makeNative(function screenX() {{
+            const sx = sxDesc.get.call(this);
+            const cx = cxDesc.get.call(this);
+            const sy = syDesc.get.call(this);
+            const cy = cyDesc.get.call(this);
+            if (sx === cx && sy === cy) return cx + (window.screenX || 0);
+            return sx;
+          }}, 'get screenX', sxDesc.get),
+          configurable: true
+        }});
+        Object.defineProperty(MouseEvent.prototype, 'screenY', {{
+          get: makeNative(function screenY() {{
+            const sx = sxDesc.get.call(this);
+            const cx = cxDesc.get.call(this);
+            const sy = syDesc.get.call(this);
+            const cy = cyDesc.get.call(this);
+            if (sx === cx && sy === cy) return cy + (window.screenY || 0) + {chrome_h};
+            return sy;
+          }}, 'get screenY', syDesc.get),
+          configurable: true
+        }});
+      }}
+    }}
+  }} catch (_) {{}}
+",
+        );
+    }
+
+    fn push_codec_support(out: &mut String) {
+        out.push_str(
+            r"  // 27. Media Codec Support Alignment (H.264, AAC, AV1, WebM, Opus)
+  try {
+    const probable = ['avc1', 'mp4a', 'vp8', 'vp9', 'av01', 'opus', 'vorbis', 'theora', 'mp3', 'mpeg', 'aac'];
+    if (typeof HTMLMediaElement !== 'undefined' && HTMLMediaElement.prototype.canPlayType) {
+      const origCanPlay = HTMLMediaElement.prototype.canPlayType;
+      HTMLMediaElement.prototype.canPlayType = makeNative(function canPlayType(type) {
+        const res = origCanPlay.apply(this, arguments);
+        if (res) return res;
+        const lower = String(type || '').toLowerCase();
+        if (probable.some((c) => lower.includes(c))) return 'probably';
+        if (lower === 'video/mp4' || lower === 'audio/mp4' || lower === 'video/webm' || lower === 'audio/webm') return 'maybe';
+        return res;
+      }, 'canPlayType', origCanPlay);
+    }
+    if (typeof MediaSource !== 'undefined' && MediaSource.isTypeSupported) {
+      const origSupported = MediaSource.isTypeSupported;
+      MediaSource.isTypeSupported = makeNative(function isTypeSupported(type) {
+        if (origSupported.apply(this, arguments)) return true;
+        const lower = String(type || '').toLowerCase();
+        return probable.some((c) => lower.includes(c));
+      }, 'isTypeSupported', origSupported);
+    }
+  } catch (_) {}
+",
+        );
+    }
+
+    fn push_timezone_offset(&self, out: &mut String) {
+        let Some(tz) = self.timezone.as_deref() else {
+            return;
+        };
+        let tz_js = js_str(tz);
+        let _ = writeln!(
+            out,
+            r"  // 28. DST-aware Date.prototype.getTimezoneOffset() alignment
+  try {{
+    const targetTz = {tz_js};
+    const origGetOffset = Date.prototype.getTimezoneOffset;
+    const fmt = new Intl.DateTimeFormat('en-US', {{
+      timeZone: targetTz,
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+      hour12: false
+    }});
+    Date.prototype.getTimezoneOffset = makeNative(function getTimezoneOffset() {{
+      try {{
+        const ms = this.getTime();
+        if (!Number.isFinite(ms)) return origGetOffset.call(this);
+        const parts = {{}};
+        for (const p of fmt.formatToParts(this)) parts[p.type] = p.value;
+        const asUtc = Date.UTC(
+          Number(parts.year), Number(parts.month) - 1, Number(parts.day),
+          Number(parts.hour) % 24, Number(parts.minute), Number(parts.second)
+        );
+        return Math.round((ms - asUtc) / 60000);
+      }} catch (_) {{
+        return origGetOffset.call(this);
+      }}
+    }}, 'getTimezoneOffset', origGetOffset);
+  }} catch (_) {{}}
+",
+        );
+    }
+
+    fn push_iframe_srcdoc_guard(out: &mut String) {
+        out.push_str(
+            r"  // 29. Same-origin / about:blank / srcdoc Iframe Sandbox Propagation
+  try {
+    const patchFrameWin = (win) => {
+      if (!win) return;
+      try {
+        const nav = win.navigator;
+        if (nav) {
+          const proto = Object.getPrototypeOf(nav);
+          Object.defineProperty(proto, 'webdriver', { get: () => false, configurable: true });
+        }
+        if (win.Function && win.Function.prototype) {
+          win.Function.prototype.toString = patchedToString;
+        }
+      } catch (_) {}
+    };
+    const desc = Object.getOwnPropertyDescriptor(HTMLIFrameElement.prototype, 'contentWindow');
+    if (desc && desc.get) {
+      Object.defineProperty(HTMLIFrameElement.prototype, 'contentWindow', {
+        get: makeNative(function contentWindow() {
+          const w = desc.get.call(this);
+          patchFrameWin(w);
+          return w;
+        }, 'get contentWindow', desc.get),
+        configurable: true
+      });
+    }
+  } catch (_) {}
+",
+        );
+    }
+
+    fn push_history_length_guard(&self, out: &mut String) {
+        let min_len = self.history_min_length.max(1);
+        let _ = writeln!(
+            out,
+            r"  // 30. History.length Fresh-Tab Masking
+  try {{
+    if (typeof History !== 'undefined') {{
+      const lenDesc = Object.getOwnPropertyDescriptor(History.prototype, 'length');
+      if (lenDesc && lenDesc.get) {{
+        Object.defineProperty(History.prototype, 'length', {{
+          get: makeNative(function length() {{
+            const raw = lenDesc.get.call(this);
+            return raw < {min_len} ? {min_len} : raw;
+          }}, 'get length', lenDesc.get),
+          configurable: true
+        }});
+      }}
+    }}
+  }} catch (_) {{}}
+",
+        );
+    }
+
+    fn push_canvas_toblob_guard(out: &mut String) {
+        out.push_str(
+            r"  // 31. Canvas toBlob & OffscreenCanvas convertToBlob Noise Consistency
+  try {
+    if (typeof HTMLCanvasElement !== 'undefined' && HTMLCanvasElement.prototype.toBlob) {
+      const origToBlob = HTMLCanvasElement.prototype.toBlob;
+      HTMLCanvasElement.prototype.toBlob = makeNative(function toBlob(callback, type, quality) {
+        try {
+          if (typeof this.toDataURL === 'function' && typeof callback === 'function') {
+            const dataUrl = this.toDataURL(type, quality);
+            const parts = dataUrl.split(',');
+            if (parts.length === 2) {
+              const mimeMatch = parts[0].match(/:(.*?);/);
+              const mime = mimeMatch ? mimeMatch[1] : (type || 'image/png');
+              const bin = atob(parts[1]);
+              const bytes = new Uint8Array(bin.length);
+              for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+              callback(new Blob([bytes], { type: mime }));
+              return;
+            }
+          }
+        } catch (_) {}
+        return origToBlob.apply(this, arguments);
+      }, 'toBlob', origToBlob);
+    }
+  } catch (_) {}
+",
+        );
+    }
+
+    fn push_webgl_shader_precision(out: &mut String) {
+        out.push_str(
+            r"  // 32. WebGL 1/2 Shader Precision Format Alignment (anti-SwiftShader)
+  try {
+    const patchPrecision = (Ctor) => {
+      if (typeof Ctor === 'undefined' || !Ctor.prototype || !Ctor.prototype.getShaderPrecisionFormat) return;
+      const origPrec = Ctor.prototype.getShaderPrecisionFormat;
+      Ctor.prototype.getShaderPrecisionFormat = makeNative(function getShaderPrecisionFormat(shaderType, precisionType) {
+        const res = origPrec.apply(this, arguments);
+        if (res && precisionType === 0x8DF2 && (res.precision === 0 || res.rangeMax < 127)) {
+          return Object.freeze({ rangeMin: 127, rangeMax: 127, precision: 23 });
+        }
+        return res;
+      }, 'getShaderPrecisionFormat', origPrec);
+    };
+    patchPrecision(window.WebGLRenderingContext);
+    patchPrecision(window.WebGL2RenderingContext);
+  } catch (_) {}
+",
+        );
+    }
+
+    fn push_media_capabilities(out: &mut String) {
+        out.push_str(
+            r"  // 33. MediaCapabilities Hardware Decoding Alignment
+  try {
+    if (typeof MediaCapabilities !== 'undefined' && MediaCapabilities.prototype.decodingInfo) {
+      const origDecode = MediaCapabilities.prototype.decodingInfo;
+      MediaCapabilities.prototype.decodingInfo = makeNative(function decodingInfo(config) {
+        return origDecode.apply(this, arguments).then((info) => {
+          if (info && info.supported && (!info.smooth || !info.powerEfficient)) {
+            return Object.assign({}, info, { smooth: true, powerEfficient: true });
+          }
+          return info;
+        });
+      }, 'decodingInfo', origDecode);
+    }
+  } catch (_) {}
+",
+        );
+    }
+
+    fn push_keyboard_layout(out: &mut String) {
+        out.push_str(
+            r"  // 34. Navigator.keyboard QWERTY Layout Map Consistency
+  try {
+    if (typeof Keyboard !== 'undefined' && Keyboard.prototype.getLayoutMap) {
+      const origLayout = Keyboard.prototype.getLayoutMap;
+      Keyboard.prototype.getLayoutMap = makeNative(function getLayoutMap() {
+        return origLayout.apply(this, arguments).then((map) => {
+          if (map && map.size > 0) return map;
+          return new Map([
+            ['KeyQ','q'],['KeyW','w'],['KeyE','e'],['KeyR','r'],['KeyT','t'],['KeyY','y'],
+            ['KeyU','u'],['KeyI','i'],['KeyO','o'],['KeyP','p'],['KeyA','a'],['KeyS','s'],
+            ['KeyD','d'],['KeyF','f'],['KeyG','g'],['KeyH','h'],['KeyJ','j'],['KeyK','k'],
+            ['KeyL','l'],['KeyZ','z'],['KeyX','x'],['KeyC','c'],['KeyV','v'],['KeyB','b'],
+            ['KeyN','n'],['KeyM','m'],['Digit1','1'],['Digit2','2'],['Digit3','3'],['Digit4','4'],
+            ['Digit5','5'],['Digit6','6'],['Digit7','7'],['Digit8','8'],['Digit9','9'],['Digit0','0']
+          ]);
+        });
+      }, 'getLayoutMap', origLayout);
+    }
+  } catch (_) {}
+",
+        );
+    }
+
+    fn push_clipboard_guard(out: &mut String) {
+        out.push_str(
+            r"  // 35. Navigator.clipboard Presence Guard
+  try {
+    const navProto = typeof Navigator !== 'undefined' ? Navigator.prototype : Object.getPrototypeOf(navigator);
+    if (navProto && !('clipboard' in navigator)) {
+      const fakeClipboard = {
+        readText: makeNative(() => Promise.resolve(''), 'readText'),
+        writeText: makeNative(() => Promise.resolve(), 'writeText')
+      };
+      defineGetter(navProto, 'clipboard', () => fakeClipboard);
+    }
+  } catch (_) {}
+",
+        );
+    }
+
+    fn push_fullscreen_guard(out: &mut String) {
+        out.push_str(
+            r"  // 36. Document.fullscreenEnabled Guard
+  try {
+    const docProto = typeof Document !== 'undefined' ? Document.prototype : Object.getPrototypeOf(document);
+    if (docProto && !document.fullscreenEnabled) {
+      defineGetter(docProto, 'fullscreenEnabled', () => true);
+    }
+  } catch (_) {}
+",
+        );
+    }
+
+    fn push_pointer_capabilities(&self, out: &mut String) {
+        let is_mobile = self.os.is_mobile();
+        let _ = writeln!(
+            out,
+            r"  // 37. Pointer & Hover Media Query Capabilities
+  try {{
+    const isMobile = {is_mobile};
+    if (typeof window.matchMedia === 'function') {{
+      const origMm = window.matchMedia;
+      window.matchMedia = makeNative(function matchMedia(query) {{
+        const mql = origMm.apply(this, arguments);
+        const q = String(query || '').toLowerCase();
+        let ov = null;
+        if (q.includes('pointer: fine') || q.includes('any-pointer: fine')) ov = !isMobile;
+        else if (q.includes('pointer: coarse') || q.includes('any-pointer: coarse')) ov = isMobile;
+        else if (q.includes('hover: hover') || q.includes('any-hover: hover')) ov = !isMobile;
+        else if (q.includes('hover: none') || q.includes('any-hover: none')) ov = isMobile;
+        if (ov !== null) {{
+          try {{ Object.defineProperty(mql, 'matches', {{ get: () => ov, configurable: true }}); }} catch (_) {{}}
+        }}
+        return mql;
+      }}, 'matchMedia', origMm);
+    }}
+  }} catch (_) {{}}
+",
+        );
+    }
+
+    fn push_beacon_guard(out: &mut String) {
+        out.push_str(
+            r"  // 38. Navigator.sendBeacon Telemetry Guard
+  try {
+    const navProto = typeof Navigator !== 'undefined' ? Navigator.prototype : Object.getPrototypeOf(navigator);
+    if (navProto && navProto.sendBeacon) {
+      const origBeacon = navProto.sendBeacon;
+      navProto.sendBeacon = makeNative(function sendBeacon() {
+        return true;
+      }, 'sendBeacon', origBeacon);
+    }
+  } catch (_) {}
+",
+        );
+    }
 }
 
 #[cfg(test)]
@@ -1711,5 +3144,261 @@ mod tests {
         assert!(!script.contains("window.chrome = {"));
         assert!(script.contains("delete Object.getPrototypeOf(navigator).getBattery"));
         assert!(script.contains("delete Object.getPrototypeOf(navigator).connection"));
+    }
+
+    #[test]
+    fn selective_script_options_omit_disabled_evasions() {
+        let profile = ProfileFingerprint::default();
+        let minimal = StealthScriptOptions::minimal();
+        let js = StealthScriptBundle::from_profile_with(&profile, &minimal).into_script();
+        assert!(js.contains("navigator"));
+        assert!(js.contains("webdriver"));
+        assert!(!js.contains("patchWebGLParams"));
+        assert!(!js.contains("AudioBuffer.prototype"));
+        assert!(!js.contains("enumerateDevices"));
+        assert!(!js.contains("speechSynthesis"));
+        assert!(!js.contains("window.matchMedia"));
+        assert!(!js.contains("Performance.prototype.now"));
+        assert!(!js.contains("wrapWorkerCtor"));
+    }
+
+    #[test]
+    fn expanded_fingerprint_options_and_script_surfaces_render_coherently() {
+        use crate::fingerprint::{
+            AudioDynamicsCompressor, BatteryOverride, ColorScheme, FingerprintOptions, HdrMode,
+            ReducedMotion, SpeechVoice,
+        };
+        use seleniumbase_rs::evasion::settings::ColorGamut;
+
+        let opts = FingerprintOptions::builder()
+            .os(OsType::Macos)
+            .fonts(vec!["SF Pro".to_owned(), "Menlo".to_owned()])
+            .battery(BatteryOverride::new(false, 0.72))
+            .speech_voices(vec![SpeechVoice::new("Samantha", "en-US")])
+            .max_touch_points(0)
+            .do_not_track("1")
+            .pdf_viewer_enabled(true)
+            .color_scheme(ColorScheme::Dark)
+            .reduced_motion(ReducedMotion::Reduce)
+            .color_gamut(ColorGamut::P3)
+            .hdr_mode(HdrMode::High)
+            .performance_jitter_ms(0.12)
+            .worker_spoofing(true)
+            .audio_compressor(AudioDynamicsCompressor {
+                threshold: -48.0,
+                knee: 36.0,
+                ratio: 10.0,
+                attack: 0.002,
+                release: 0.2,
+            })
+            .seed(9090)
+            .build()
+            .expect("valid expanded fingerprint options");
+
+        let generated = FingerprintGenerator::generate_with(&opts);
+        assert_eq!(generated.fonts, vec!["SF Pro", "Menlo"]);
+        assert!(!generated.battery.charging);
+        assert!((generated.battery.level - 0.72).abs() < 1e-9);
+        assert_eq!(generated.audio.compressor.threshold, -48.0);
+        assert_eq!(generated.profile.do_not_track.as_deref(), Some("1"));
+        assert_eq!(generated.profile.color_scheme, Some(ColorScheme::Dark));
+        assert_eq!(
+            generated.profile.reduced_motion,
+            Some(ReducedMotion::Reduce)
+        );
+
+        let js = StealthScriptBundle::from_generated(&generated).into_script();
+        assert!(js.contains("defineGetter(navProto, 'doNotTrack', () => \"1\")"));
+        assert!(js.contains("defineGetter(navProto, 'pdfViewerEnabled', () => true)"));
+        assert!(js.contains("Samantha"));
+        assert!(js.contains("prefers-color-scheme"));
+        assert!(js.contains("prefers-reduced-motion"));
+        assert!(js.contains("Performance.prototype.now"));
+        assert!(js.contains("wrapWorkerCtor"));
+        assert!(js.contains("SF Pro"));
+        assert!(js.contains("Intl.DateTimeFormat"));
+        assert!(js.contains("RTCPeerConnection"));
+        assert!(js.contains("SVGTextContentElement"));
+        assert!(js.contains("outerHeight"));
+        assert!(js.contains("StorageManager.prototype.estimate"));
+        assert!(js.contains("getGamepads"));
+        assert!(js.contains("visibilityState"));
+        assert!(js.contains("hasGetterTrap"));
+        assert!(js.contains("MouseEvent.prototype, 'screenX'"));
+        assert!(js.contains("HTMLMediaElement.prototype.canPlayType"));
+        assert!(js.contains("Date.prototype.getTimezoneOffset"));
+        assert!(js.contains("HTMLIFrameElement.prototype, 'contentWindow'"));
+        assert!(js.contains("History.prototype, 'length'"));
+        assert!(js.contains("HTMLCanvasElement.prototype.toBlob"));
+        assert!(js.contains("getShaderPrecisionFormat"));
+        assert!(js.contains("MediaCapabilities.prototype.decodingInfo"));
+        assert!(js.contains("Keyboard.prototype.getLayoutMap"));
+        assert!(js.contains("'clipboard' in navigator"));
+
+        assert!(FingerprintOptions::builder()
+            .battery(BatteryOverride {
+                charging: true,
+                level: 1.5,
+                charging_time: 0.0,
+                discharging_time: f64::INFINITY,
+            })
+            .build()
+            .is_err());
+        assert!(FingerprintOptions::builder()
+            .performance_jitter_ms(-0.1)
+            .build()
+            .is_err());
+    }
+
+    const V8_STEALTH_HARNESS: &str = r"
+const vm = require('vm');
+const chunks = [];
+process.stdin.on('data', c => chunks.push(c));
+process.stdin.on('end', () => {
+  const cases = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+  for (const c of cases) {
+    // 1. Parse strictly as JS script in V8.
+    const compiled = new vm.Script(c.js, { filename: c.label + '.js' });
+    // 2. Execute inside a realistic browser-like global sandbox.
+    const runCase = (initialWebdriver) => {
+      function Navigator() {}
+      const navigator = Object.create(Navigator.prototype);
+      const origWebdriverGetter = function webdriver() { return initialWebdriver; };
+      Object.defineProperty(Navigator.prototype, 'webdriver', { get: origWebdriverGetter, configurable: true, enumerable: true });
+      function Screen() {}
+      const screen = Object.create(Screen.prototype);
+      function History() {}
+      const history = Object.create(History.prototype);
+      Object.defineProperty(History.prototype, 'length', { get() { return 1; }, configurable: true });
+      function Performance() {}
+      Performance.prototype.now = () => 100.0;
+      const performance = Object.create(Performance.prototype);
+      const ctx = {
+        Navigator, navigator, Screen, screen, History, history, Performance, performance,
+        document: { visibilityState: 'visible', hidden: false, createElement: () => ({}), fonts: { check: () => true } },
+        console: { debug: () => {}, log: () => {}, warn: () => {}, error: () => {} },
+        matchMedia: (q) => ({ matches: false, media: q, onchange: null, addListener() {}, removeListener() {}, addEventListener() {}, removeEventListener() {}, dispatchEvent() { return false; } }),
+        outerWidth: 1920, outerHeight: 1080, innerWidth: 1920, innerHeight: 1000, devicePixelRatio: 1,
+        Intl, Date, Error, Function, Object, Proxy, Reflect, WeakMap, Map, Set, Symbol, Promise, Array, Uint8Array, Float32Array, Number, String, Boolean, Math, RegExp, JSON,
+        URL: { createObjectURL: () => 'blob:mock' },
+        Blob: class Blob { constructor(p) { this.parts = p; } },
+        Worker: class Worker { constructor(u) { this.url = u; } },
+        SharedWorker: class SharedWorker { constructor(u) { this.url = u; } },
+        Notification: { permission: 'default' },
+        Permissions: { prototype: { query: async () => ({ state: 'prompt' }) } },
+        RTCPeerConnection: class RTCPeerConnection { addIceCandidate() { return Promise.resolve(); } },
+        StorageManager: { prototype: { estimate: async () => ({ quota: 1e9, usage: 0 }) } },
+        MediaCapabilities: { prototype: { decodingInfo: async () => ({ supported: true, smooth: true, powerEfficient: true }) } },
+        Keyboard: { prototype: { getLayoutMap: async () => new Map() } },
+        MouseEvent: { prototype: {} },
+        HTMLIFrameElement: { prototype: {} },
+        HTMLCanvasElement: { prototype: { toDataURL: () => 'data:image/png;base64,', toBlob: (cb) => cb(null) } },
+        CanvasRenderingContext2D: { prototype: { getImageData: () => ({ data: new Uint8ClampedArray(16) }), measureText: () => ({ width: 10 }) } },
+        Element: { prototype: { getBoundingClientRect: () => ({ x: 0, y: 0, width: 10, height: 10, top: 0, right: 10, bottom: 10, left: 0 }), getClientRects: () => [] } },
+        Range: { prototype: { getBoundingClientRect: () => ({ x: 0, y: 0, width: 10, height: 10, top: 0, right: 10, bottom: 10, left: 0 }), getClientRects: () => [] } },
+        AudioBuffer: { prototype: { getChannelData: () => new Float32Array(4), copyFromChannel: () => {} } },
+        AnalyserNode: { prototype: { getFloatFrequencyData: () => {}, getByteFrequencyData: () => {}, getFloatTimeDomainData: () => {}, getByteTimeDomainData: () => {} } },
+        AudioDestinationNode: { prototype: {} },
+        SVGTextContentElement: { prototype: { getComputedTextLength: () => 10 } },
+        HTMLMediaElement: { prototype: { canPlayType: () => 'probably' } },
+        setTimeout, clearTimeout,
+      };
+      ctx.window = ctx;
+      ctx.self = ctx;
+      ctx.globalThis = ctx;
+      vm.createContext(ctx);
+      compiled.runInContext(ctx);
+      if (ctx.navigator.webdriver !== false) {
+        throw new Error(c.label + ': navigator.webdriver was ' + ctx.navigator.webdriver);
+      }
+      const desc = Object.getOwnPropertyDescriptor(ctx.Navigator.prototype, 'webdriver');
+      if (initialWebdriver === false) {
+        if (desc.get !== origWebdriverGetter) {
+          throw new Error(c.label + ': native webdriver=false getter was unnecessarily replaced');
+        }
+      } else {
+        const toStr = ctx.Function.prototype.toString.call(desc.get);
+        if (!toStr.includes('[native code]')) {
+          throw new Error(c.label + ': webdriver getter toString leaked: ' + toStr);
+        }
+      }
+      if (c.expected_platform && ctx.navigator.platform !== c.expected_platform) {
+        throw new Error(c.label + ': platform mismatch ' + ctx.navigator.platform + ' != ' + c.expected_platform);
+      }
+      if (c.expected_cores && ctx.navigator.hardwareConcurrency !== c.expected_cores) {
+        throw new Error(c.label + ': cores mismatch ' + ctx.navigator.hardwareConcurrency + ' != ' + c.expected_cores);
+      }
+      if (c.expected_width && ctx.screen.width !== c.expected_width) {
+        throw new Error(c.label + ': screen.width mismatch ' + ctx.screen.width + ' != ' + c.expected_width);
+      }
+    };
+    runCase(true);
+    runCase(false);
+  }
+  console.log('VERIFIED ' + cases.length + ' STEALTH BUNDLES IN V8 (both webdriver=true and native webdriver=false)');
+});
+";
+
+    #[test]
+    fn generated_stealth_scripts_parse_and_execute_cleanly_in_v8() {
+        use crate::fingerprint::FingerprintOptions;
+        use std::io::Write as _;
+        use std::process::{Command, Stdio};
+
+        if Command::new("node").arg("--version").output().is_err() {
+            return;
+        }
+
+        let os_presets = [
+            ("windows_chrome", FingerprintOptions::windows_chrome()),
+            ("macos_chrome", FingerprintOptions::macos_chrome()),
+            ("linux_chrome", FingerprintOptions::linux_chrome()),
+            ("android_chrome", FingerprintOptions::android_chrome()),
+            ("ios_safari", FingerprintOptions::ios_safari()),
+        ];
+        let script_presets = [
+            ("all", StealthScriptOptions::all()),
+            ("strict", StealthScriptOptions::strict()),
+            ("balanced", StealthScriptOptions::balanced()),
+            ("minimal", StealthScriptOptions::minimal()),
+        ];
+
+        let mut payload = Vec::new();
+        for (os_name, opts) in &os_presets {
+            let generated = FingerprintGenerator::generate_with(opts);
+            for (preset_name, script_opts) in &script_presets {
+                let js =
+                    StealthScriptBundle::from_generated_with(&generated, script_opts).into_script();
+                payload.push(serde_json::json!({
+                    "label": format!("{os_name}/{preset_name}"),
+                    "js": js,
+                    "expected_platform": &generated.profile.platform,
+                    "expected_cores": generated.profile.hardware_concurrency,
+                    "expected_width": script_opts.screen_geometry.then_some(generated.display.width),
+                }));
+            }
+        }
+
+        let mut child = Command::new("node")
+            .arg("-e")
+            .arg(V8_STEALTH_HARNESS)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .expect("spawn node");
+        child
+            .stdin
+            .as_mut()
+            .expect("stdin")
+            .write_all(serde_json::to_string(&payload).expect("json").as_bytes())
+            .expect("write payload");
+        let output = child.wait_with_output().expect("wait node");
+        assert!(
+            output.status.success(),
+            "V8 validation failed:\nstdout: {}\nstderr: {}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
 }

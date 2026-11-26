@@ -53,18 +53,19 @@ pub const UC_STEALTH_SCRIPT: &str = r#"
   }
 
   // 2. navigator.webdriver must be false (not undefined) on Navigator.prototype, not an own property on navigator.
+  // Leave the native C++ getter untouched when --disable-blink-features=AutomationControlled already set it to false.
   try {
-    delete navigator.webdriver;
-  } catch (err) {}
-  try {
-    const proto = Navigator.prototype || Object.getPrototypeOf(navigator);
-    if (proto) {
-      const getter = markNative(function() { return false; }, 'get webdriver');
-      Object.defineProperty(proto, 'webdriver', {
-        get: getter,
-        configurable: true,
-        enumerable: true
-      });
+    if (navigator.webdriver !== false) {
+      delete navigator.webdriver;
+      const proto = Navigator.prototype || Object.getPrototypeOf(navigator);
+      if (proto && navigator.webdriver !== false) {
+        const getter = markNative(function() { return false; }, 'get webdriver');
+        Object.defineProperty(proto, 'webdriver', {
+          get: getter,
+          configurable: true,
+          enumerable: true
+        });
+      }
     }
   } catch(err) {}
 
@@ -280,13 +281,16 @@ pub const UC_STEALTH_SCRIPT: &str = r#"
               const win = contentWindowProp.get.call(this);
               if (win) {
                 try {
-                  delete win.navigator.webdriver;
-                  const winProto = win.Navigator.prototype || Object.getPrototypeOf(win.navigator);
-                  if (winProto) {
-                    Object.defineProperty(winProto, 'webdriver', {
-                      get: markNative(() => false, 'get webdriver'),
-                      configurable: true
-                    });
+                  if (win.navigator && win.navigator.webdriver !== false) {
+                    delete win.navigator.webdriver;
+                    const winProto = win.Navigator.prototype || Object.getPrototypeOf(win.navigator);
+                    if (winProto && win.navigator.webdriver !== false) {
+                      Object.defineProperty(winProto, 'webdriver', {
+                        get: markNative(() => false, 'get webdriver'),
+                        configurable: true,
+                        enumerable: true
+                      });
+                    }
                   }
                 } catch (e) {}
               }

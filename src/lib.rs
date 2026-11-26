@@ -12,10 +12,20 @@
 pub use seleniumbase_rs::*;
 
 pub mod fingerprint;
-pub use fingerprint::{FingerprintGenerator, GeneratedFingerprint, ProfileFingerprint};
+pub use fingerprint::{
+    BatteryOverride, ColorScheme, ConnectionOverride, FingerprintGenerator, FingerprintOptions,
+    FingerprintOptionsBuilder, GeneratedFingerprint, ProfileFingerprint, ReducedMotion,
+    ScreenConstraints, SpeechVoice,
+};
+
+pub mod bayesian;
+pub use bayesian::{
+    audit_coherence, BayesianSampler, CoherenceReport, DeviceCategory, FingerprintConverter,
+    HeaderGenerator, RequestContext, SampleConstraints,
+};
 
 pub mod script;
-pub use script::StealthScriptBundle;
+pub use script::{StealthScriptBundle, StealthScriptOptions};
 
 pub mod plugin;
 pub use plugin::StealthPlugin;

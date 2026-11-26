@@ -10,14 +10,17 @@
 //! Every request goes over HTTP/3 only; nothing falls back to HTTP/2. A program that wants a
 //! fallback sends the request again through [`HttpSession`](crate::HttpSession).
 
+use std::fmt;
 use std::net::IpAddr;
 use std::path::PathBuf;
 use std::process::Stdio;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine as _;
+use seleniumbase_rs::evasion::fingerprint::{BrowserType, OsType};
 use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncBufReadExt as _, AsyncWriteExt as _, BufReader, Lines};
 use tokio::process::{Child, ChildStdin, ChildStdout};
@@ -62,15 +65,61 @@ pub enum Http3Error {
     },
 }
 
+/// Request header template category selected by `sbrs-h3d`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+#[non_exhaustive]
+pub enum Http3RequestKind {
+    /// Top-level document navigation (`--request-kind navigation`).
+    #[default]
+    Navigation,
+    /// Subresource or CORS fetch (`--request-kind subresource`).
+    Subresource,
+}
+
+impl Http3RequestKind {
+    /// Returns the CLI identifier accepted by `sbrs-h3d --request-kind`.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Navigation => "navigation",
+            Self::Subresource => "subresource",
+        }
+    }
+}
+
+impl fmt::Display for Http3RequestKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl FromStr for Http3RequestKind {
+    type Err = Http3Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "navigation" => Ok(Self::Navigation),
+            "subresource" => Ok(Self::Subresource),
+            other => Err(Http3Error::Reply(format!(
+                "unknown HTTP/3 request kind: {other}"
+            ))),
+        }
+    }
+}
+
 /// How to start the helper.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[must_use]
 pub struct Http3Options {
     program: PathBuf,
     profile: Option<String>,
+    request_kind: Option<Http3RequestKind>,
     root_cert_der: Option<PathBuf>,
     resolve: Vec<(String, IpAddr)>,
     proxy: Option<String>,
+    default_headers: Vec<(String, String)>,
+    default_timeout: Option<Duration>,
 }
 
 impl Default for Http3Options {
@@ -79,9 +128,12 @@ impl Default for Http3Options {
             program: std::env::var_os(HELPER_VAR)
                 .map_or_else(|| PathBuf::from("sbrs-h3d"), PathBuf::from),
             profile: None,
+            request_kind: None,
             root_cert_der: None,
             resolve: Vec::new(),
             proxy: None,
+            default_headers: Vec::new(),
+            default_timeout: None,
         }
     }
 }
@@ -104,36 +156,73 @@ impl Http3Options {
         self
     }
 
+    /// Sets the profile to match the specified browser family, major version, and operating system.
+    ///
+    /// `sbrs-h3d` resolves the generated selector to the exact `phantom-profile` catalog entry when
+    /// available or the closest matching browser family and OS entry.
+    pub fn for_browser(mut self, browser: BrowserType, major: u32, os: OsType) -> Self {
+        let family = match browser {
+            BrowserType::Firefox => "firefox",
+            BrowserType::MobileSafari => "safari",
+            BrowserType::Chromium | _ => "chrome",
+        };
+        let os_slug = match os {
+            OsType::Windows => "windows",
+            OsType::Linux => "linux",
+            OsType::Android => "android",
+            OsType::Ios => {
+                if browser == BrowserType::MobileSafari {
+                    "ios"
+                } else {
+                    "macos"
+                }
+            }
+            OsType::Macos | _ => "macos",
+        };
+        self.profile = Some(format!("{family}-{major}-{os_slug}"));
+        self
+    }
+
     /// Sets the profile to match the specified Chromium major and operating system.
     ///
     /// Uses the requested Chromium major and OS. Callers that need a specific
     /// profile string should use [`Self::profile`].
-    pub fn for_version(
-        mut self,
-        major: u32,
-        os: seleniumbase_rs::evasion::fingerprint::OsType,
-    ) -> Self {
-        let preferred = match os {
-            seleniumbase_rs::evasion::fingerprint::OsType::Windows => "windows",
-            seleniumbase_rs::evasion::fingerprint::OsType::Linux => "linux",
-            seleniumbase_rs::evasion::fingerprint::OsType::Android => "android",
-            seleniumbase_rs::evasion::fingerprint::OsType::Ios
-            | seleniumbase_rs::evasion::fingerprint::OsType::Macos
-            | _ => "macos",
-        };
-        self.profile = Some(format!("chrome-{major}-{preferred}"));
-        self
+    pub fn for_version(self, major: u32, os: OsType) -> Self {
+        self.for_browser(BrowserType::Chromium, major, os)
     }
 
     /// Sets the profile to match a [`Fingerprint`](seleniumbase_rs::Fingerprint).
     ///
     /// When the fingerprint carries no version, uses the current stable Chromium major.
-    pub fn for_fingerprint(self, fingerprint: &seleniumbase_rs::Fingerprint) -> Self {
+    pub fn for_fingerprint(mut self, fingerprint: &seleniumbase_rs::Fingerprint) -> Self {
         let major = fingerprint
             .core_version()
             .unwrap_or(seleniumbase_rs::evasion::randomize::CURRENT_STABLE_MAJOR);
         let os = fingerprint.os_type();
-        self.for_version(major, os)
+        let ua = fingerprint.user_agent().value().map_or("", String::as_str);
+        if ua.contains("Edg/") {
+            let slug = match os {
+                OsType::Android => "android",
+                _ => "windows",
+            };
+            self.profile = Some(format!("edge-{major}-{slug}"));
+            return self;
+        }
+        if ua.contains("OPR/") {
+            let slug = match os {
+                OsType::Android => "android",
+                _ => "windows",
+            };
+            self.profile = Some(format!("opera-{major}-{slug}"));
+            return self;
+        }
+        self.for_browser(fingerprint.browser_type(), major, os)
+    }
+
+    /// Sets the request header template category (`navigation` or `subresource`).
+    pub fn request_kind(mut self, kind: Http3RequestKind) -> Self {
+        self.request_kind = Some(kind);
+        self
     }
 
     /// One more certificate to trust, as a DER file: for a local test server.
@@ -148,16 +237,82 @@ impl Http3Options {
         self
     }
 
-    /// A proxy to route requests through (e.g. SOCKS5, HTTP CONNECT, or CONNECT-UDP).
+    /// A proxy to route requests through (SOCKS5 UDP relay or CONNECT-UDP / MASQUE).
     pub fn proxy(mut self, proxy: impl Into<String>) -> Self {
         self.proxy = Some(proxy.into());
         self
+    }
+
+    /// Routes QUIC datagrams through a SOCKS5 UDP relay (`socks5://` or `socks5h://`).
+    ///
+    /// Bare `host:port` values default to `socks5h://` so target hostnames resolve at the proxy.
+    pub fn socks5(mut self, proxy: impl Into<String>) -> Self {
+        let raw = proxy.into();
+        let normalized = if raw.contains("://") {
+            raw
+        } else {
+            format!("socks5h://{raw}")
+        };
+        self.proxy = Some(normalized);
+        self
+    }
+
+    /// Routes QUIC datagrams through an RFC 9298 CONNECT-UDP (MASQUE) endpoint or URI template.
+    ///
+    /// Bare `host:port` values default to `connect-udp://host:port`.
+    pub fn connect_udp(mut self, template: impl Into<String>) -> Self {
+        let raw = template.into();
+        let normalized = if raw.contains("://") {
+            raw
+        } else {
+            format!("connect-udp://{raw}")
+        };
+        self.proxy = Some(normalized);
+        self
+    }
+
+    /// Adds a default header merged into every request sent by clients created from these options.
+    pub fn default_header(mut self, name: impl Into<String>, value: impl Into<String>) -> Self {
+        self.default_headers.push((name.into(), value.into()));
+        self
+    }
+
+    /// Adds multiple default headers merged into every request.
+    pub fn default_headers<I, K, V>(mut self, headers: I) -> Self
+    where
+        I: IntoIterator<Item = (K, V)>,
+        K: Into<String>,
+        V: Into<String>,
+    {
+        self.default_headers
+            .extend(headers.into_iter().map(|(k, v)| (k.into(), v.into())));
+        self
+    }
+
+    /// Sets a default `user-agent` header for every request.
+    pub fn user_agent(self, ua: impl Into<String>) -> Self {
+        self.default_header("user-agent", ua)
+    }
+
+    /// Sets a default per-request timeout applied when a request does not specify its own.
+    pub fn default_timeout(mut self, timeout: Duration) -> Self {
+        self.default_timeout = Some(timeout);
+        self
+    }
+
+    /// Builds a reusable [`Http3Pool`] retaining up to `max_idle` helper processes for these options.
+    #[must_use]
+    pub fn pool(self, max_idle: usize) -> Http3Pool {
+        Http3Pool::with_max_idle(self, max_idle)
     }
 
     fn arguments(&self) -> Vec<String> {
         let mut arguments = Vec::new();
         if let Some(profile) = &self.profile {
             arguments.extend(["--profile".to_owned(), profile.clone()]);
+        }
+        if let Some(kind) = self.request_kind {
+            arguments.extend(["--request-kind".to_owned(), kind.as_str().to_owned()]);
         }
         if let Some(path) = &self.root_cert_der {
             arguments.extend(["--root-cert-der".to_owned(), path.display().to_string()]);
@@ -234,6 +389,95 @@ impl Http3Request {
         self
     }
 
+    /// Appends multiple request headers.
+    pub fn headers<I, K, V>(mut self, headers: I) -> Self
+    where
+        I: IntoIterator<Item = (K, V)>,
+        K: Into<String>,
+        V: Into<String>,
+    {
+        self.headers
+            .extend(headers.into_iter().map(|(k, v)| (k.into(), v.into())));
+        self
+    }
+
+    /// Sets an `authorization: Bearer <token>` header.
+    pub fn bearer_auth(self, token: impl AsRef<str>) -> Self {
+        self.header("authorization", format!("Bearer {}", token.as_ref()))
+    }
+
+    /// Sets an `authorization: Basic <base64>` header from username and password.
+    pub fn basic_auth(self, username: impl AsRef<str>, password: impl AsRef<str>) -> Self {
+        let raw = format!("{}:{}", username.as_ref(), password.as_ref());
+        self.header("authorization", format!("Basic {}", STANDARD.encode(raw)))
+    }
+
+    /// Sets the `referer` request header.
+    pub fn referer(self, referer: impl Into<String>) -> Self {
+        self.header("referer", referer)
+    }
+
+    /// Sets the `origin` request header.
+    pub fn origin(self, origin: impl Into<String>) -> Self {
+        self.header("origin", origin)
+    }
+
+    /// Sets the `accept-language` request header.
+    pub fn accept_language(self, value: impl Into<String>) -> Self {
+        self.header("accept-language", value)
+    }
+
+    /// Sets the `cookie` request header.
+    pub fn cookie(self, cookie: impl Into<String>) -> Self {
+        self.header("cookie", cookie)
+    }
+
+    /// Sets a UTF-8 plain-text body and `content-type: text/plain; charset=utf-8`.
+    pub fn text_body(mut self, text: impl Into<String>) -> Self {
+        self.body = Some(text.into().into_bytes());
+        self.headers
+            .retain(|(k, _)| !k.eq_ignore_ascii_case("content-type"));
+        self.headers.push((
+            "content-type".to_owned(),
+            "text/plain; charset=utf-8".to_owned(),
+        ));
+        self
+    }
+
+    /// Appends URL-encoded query parameters to the request URL.
+    pub fn query<I, K, V>(mut self, params: I) -> Self
+    where
+        I: IntoIterator<Item = (K, V)>,
+        K: AsRef<str>,
+        V: AsRef<str>,
+    {
+        let encoded = encode_form_pairs(params);
+        if !encoded.is_empty() {
+            let sep = if self.url.contains('?') { '&' } else { '?' };
+            self.url.push(sep);
+            self.url.push_str(&encoded);
+        }
+        self
+    }
+
+    /// Sets an `application/x-www-form-urlencoded` body and matching `content-type` header.
+    pub fn form<I, K, V>(mut self, params: I) -> Self
+    where
+        I: IntoIterator<Item = (K, V)>,
+        K: AsRef<str>,
+        V: AsRef<str>,
+    {
+        let encoded = encode_form_pairs(params);
+        self.body = Some(encoded.into_bytes());
+        self.headers
+            .retain(|(k, _)| !k.eq_ignore_ascii_case("content-type"));
+        self.headers.push((
+            "content-type".to_owned(),
+            "application/x-www-form-urlencoded".to_owned(),
+        ));
+        self
+    }
+
     /// The request body; set its `content-type` with [`header`](Self::header).
     pub fn body(mut self, body: impl Into<Vec<u8>>) -> Self {
         self.body = Some(body.into());
@@ -241,11 +485,17 @@ impl Http3Request {
     }
 
     /// Serializes `value` as JSON body and sets `content-type: application/json`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`serde_json::Error`] if `value` cannot be serialized as JSON.
     pub fn json<T: serde::Serialize>(mut self, value: &T) -> Result<Self, serde_json::Error> {
         let bytes = serde_json::to_vec(value)?;
         self.body = Some(bytes);
-        self.headers.retain(|(k, _)| !k.eq_ignore_ascii_case("content-type"));
-        self.headers.push(("content-type".to_owned(), "application/json".to_owned()));
+        self.headers
+            .retain(|(k, _)| !k.eq_ignore_ascii_case("content-type"));
+        self.headers
+            .push(("content-type".to_owned(), "application/json".to_owned()));
         Ok(self)
     }
 
@@ -300,6 +550,52 @@ impl Http3Response {
             .map(|(_, value)| value.as_str())
     }
 
+    /// All values of the header `name`, compared without case.
+    #[must_use]
+    pub fn headers_all(&self, name: &str) -> Vec<&str> {
+        self.headers
+            .iter()
+            .filter(|(header, _)| header.eq_ignore_ascii_case(name))
+            .map(|(_, value)| value.as_str())
+            .collect()
+    }
+
+    /// All `Set-Cookie` header values from the response.
+    #[must_use]
+    pub fn cookies(&self) -> Vec<&str> {
+        self.headers_all("set-cookie")
+    }
+
+    /// The response `Content-Type` header value, if present.
+    #[must_use]
+    pub fn content_type(&self) -> Option<&str> {
+        self.header("content-type")
+    }
+
+    /// Returns `true` if the status code is in `200..=299`.
+    #[must_use]
+    pub fn is_success(&self) -> bool {
+        (200..=299).contains(&self.status)
+    }
+
+    /// Returns `true` if the status code is in `300..=399`.
+    #[must_use]
+    pub fn is_redirect(&self) -> bool {
+        (300..=399).contains(&self.status)
+    }
+
+    /// Returns `true` if the status code is in `400..=499`.
+    #[must_use]
+    pub fn is_client_error(&self) -> bool {
+        (400..=499).contains(&self.status)
+    }
+
+    /// Returns `true` if the status code is in `500..=599`.
+    #[must_use]
+    pub fn is_server_error(&self) -> bool {
+        (500..=599).contains(&self.status)
+    }
+
     /// The response body.
     #[must_use]
     pub fn body(&self) -> &[u8] {
@@ -307,6 +603,10 @@ impl Http3Response {
     }
 
     /// Decodes the response body as a UTF-8 string.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`std::string::FromUtf8Error`] if the body is not valid UTF-8.
     pub fn text(&self) -> Result<String, std::string::FromUtf8Error> {
         String::from_utf8(self.body.clone())
     }
@@ -318,9 +618,46 @@ impl Http3Response {
     }
 
     /// Deserializes the response body as JSON.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`serde_json::Error`] if the body is not valid JSON for `T`.
     pub fn json<T: serde::de::DeserializeOwned>(&self) -> Result<T, serde_json::Error> {
         serde_json::from_slice(&self.body)
     }
+}
+
+/// Percent-encodes `key=value` pairs for query strings and `application/x-www-form-urlencoded` bodies.
+fn encode_form_pairs<I, K, V>(params: I) -> String
+where
+    I: IntoIterator<Item = (K, V)>,
+    K: AsRef<str>,
+    V: AsRef<str>,
+{
+    fn pct(input: &str, out: &mut String) {
+        use std::fmt::Write as _;
+        for b in input.bytes() {
+            match b {
+                b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                    out.push(char::from(b));
+                }
+                b' ' => out.push('+'),
+                other => {
+                    let _ = write!(out, "%{other:02X}");
+                }
+            }
+        }
+    }
+    let mut out = String::new();
+    for (idx, (k, v)) in params.into_iter().enumerate() {
+        if idx > 0 {
+            out.push('&');
+        }
+        pct(k.as_ref(), &mut out);
+        out.push('=');
+        pct(v.as_ref(), &mut out);
+    }
+    out
 }
 
 /// A request line, as `sbrs-h3d` reads it.
@@ -359,10 +696,12 @@ struct Failure {
 /// A running `sbrs-h3d`. Requests are sent one at a time; the helper ends when this is dropped.
 #[derive(Debug)]
 pub struct Http3Client {
-    _child: Child,
+    child: Child,
     stdin: ChildStdin,
     stdout: Lines<BufReader<ChildStdout>>,
     next_id: u64,
+    default_headers: Vec<(String, String)>,
+    default_timeout: Option<Duration>,
 }
 
 impl Http3Client {
@@ -387,11 +726,45 @@ impl Http3Client {
             return Err(missing(std::io::Error::other("no stdin or stdout")));
         };
         Ok(Self {
-            _child: child,
+            child,
             stdin,
             stdout: BufReader::new(stdout).lines(),
             next_id: 1,
+            default_headers: options.default_headers.clone(),
+            default_timeout: options.default_timeout,
         })
+    }
+
+    /// Sends a `GET` request for `url` using this client's defaults.
+    ///
+    /// # Errors
+    ///
+    /// See [`Self::send`].
+    pub async fn get(&mut self, url: impl Into<String>) -> Result<Http3Response, Http3Error> {
+        self.send(Http3Request::get(url)).await
+    }
+
+    /// Serializes `payload` as JSON and sends a `POST` request to `url`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Http3Error::Reply`] on JSON serialization failure or any [`Self::send`] error.
+    pub async fn post_json<T: serde::Serialize>(
+        &mut self,
+        url: impl Into<String>,
+        payload: &T,
+    ) -> Result<Http3Response, Http3Error> {
+        let req = Http3Request::post(url)
+            .json(payload)
+            .map_err(|e| Http3Error::Reply(e.to_string()))?;
+        self.send(req).await
+    }
+
+    /// Whether the helper process is still running.
+    ///
+    /// A helper whose exit status cannot be read counts as ended.
+    pub fn is_alive(&mut self) -> bool {
+        matches!(self.child.try_wait(), Ok(None))
     }
 
     /// Sends `request` over HTTP/3 and waits for its response.
@@ -404,14 +777,26 @@ impl Http3Client {
     pub async fn send(&mut self, request: Http3Request) -> Result<Http3Response, Http3Error> {
         let id = self.next_id;
         self.next_id += 1;
+        let mut merged_headers =
+            Vec::with_capacity(self.default_headers.len() + request.headers.len());
+        for (k, v) in &self.default_headers {
+            if !request
+                .headers
+                .iter()
+                .any(|(rk, _)| rk.eq_ignore_ascii_case(k))
+            {
+                merged_headers.push((k.clone(), v.clone()));
+            }
+        }
+        merged_headers.extend(request.headers);
+        let effective_timeout = request.timeout.or(self.default_timeout);
         let line = Line {
             id,
             method: &request.method,
             url: &request.url,
-            headers: &request.headers,
+            headers: &merged_headers,
             body: request.body.as_deref().map(|body| STANDARD.encode(body)),
-            timeout_ms: request
-                .timeout
+            timeout_ms: effective_timeout
                 .map(|timeout| u64::try_from(timeout.as_millis()).unwrap_or(u64::MAX)),
             proxy: request.proxy.as_deref(),
         };
@@ -474,11 +859,13 @@ pub struct Http3Pool {
 
 impl Http3Pool {
     /// Creates a new pool for the given `options` with a default capacity of 4 idle clients.
+    #[must_use]
     pub fn new(options: Http3Options) -> Self {
         Self::with_max_idle(options, 4)
     }
 
     /// Creates a new pool with the specified idle client capacity.
+    #[must_use]
     pub fn with_max_idle(options: Http3Options, max_idle: usize) -> Self {
         Self {
             options,
@@ -487,18 +874,42 @@ impl Http3Pool {
         }
     }
 
-    /// Acquires an idle client from the pool or starts a new one.
-    pub async fn acquire(&self) -> Result<Http3Client, Http3Error> {
-        let mut guard = self.clients.lock().await;
-        if let Some(client) = guard.pop() {
-            Ok(client)
-        } else {
-            Http3Client::start(&self.options)
-        }
+    /// The options every helper of this pool is started with.
+    #[must_use]
+    pub fn options(&self) -> &Http3Options {
+        &self.options
     }
 
-    /// Releases a client back to the pool for reuse if under `max_idle`.
-    pub async fn release(&self, client: Http3Client) {
+    /// How many idle helpers the pool keeps at most.
+    #[must_use]
+    pub fn max_idle(&self) -> usize {
+        self.max_idle
+    }
+
+    /// Acquires an idle client from the pool or starts a new one.
+    ///
+    /// An idle helper that has exited since it was released is dropped, never returned.
+    ///
+    /// # Errors
+    ///
+    /// [`Http3Error::HelperMissing`] when a new helper cannot be started.
+    pub async fn acquire(&self) -> Result<Http3Client, Http3Error> {
+        let mut guard = self.clients.lock().await;
+        while let Some(mut client) = guard.pop() {
+            if client.is_alive() {
+                return Ok(client);
+            }
+        }
+        drop(guard);
+        Http3Client::start(&self.options)
+    }
+
+    /// Releases a client back to the pool for reuse if it is alive and the pool is under
+    /// `max_idle`.
+    pub async fn release(&self, mut client: Http3Client) {
+        if !client.is_alive() {
+            return;
+        }
         let mut guard = self.clients.lock().await;
         if guard.len() < self.max_idle {
             guard.push(client);
@@ -506,6 +917,10 @@ impl Http3Pool {
     }
 
     /// Sends a request using a pooled client, returning the client to the pool upon completion.
+    ///
+    /// # Errors
+    ///
+    /// See [`Http3Client::send`]; a failed send drops its helper instead of pooling it.
     pub async fn send(&self, request: Http3Request) -> Result<Http3Response, Http3Error> {
         let mut client = self.acquire().await?;
         let res = client.send(request).await;
@@ -513,6 +928,31 @@ impl Http3Pool {
             self.release(client).await;
         }
         res
+    }
+
+    /// Sends a `GET` request for `url` using a pooled client.
+    ///
+    /// # Errors
+    ///
+    /// See [`Self::send`].
+    pub async fn get(&self, url: impl Into<String>) -> Result<Http3Response, Http3Error> {
+        self.send(Http3Request::get(url)).await
+    }
+
+    /// Serializes `payload` as JSON and sends a `POST` request to `url` using a pooled client.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Http3Error::Reply`] on JSON serialization failure or any [`Self::send`] error.
+    pub async fn post_json<T: serde::Serialize>(
+        &self,
+        url: impl Into<String>,
+        payload: &T,
+    ) -> Result<Http3Response, Http3Error> {
+        let req = Http3Request::post(url)
+            .json(payload)
+            .map_err(|e| Http3Error::Reply(e.to_string()))?;
+        self.send(req).await
     }
 }
 
@@ -655,6 +1095,7 @@ mod tests {
     fn the_options_become_the_helpers_command_line() {
         let options = Http3Options::new()
             .profile("chrome-154-macos")
+            .request_kind(Http3RequestKind::Subresource)
             .root_cert_der("/tmp/cert.der")
             .resolve("localhost", IpAddr::from([127, 0, 0, 1]))
             .proxy("socks5://127.0.0.1:1080");
@@ -663,6 +1104,8 @@ mod tests {
             [
                 "--profile",
                 "chrome-154-macos",
+                "--request-kind",
+                "subresource",
                 "--root-cert-der",
                 "/tmp/cert.der",
                 "--resolve",
@@ -670,6 +1113,173 @@ mod tests {
                 "--proxy",
                 "socks5://127.0.0.1:1080",
             ]
+        );
+    }
+
+    #[test]
+    fn options_build_browser_selectors_and_proxy_shortcuts() {
+        let chrome = Http3Options::new().for_browser(BrowserType::Chromium, 157, OsType::Windows);
+        assert!(chrome
+            .arguments()
+            .contains(&"chrome-157-windows".to_owned()));
+
+        let firefox = Http3Options::new().for_browser(BrowserType::Firefox, 157, OsType::Windows);
+        assert!(firefox
+            .arguments()
+            .contains(&"firefox-157-windows".to_owned()));
+
+        let safari = Http3Options::new().for_browser(BrowserType::MobileSafari, 26, OsType::Ios);
+        assert!(safari.arguments().contains(&"safari-26-ios".to_owned()));
+
+        let socks = Http3Options::new().socks5("127.0.0.1:1080");
+        assert!(socks
+            .arguments()
+            .contains(&"socks5h://127.0.0.1:1080".to_owned()));
+
+        let masque = Http3Options::new().connect_udp("masque.example:443");
+        assert!(masque
+            .arguments()
+            .contains(&"connect-udp://masque.example:443".to_owned()));
+    }
+
+    #[tokio::test]
+    async fn pool_drops_exited_helper_before_returning_it() {
+        let dir = tempfile::tempdir().expect("a folder");
+        // First helper answers one request and exits immediately; second answers request 2.
+        let program = fake_helper(
+            dir.path(),
+            &[r#"{"id":1,"status":200,"protocol":"h3","headers":[],"body":""}"#],
+        );
+        let pool = Http3Options::new().program(&program).pool(2);
+        let mut client = pool.acquire().await.expect("starts");
+        let resp = client
+            .send(Http3Request::get("https://localhost/one"))
+            .await
+            .expect("first ok");
+        assert_eq!(resp.status(), 200);
+        // Wait briefly for the fake shell script to exit.
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        pool.release(client).await;
+        assert_eq!(pool.clients.lock().await.len(), 0);
+    }
+
+    #[test]
+    fn request_builder_helpers_set_headers_query_form_and_text_body() {
+        let req = Http3Request::get("https://example.com/search")
+            .headers([("x-one", "1"), ("x-two", "2")])
+            .bearer_auth("tok-123")
+            .referer("https://example.com/")
+            .origin("https://example.com")
+            .accept_language("en-US,en;q=0.9")
+            .cookie("sid=abc")
+            .query([("q", "hello world"), ("page", "2")]);
+
+        assert_eq!(req.url, "https://example.com/search?q=hello+world&page=2");
+        assert!(req.headers.contains(&("x-one".to_owned(), "1".to_owned())));
+        assert!(req.headers.contains(&("x-two".to_owned(), "2".to_owned())));
+        assert!(req
+            .headers
+            .contains(&("authorization".to_owned(), "Bearer tok-123".to_owned())));
+        assert!(req
+            .headers
+            .contains(&("referer".to_owned(), "https://example.com/".to_owned())));
+        assert!(req
+            .headers
+            .contains(&("origin".to_owned(), "https://example.com".to_owned())));
+        assert!(req
+            .headers
+            .contains(&("accept-language".to_owned(), "en-US,en;q=0.9".to_owned())));
+        assert!(req
+            .headers
+            .contains(&("cookie".to_owned(), "sid=abc".to_owned())));
+
+        let basic = Http3Request::post("https://example.com/login")
+            .basic_auth("alice", "secret")
+            .form([("user", "alice"), ("role", "admin user")]);
+        assert!(basic.headers.contains(&(
+            "authorization".to_owned(),
+            format!("Basic {}", STANDARD.encode("alice:secret"))
+        )));
+        assert_eq!(
+            basic.body.as_deref(),
+            Some(&b"user=alice&role=admin+user"[..])
+        );
+        assert!(basic.headers.contains(&(
+            "content-type".to_owned(),
+            "application/x-www-form-urlencoded".to_owned()
+        )));
+
+        let text = Http3Request::post("https://example.com/note").text_body("hello");
+        assert_eq!(text.body.as_deref(), Some(&b"hello"[..]));
+        assert!(text.headers.contains(&(
+            "content-type".to_owned(),
+            "text/plain; charset=utf-8".to_owned()
+        )));
+    }
+
+    #[test]
+    fn response_helpers_inspect_headers_cookies_and_status_classes() {
+        let resp = Http3Response {
+            status: 201,
+            protocol: "h3".to_owned(),
+            headers: vec![
+                ("Content-Type".to_owned(), "application/json".to_owned()),
+                ("Set-Cookie".to_owned(), "a=1; Path=/".to_owned()),
+                ("set-cookie".to_owned(), "b=2; HttpOnly".to_owned()),
+            ],
+            body: br#"{"ok":true}"#.to_vec(),
+        };
+        assert_eq!(resp.content_type(), Some("application/json"));
+        assert_eq!(
+            resp.headers_all("set-cookie"),
+            vec!["a=1; Path=/", "b=2; HttpOnly"]
+        );
+        assert_eq!(resp.cookies(), vec!["a=1; Path=/", "b=2; HttpOnly"]);
+        assert!(resp.is_success());
+        assert!(!resp.is_redirect());
+        assert!(!resp.is_client_error());
+        assert!(!resp.is_server_error());
+
+        let redir = Http3Response {
+            status: 302,
+            ..resp.clone()
+        };
+        assert!(redir.is_redirect());
+        let client_err = Http3Response {
+            status: 404,
+            ..resp.clone()
+        };
+        assert!(client_err.is_client_error());
+        let server_err = Http3Response {
+            status: 503,
+            ..resp
+        };
+        assert!(server_err.is_server_error());
+    }
+
+    #[tokio::test]
+    async fn pool_get_and_post_json_shorthands_work() {
+        let dir = tempfile::tempdir().expect("a folder");
+        let program = fake_helper(
+            dir.path(),
+            &[
+                r#"{"id":1,"status":200,"protocol":"h3","headers":[],"body":"b2s="}"#,
+                r#"{"id":2,"status":201,"protocol":"h3","headers":[],"body":"eyJvayI6dHJ1ZX0="}"#,
+            ],
+        );
+        let pool = Http3Options::new().program(&program).pool(2);
+        let r1 = pool.get("https://localhost/ping").await.expect("get ok");
+        assert_eq!(r1.status(), 200);
+        assert_eq!(r1.text().expect("utf8"), "ok");
+
+        let r2 = pool
+            .post_json("https://localhost/items", &serde_json::json!({"x": 1}))
+            .await
+            .expect("post_json ok");
+        assert_eq!(r2.status(), 201);
+        assert_eq!(
+            r2.json::<serde_json::Value>().expect("json"),
+            serde_json::json!({"ok": true})
         );
     }
 }

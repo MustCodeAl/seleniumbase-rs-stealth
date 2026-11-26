@@ -181,4 +181,59 @@ mod tests {
         let bundle_gen = StealthScriptBundle::from_generated(&generated);
         assert!(bundle_gen.script().contains(&generated.gpu.renderer));
     }
+
+    #[test]
+    fn stealth_page_ext_and_base_case_ext_execute_protocol_commands_on_mocked_page() {
+        let rt = seleniumbase_rs::tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("tokio runtime");
+        rt.block_on(async {
+            let (browser, mock) = seleniumbase_rs::sb_cdp::Browser::new_mocked();
+            let page = browser.default_page().await.expect("mock page");
+
+            let generated = FingerprintGenerator::new(77).os(OsType::Windows).generate();
+            let bundle = StealthScriptBundle::from_generated(&generated);
+
+            page.apply_stealth(&bundle).await.expect("apply_stealth");
+            page.apply_profile(&generated.profile)
+                .await
+                .expect("apply_profile");
+            page.apply_stealth_fingerprint(&generated.fingerprint)
+                .await
+                .expect("apply_stealth_fingerprint");
+            page.apply_generated(&generated)
+                .await
+                .expect("apply_generated");
+
+            let injected = mock.calls_to("Page.addScriptToEvaluateOnNewDocument");
+            assert!(
+                injected
+                    .iter()
+                    .filter(|c| c.params["source"] == bundle.script())
+                    .count()
+                    >= 2
+            );
+            assert!(injected.len() >= 4);
+
+            // Exercise StealthBaseCaseExt over a BaseCase attached to the mocked CDP page.
+            let session = seleniumbase_rs::BrowserSession::attach_page(page);
+            let sb = seleniumbase_rs::BaseCase::with_session(
+                seleniumbase_rs::BrowserConfig::default(),
+                session,
+            );
+            sb.apply_stealth(&bundle)
+                .await
+                .expect("base_case apply_stealth");
+            sb.apply_profile(&generated.profile)
+                .await
+                .expect("base_case apply_profile");
+            sb.apply_stealth_fingerprint(&generated.fingerprint)
+                .await
+                .expect("base_case apply_stealth_fingerprint");
+            sb.apply_generated(&generated)
+                .await
+                .expect("base_case apply_generated");
+        });
+    }
 }

@@ -38,10 +38,19 @@ assert_eq!(response.protocol(), "h3");
 - The helper uses phantom's `chrome-156-macos` profile unless `Http3Options::profile` names
   another. Its headers come from that profile's navigation template; a header you add keeps the
   template's place when the template has it.
-- `Alt-Svc` is not learned: HTTP/3 is used only when you ask for it. With UDP blocked, a request
-  fails at its time limit (30 seconds unless `Http3Request::timeout` says otherwise).
-- An HTTP proxy cannot carry HTTP/3 (a CONNECT tunnel carries TCP), and the helper takes no
-  proxy. Requests go straight from this machine.
+- `Alt-Svc` is off by default; enable `HttpSessionOptions::http3_alt_svc(true)` to learn `h3`
+  advertisements and opportunistically upgrade subsequent hops (falling back to HTTP/2 on failure).
+  Explicit `HttpRequest::protocol(WireProtocol::Http3)` always stays strict HTTP/3.
+- `sbrs-h3d` supports `socks5://` / `socks5h://` UDP relay and `connect-udp://` / MASQUE `https://`
+  proxies (`Http3Options::socks5`, `Http3Options::connect_udp`, `Http3Request::proxy`), as well as
+  `--request-kind navigation|subresource` (`Http3Options::request_kind`). TCP-only `http://` CONNECT
+  proxies are rejected because QUIC requires UDP.
+- `Http3Pool` reuses live `sbrs-h3d` helper processes (`Http3Options::pool(max_idle)`) and exposes
+  `get(url)` and `post_json(url, &payload)` shorthands alongside `send(Http3Request)`.
+- `Http3Request` provides ergonomic builders (`headers`, `bearer_auth`, `basic_auth`, `referer`,
+  `origin`, `accept_language`, `cookie`, `query`, `form`, `text_body`, `json`) and `Http3Response`
+  provides inspection helpers (`headers_all`, `cookies`, `content_type`, `is_success`,
+  `is_redirect`, `is_client_error`, `is_server_error`, `text`, `text_lossy`, `json`).
 
 ## What matches Chrome, and what does not
 

@@ -339,14 +339,11 @@ async fn probe(page: &Page) -> Result<Probe, HttpError> {
         .as_str()
         .ok_or_else(|| SeleniumBaseError::cdp_driver("the page reported no navigator.userAgent"))?
         .to_owned();
-    let languages = value["languages"]
-        .as_array()
-        .map(|list| {
-            list.iter()
-                .filter_map(|language| language.as_str().map(str::to_owned))
-                .collect()
-        })
-        .unwrap_or_default();
+    let languages = value["languages"].as_array().map_or_default(|list| {
+        list.iter()
+            .filter_map(|language| language.as_str().map(str::to_owned))
+            .collect()
+    });
     let version = page
         .browser()
         .execute("Browser.getVersion", json!({}))

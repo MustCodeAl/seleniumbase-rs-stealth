@@ -232,9 +232,7 @@ mod tests {
     }
 
     fn host_of(proxy: Option<ProxyRoute>) -> String {
-        proxy
-            .map(|route| route.key().host.clone())
-            .unwrap_or_default()
+        proxy.map_or_else(String::new, |route| route.key().host.clone())
     }
 
     /// The hosts of `count` picks in a row at time `now`.

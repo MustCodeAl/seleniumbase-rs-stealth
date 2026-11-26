@@ -112,25 +112,21 @@ async fn ping(tls: &mut SslStream<TcpStream>) {
 }
 
 fn dns_names(cert: &X509Ref) -> Vec<String> {
-    cert.subject_alt_names()
-        .map(|names| {
-            names
-                .iter()
-                .filter_map(|name| name.dnsname().map(str::to_owned))
-                .collect()
-        })
-        .unwrap_or_default()
+    cert.subject_alt_names().map_or_else(Vec::new, |names| {
+        names
+            .iter()
+            .filter_map(|name| name.dnsname().map(str::to_owned))
+            .collect()
+    })
 }
 
 fn ip_addresses(cert: &X509Ref) -> Vec<Vec<u8>> {
-    cert.subject_alt_names()
-        .map(|names| {
-            names
-                .iter()
-                .filter_map(|name| name.ipaddress().map(<[u8]>::to_vec))
-                .collect()
-        })
-        .unwrap_or_default()
+    cert.subject_alt_names().map_or_else(Vec::new, |names| {
+        names
+            .iter()
+            .filter_map(|name| name.ipaddress().map(<[u8]>::to_vec))
+            .collect()
+    })
 }
 
 #[tokio::test]
@@ -563,8 +559,9 @@ fn debug_output_never_shows_a_private_key() {
 
 /// Regular files of `dir` with their length and modification time.
 fn listing(dir: &Path) -> HashMap<PathBuf, (u64, Option<SystemTime>)> {
-    std::fs::read_dir(dir)
-        .map(|entries| {
+    std::fs::read_dir(dir).map_or_else(
+        |_| HashMap::new(),
+        |entries| {
             entries
                 .flatten()
                 .filter_map(|entry| {
@@ -572,8 +569,8 @@ fn listing(dir: &Path) -> HashMap<PathBuf, (u64, Option<SystemTime>)> {
                     Some((entry.path(), (meta.len(), meta.modified().ok())))
                 })
                 .collect()
-        })
-        .unwrap_or_default()
+        },
+    )
 }
 
 #[tokio::test]
