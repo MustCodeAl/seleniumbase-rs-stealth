@@ -413,7 +413,16 @@ impl HeaderGenerator {
         ordered.push(("Accept".to_owned(), accept.to_owned()));
 
         let (site, mode, dest, user) = match context {
-            RequestContext::Navigation => ("none", "navigate", "document", Some("?1")),
+            RequestContext::Navigation => (
+                if referer.is_some() {
+                    "cross-site"
+                } else {
+                    "none"
+                },
+                "navigate",
+                "document",
+                Some("?1"),
+            ),
             RequestContext::Fetch => ("same-origin", "cors", "empty", None),
             RequestContext::Subresource => ("same-origin", "no-cors", "script", None),
             RequestContext::CrossOriginApi => ("cross-site", "cors", "empty", None),
@@ -428,9 +437,14 @@ impl HeaderGenerator {
         if let Some(r) = referer {
             ordered.push(("Referer".to_owned(), r.to_owned()));
         }
+        let is_safari = matches!(fp.profile.browser, Some(BrowserType::MobileSafari));
         ordered.push((
             "Accept-Encoding".to_owned(),
-            "gzip, deflate, br, zstd".to_owned(),
+            if is_safari {
+                "gzip, deflate, br".to_owned()
+            } else {
+                "gzip, deflate, br, zstd".to_owned()
+            },
         ));
         if let Some(al) = fp.headers.get("Accept-Language") {
             ordered.push(("Accept-Language".to_owned(), al.clone()));
@@ -552,6 +566,7 @@ impl FingerprintConverter {
             Some(ColorScheme::Dark) => "dark",
             _ => "light",
         };
+        let is_mobile = fp.profile.os.is_some_and(|os| os.is_mobile());
         json!({
             "userAgent": fp.profile.user_agent,
             "viewport": {
@@ -559,6 +574,8 @@ impl FingerprintConverter {
                 "height": fp.display.height,
             },
             "deviceScaleFactor": fp.display.pixel_ratio,
+            "isMobile": is_mobile,
+            "hasTouch": is_mobile || fp.profile.max_touch_points.is_some_and(|t| t > 0),
             "locale": fp.profile.languages.first(),
             "timezoneId": fp.profile.timezone,
             "colorScheme": color_scheme,
@@ -725,6 +742,27 @@ mod tests {
         assert!(api
             .iter()
             .any(|(k, v)| k == "Referer" && v == "https://example.com/"));
+
+        // Navigation with Referer must not emit contradictory `Sec-Fetch-Site: none`.
+        let referred_nav = HeaderGenerator::generate(
+            &fp,
+            RequestContext::Navigation,
+            Some("https://example.com/"),
+        );
+        assert!(referred_nav
+            .iter()
+            .any(|(k, v)| k == "Sec-Fetch-Site" && v == "cross-site"));
+
+        // Safari/iOS must not advertise `zstd` in Accept-Encoding.
+        let ios = BayesianSampler::sample(&SampleConstraints::new().os([OsType::Ios]).seed(9))
+            .expect("ios safari");
+        let ios_headers = HeaderGenerator::generate(&ios, RequestContext::Navigation, None);
+        assert!(ios_headers
+            .iter()
+            .any(|(k, v)| k == "Accept-Encoding" && v == "gzip, deflate, br"));
+        let pw_ios = FingerprintConverter::to_playwright_context_options(&ios);
+        assert_eq!(pw_ios["isMobile"], true);
+        assert_eq!(pw_ios["hasTouch"], true);
     }
 
     #[test]
