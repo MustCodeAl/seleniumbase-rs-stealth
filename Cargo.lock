@@ -1994,6 +1994,7 @@ dependencies = [
 [[package]]
 name = "seleniumbase-rs"
 version = "0.9.4"
+source = "git+https://github.com/MustCodeAl/seleniumbase-rs#ea1d70a4adb8ef7f349a1228bb01bc2cb1da3e47"
 dependencies = [
  "allocator-api2",
  "anstream",
