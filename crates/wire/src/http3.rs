@@ -13,6 +13,7 @@
 use std::net::IpAddr;
 use std::path::PathBuf;
 use std::process::Stdio;
+use std::sync::Arc;
 use std::time::Duration;
 
 use base64::engine::general_purpose::STANDARD;
@@ -20,6 +21,7 @@ use base64::Engine as _;
 use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncBufReadExt as _, AsyncWriteExt as _, BufReader, Lines};
 use tokio::process::{Child, ChildStdin, ChildStdout};
+use tokio::sync::Mutex;
 
 /// The environment variable that names the helper program; without it, `sbrs-h3d` is looked up
 /// on the `PATH`.
@@ -68,6 +70,7 @@ pub struct Http3Options {
     profile: Option<String>,
     root_cert_der: Option<PathBuf>,
     resolve: Vec<(String, IpAddr)>,
+    proxy: Option<String>,
 }
 
 impl Default for Http3Options {
@@ -78,6 +81,7 @@ impl Default for Http3Options {
             profile: None,
             root_cert_der: None,
             resolve: Vec::new(),
+            proxy: None,
         }
     }
 }
@@ -144,6 +148,12 @@ impl Http3Options {
         self
     }
 
+    /// A proxy to route requests through (e.g. SOCKS5, HTTP CONNECT, or CONNECT-UDP).
+    pub fn proxy(mut self, proxy: impl Into<String>) -> Self {
+        self.proxy = Some(proxy.into());
+        self
+    }
+
     fn arguments(&self) -> Vec<String> {
         let mut arguments = Vec::new();
         if let Some(profile) = &self.profile {
@@ -154,6 +164,9 @@ impl Http3Options {
         }
         for (host, ip) in &self.resolve {
             arguments.extend(["--resolve".to_owned(), format!("{host}={ip}")]);
+        }
+        if let Some(proxy) = &self.proxy {
+            arguments.extend(["--proxy".to_owned(), proxy.clone()]);
         }
         arguments
     }
@@ -168,6 +181,7 @@ pub struct Http3Request {
     headers: Vec<(String, String)>,
     body: Option<Vec<u8>>,
     timeout: Option<Duration>,
+    proxy: Option<String>,
 }
 
 impl Http3Request {
@@ -179,12 +193,38 @@ impl Http3Request {
             headers: Vec::new(),
             body: None,
             timeout: None,
+            proxy: None,
         }
     }
 
     /// A `GET` request for `url`.
     pub fn get(url: impl Into<String>) -> Self {
         Self::new("GET", url)
+    }
+
+    /// A `POST` request for `url`.
+    pub fn post(url: impl Into<String>) -> Self {
+        Self::new("POST", url)
+    }
+
+    /// A `PUT` request for `url`.
+    pub fn put(url: impl Into<String>) -> Self {
+        Self::new("PUT", url)
+    }
+
+    /// A `DELETE` request for `url`.
+    pub fn delete(url: impl Into<String>) -> Self {
+        Self::new("DELETE", url)
+    }
+
+    /// A `PATCH` request for `url`.
+    pub fn patch(url: impl Into<String>) -> Self {
+        Self::new("PATCH", url)
+    }
+
+    /// A `HEAD` request for `url`.
+    pub fn head(url: impl Into<String>) -> Self {
+        Self::new("HEAD", url)
     }
 
     /// One more header. A header the profile also sends keeps the profile's place and takes
@@ -200,10 +240,25 @@ impl Http3Request {
         self
     }
 
+    /// Serializes `value` as JSON body and sets `content-type: application/json`.
+    pub fn json<T: serde::Serialize>(mut self, value: &T) -> Result<Self, serde_json::Error> {
+        let bytes = serde_json::to_vec(value)?;
+        self.body = Some(bytes);
+        self.headers.retain(|(k, _)| !k.eq_ignore_ascii_case("content-type"));
+        self.headers.push(("content-type".to_owned(), "application/json".to_owned()));
+        Ok(self)
+    }
+
     /// How long to wait for the response (the helper's default is 30 seconds, its limit five
     /// minutes).
     pub fn timeout(mut self, timeout: Duration) -> Self {
         self.timeout = Some(timeout);
+        self
+    }
+
+    /// An optional per-request proxy override.
+    pub fn proxy(mut self, proxy: impl Into<String>) -> Self {
+        self.proxy = Some(proxy.into());
         self
     }
 }
@@ -250,6 +305,22 @@ impl Http3Response {
     pub fn body(&self) -> &[u8] {
         &self.body
     }
+
+    /// Decodes the response body as a UTF-8 string.
+    pub fn text(&self) -> Result<String, std::string::FromUtf8Error> {
+        String::from_utf8(self.body.clone())
+    }
+
+    /// Decodes the response body lossily as a UTF-8 string.
+    #[must_use]
+    pub fn text_lossy(&self) -> std::borrow::Cow<'_, str> {
+        String::from_utf8_lossy(&self.body)
+    }
+
+    /// Deserializes the response body as JSON.
+    pub fn json<T: serde::de::DeserializeOwned>(&self) -> Result<T, serde_json::Error> {
+        serde_json::from_slice(&self.body)
+    }
 }
 
 /// A request line, as `sbrs-h3d` reads it.
@@ -263,6 +334,8 @@ struct Line<'a> {
     body: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     timeout_ms: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    proxy: Option<&'a str>,
 }
 
 /// An answer line, as `sbrs-h3d` writes it.
@@ -340,6 +413,7 @@ impl Http3Client {
             timeout_ms: request
                 .timeout
                 .map(|timeout| u64::try_from(timeout.as_millis()).unwrap_or(u64::MAX)),
+            proxy: request.proxy.as_deref(),
         };
         let mut text =
             serde_json::to_string(&line).map_err(|error| Http3Error::Reply(error.to_string()))?;
@@ -385,6 +459,60 @@ impl Http3Client {
     async fn write(&mut self, bytes: &[u8]) -> std::io::Result<()> {
         self.stdin.write_all(bytes).await?;
         self.stdin.flush().await
+    }
+}
+
+/// A pool of reusable [`Http3Client`] workers.
+///
+/// Keeps active `Http3Client` process instances to avoid the latency of repeated process spawns.
+#[derive(Clone, Debug)]
+pub struct Http3Pool {
+    options: Http3Options,
+    clients: Arc<Mutex<Vec<Http3Client>>>,
+    max_idle: usize,
+}
+
+impl Http3Pool {
+    /// Creates a new pool for the given `options` with a default capacity of 4 idle clients.
+    pub fn new(options: Http3Options) -> Self {
+        Self::with_max_idle(options, 4)
+    }
+
+    /// Creates a new pool with the specified idle client capacity.
+    pub fn with_max_idle(options: Http3Options, max_idle: usize) -> Self {
+        Self {
+            options,
+            clients: Arc::new(Mutex::new(Vec::new())),
+            max_idle,
+        }
+    }
+
+    /// Acquires an idle client from the pool or starts a new one.
+    pub async fn acquire(&self) -> Result<Http3Client, Http3Error> {
+        let mut guard = self.clients.lock().await;
+        if let Some(client) = guard.pop() {
+            Ok(client)
+        } else {
+            Http3Client::start(&self.options)
+        }
+    }
+
+    /// Releases a client back to the pool for reuse if under `max_idle`.
+    pub async fn release(&self, client: Http3Client) {
+        let mut guard = self.clients.lock().await;
+        if guard.len() < self.max_idle {
+            guard.push(client);
+        }
+    }
+
+    /// Sends a request using a pooled client, returning the client to the pool upon completion.
+    pub async fn send(&self, request: Http3Request) -> Result<Http3Response, Http3Error> {
+        let mut client = self.acquire().await?;
+        let res = client.send(request).await;
+        if res.is_ok() {
+            self.release(client).await;
+        }
+        res
     }
 }
 
@@ -528,7 +656,8 @@ mod tests {
         let options = Http3Options::new()
             .profile("chrome-154-macos")
             .root_cert_der("/tmp/cert.der")
-            .resolve("localhost", IpAddr::from([127, 0, 0, 1]));
+            .resolve("localhost", IpAddr::from([127, 0, 0, 1]))
+            .proxy("socks5://127.0.0.1:1080");
         assert_eq!(
             options.arguments(),
             [
@@ -537,7 +666,9 @@ mod tests {
                 "--root-cert-der",
                 "/tmp/cert.der",
                 "--resolve",
-                "localhost=127.0.0.1"
+                "localhost=127.0.0.1",
+                "--proxy",
+                "socks5://127.0.0.1:1080",
             ]
         );
     }

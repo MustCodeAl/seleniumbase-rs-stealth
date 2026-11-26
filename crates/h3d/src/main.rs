@@ -48,6 +48,7 @@ struct Options {
     profile: String,
     root_cert_der: Option<PathBuf>,
     resolve: Vec<(String, IpAddr)>,
+    proxy: Option<String>,
 }
 
 /// One request line.
@@ -64,6 +65,8 @@ struct Request {
     body: Option<String>,
     #[serde(default)]
     timeout_ms: Option<u64>,
+    #[serde(default)]
+    proxy: Option<String>,
 }
 
 /// One answer line.
@@ -108,10 +111,12 @@ fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Options, String>
         profile: DEFAULT_PROFILE.to_owned(),
         root_cert_der: None,
         resolve: Vec::new(),
+        proxy: None,
     };
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--profile" => options.profile = args.next().ok_or("--profile needs a name")?,
+            "--proxy" => options.proxy = Some(args.next().ok_or("--proxy needs an address or URL")?),
             "--root-cert-der" => {
                 options.root_cert_der = Some(PathBuf::from(
                     args.next().ok_or("--root-cert-der needs a path")?,
@@ -326,7 +331,10 @@ mod tests {
             serde_json::from_str(r#"{"id":7,"url":"https://localhost/"}"#).expect("minimal");
         assert_eq!((request.id, request.method, request.body), (7, None, None));
         assert!(serde_json::from_str::<Request>(r#"{"url":"https://localhost/"}"#).is_err());
-        assert!(serde_json::from_str::<Request>(r#"{"id":1,"url":"x","proxy":"y"}"#).is_err());
+        assert!(serde_json::from_str::<Request>(r#"{"id":1,"url":"x","unknown_field":"y"}"#).is_err());
+        let with_proxy: Request =
+            serde_json::from_str(r#"{"id":1,"url":"x","proxy":"socks5://127.0.0.1:1080"}"#).expect("proxy");
+        assert_eq!(with_proxy.proxy.as_deref(), Some("socks5://127.0.0.1:1080"));
     }
 
     #[test]
