@@ -120,6 +120,34 @@ impl Default for StealthScriptOptions {
 impl StealthScriptOptions {
     /// Creates options with all evasions enabled.
     #[must_use]
+    pub const fn all() -> Self {
+        Self::new()
+    }
+
+    /// Creates strict options with all evasions enabled (alias for [`Self::all`]).
+    #[must_use]
+    pub const fn strict() -> Self {
+        Self::new()
+    }
+
+    /// Creates balanced options: all core, worker, console, mouse, WebRTC, Intl, and media guards
+    /// enabled while disabling pixel/audio/SVG noise for visual fidelity.
+    #[must_use]
+    pub const fn balanced() -> Self {
+        Self {
+            canvas_noise: false,
+            offscreen_canvas: false,
+            canvas_toblob_guard: false,
+            audio_noise: false,
+            dom_rect_noise: false,
+            svg_noise: false,
+            performance_jitter: false,
+            ..Self::new()
+        }
+    }
+
+    /// Creates options with all evasions enabled.
+    #[must_use]
     pub const fn new() -> Self {
         Self {
             webdriver: true,
@@ -796,6 +824,9 @@ struct ScriptParams {
     worker_spoofing: bool,
     timezone: Option<String>,
     webrtc_policy: Option<seleniumbase_rs::WebRtcPolicy>,
+    storage_quota_gb: Option<u64>,
+    outer_chrome_height: u32,
+    history_min_length: u32,
 }
 
 impl ScriptParams {
@@ -824,11 +855,13 @@ impl ScriptParams {
 
         let base_seed = profile.seed.unwrap_or_else(|| stable_profile_seed(profile));
         let canvas_mode = profile.canvas_noise.unwrap_or(CanvasNoise::Persistent);
-        let canvas_seed = if canvas_mode == CanvasNoise::Random {
-            base_seed ^ fresh_entropy()
-        } else {
-            base_seed
-        };
+        let canvas_seed = profile.canvas_seed.unwrap_or_else(|| {
+            if canvas_mode == CanvasNoise::Random {
+                base_seed ^ fresh_entropy()
+            } else {
+                base_seed
+            }
+        });
         let canvas_density = match canvas_mode {
             CanvasNoise::Natural => 0,
             CanvasNoise::Low => 8,
@@ -837,11 +870,13 @@ impl ScriptParams {
 
         let audio_mode = profile.audio_noise.unwrap_or(AudioNoise::Persistent);
         let audio_noise_enabled = audio_mode != AudioNoise::Natural;
-        let audio_seed = if audio_mode == AudioNoise::Random {
-            base_seed ^ AUDIO_SEED_MASK ^ fresh_entropy()
-        } else {
-            base_seed ^ AUDIO_SEED_MASK
-        };
+        let audio_seed = profile.audio_seed.unwrap_or_else(|| {
+            if audio_mode == AudioNoise::Random {
+                base_seed ^ AUDIO_SEED_MASK ^ fresh_entropy()
+            } else {
+                base_seed ^ AUDIO_SEED_MASK
+            }
+        });
 
         let languages = if profile.languages.is_empty() {
             vec!["en-US".to_owned(), "en".to_owned()]
@@ -924,6 +959,13 @@ impl ScriptParams {
             worker_spoofing: profile.worker_spoofing,
             timezone: profile.timezone.clone(),
             webrtc_policy: profile.webrtc_policy,
+            storage_quota_gb: profile.storage_quota_gb,
+            outer_chrome_height: profile.outer_chrome_height.unwrap_or(if os.is_mobile() {
+                0
+            } else {
+                88
+            }),
+            history_min_length: profile.history_min_length.unwrap_or(2),
         }
     }
 
@@ -1023,7 +1065,7 @@ impl ScriptParams {
             Self::push_iframe_srcdoc_guard(&mut out);
         }
         if options.history_length_guard {
-            Self::push_history_length_guard(&mut out);
+            self.push_history_length_guard(&mut out);
         }
         if options.canvas_toblob_guard {
             Self::push_canvas_toblob_guard(&mut out);
@@ -2484,7 +2526,7 @@ impl ScriptParams {
     }
 
     fn push_window_geometry(&self, out: &mut String) {
-        let chrome_h = if self.os.is_mobile() { 0 } else { 88 };
+        let chrome_h = self.outer_chrome_height;
         let _ = writeln!(
             out,
             r"  // 21. Window Outer/Inner Geometry Coherence
@@ -2504,11 +2546,16 @@ impl ScriptParams {
     }
 
     fn push_storage_quota(&self, out: &mut String) {
-        let quota_bytes: u64 = if self.os.is_mobile() {
-            64_424_509_440 // 60 GiB
-        } else {
-            274_877_906_944 // 256 GiB
-        };
+        let quota_bytes: u64 = self.storage_quota_gb.map_or_else(
+            || {
+                if self.os.is_mobile() {
+                    64_424_509_440 // 60 GiB
+                } else {
+                    274_877_906_944 // 256 GiB
+                }
+            },
+            |gb| gb.saturating_mul(1_073_741_824),
+        );
         let _ = writeln!(
             out,
             r"  // 22. StorageManager Quota (non-incognito realistic capacity)
@@ -2589,7 +2636,7 @@ impl ScriptParams {
     }
 
     fn push_mouse_coord_guard(&self, out: &mut String) {
-        let chrome_h = if self.os.is_mobile() { 0 } else { 88 };
+        let chrome_h = self.outer_chrome_height;
         let _ = writeln!(
             out,
             r"  // 26. MouseEvent screenX/screenY Coordinate Alignment
@@ -2728,23 +2775,25 @@ impl ScriptParams {
         );
     }
 
-    fn push_history_length_guard(out: &mut String) {
-        out.push_str(
+    fn push_history_length_guard(&self, out: &mut String) {
+        let min_len = self.history_min_length.max(1);
+        let _ = writeln!(
+            out,
             r"  // 30. History.length Fresh-Tab Masking
-  try {
-    if (typeof History !== 'undefined') {
+  try {{
+    if (typeof History !== 'undefined') {{
       const lenDesc = Object.getOwnPropertyDescriptor(History.prototype, 'length');
-      if (lenDesc && lenDesc.get) {
-        Object.defineProperty(History.prototype, 'length', {
-          get: makeNative(function length() {
+      if (lenDesc && lenDesc.get) {{
+        Object.defineProperty(History.prototype, 'length', {{
+          get: makeNative(function length() {{
             const raw = lenDesc.get.call(this);
-            return raw < 2 ? 2 : raw;
-          }, 'get length', lenDesc.get),
+            return raw < {min_len} ? {min_len} : raw;
+          }}, 'get length', lenDesc.get),
           configurable: true
-        });
-      }
-    }
-  } catch (_) {}
+        }});
+      }}
+    }}
+  }} catch (_) {{}}
 ",
         );
     }

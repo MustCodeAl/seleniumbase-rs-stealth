@@ -1309,6 +1309,26 @@ pub struct ProfileFingerprint {
     /// Whether `Worker` / `SharedWorker` navigator consistency spoofing is enabled.
     #[serde(default = "default_true")]
     pub worker_spoofing: bool,
+
+    /// Optional independent seed for 2D/Offscreen canvas noise.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub canvas_seed: Option<u64>,
+
+    /// Optional independent seed for Web Audio noise.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub audio_seed: Option<u64>,
+
+    /// Optional `StorageManager.estimate().quota` in GiB.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub storage_quota_gb: Option<u64>,
+
+    /// Optional browser chrome height offset in CSS pixels (`outerHeight - innerHeight` & `MouseEvent.screenY`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub outer_chrome_height: Option<u32>,
+
+    /// Optional minimum `window.history.length` reported on fresh tabs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub history_min_length: Option<u32>,
 }
 
 const fn default_true() -> bool {
@@ -1360,6 +1380,11 @@ impl Default for ProfileFingerprint {
             speech_voices: Vec::new(),
             performance_jitter_ms: None,
             worker_spoofing: true,
+            canvas_seed: None,
+            audio_seed: None,
+            storage_quota_gb: None,
+            outer_chrome_height: None,
+            history_min_length: None,
         }
     }
 }
@@ -1651,6 +1676,11 @@ impl ProfileFingerprint {
             speech_voices: SpeechVoice::defaults_for(os),
             performance_jitter_ms: None,
             worker_spoofing: true,
+            canvas_seed: None,
+            audio_seed: None,
+            storage_quota_gb: None,
+            outer_chrome_height: None,
+            history_min_length: None,
         }
     }
 
@@ -2174,6 +2204,18 @@ pub struct FingerprintOptions {
     pub webgl_override: Option<(String, String)>,
     /// Explicit WebGL 1/2 `getParameter()` limits override.
     pub webgl_params: Option<WebGlParameters>,
+    /// Explicit WebGL supported extension list override.
+    pub webgl_extensions: Option<Vec<String>>,
+    /// Independent deterministic seed for canvas noise.
+    pub canvas_seed: Option<u64>,
+    /// Independent deterministic seed for Web Audio noise.
+    pub audio_seed: Option<u64>,
+    /// Configurable `StorageManager.estimate().quota` in GiB.
+    pub storage_quota_gb: Option<u64>,
+    /// Configurable browser toolbar chrome height in CSS pixels.
+    pub outer_chrome_height: Option<u32>,
+    /// Configurable minimum `window.history.length` on fresh tabs.
+    pub history_min_length: Option<u32>,
     /// Whether WebGPU spoofing is enabled.
     pub webgpu_enabled: bool,
     /// `navigator.hardwareConcurrency` override.
@@ -2239,6 +2281,12 @@ impl Default for FingerprintOptions {
             screen: None,
             webgl_override: None,
             webgl_params: None,
+            webgl_extensions: None,
+            canvas_seed: None,
+            audio_seed: None,
+            storage_quota_gb: None,
+            outer_chrome_height: None,
+            history_min_length: None,
             webgpu_enabled: true,
             hardware_concurrency: None,
             device_memory: None,
@@ -2272,6 +2320,65 @@ impl FingerprintOptions {
     /// Starts a [`FingerprintOptionsBuilder`].
     pub fn builder() -> FingerprintOptionsBuilder {
         FingerprintOptionsBuilder::new()
+    }
+
+    /// Preset for a standard Windows desktop Chrome persona.
+    #[must_use]
+    pub fn windows_chrome() -> Self {
+        Self {
+            os: Some(OsType::Windows),
+            browser: Some(BrowserType::Chromium),
+            color_gamut: Some(ColorGamut::Srgb),
+            ..Self::default()
+        }
+    }
+
+    /// Preset for a standard macOS desktop Chrome persona with P3 display.
+    #[must_use]
+    pub fn macos_chrome() -> Self {
+        Self {
+            os: Some(OsType::Macos),
+            browser: Some(BrowserType::Chromium),
+            color_gamut: Some(ColorGamut::P3),
+            hdr_mode: Some(HdrMode::High),
+            ..Self::default()
+        }
+    }
+
+    /// Preset for a standard Linux desktop Chrome persona.
+    #[must_use]
+    pub fn linux_chrome() -> Self {
+        Self {
+            os: Some(OsType::Linux),
+            browser: Some(BrowserType::Chromium),
+            color_gamut: Some(ColorGamut::Srgb),
+            ..Self::default()
+        }
+    }
+
+    /// Preset for a mobile Android Chrome persona.
+    #[must_use]
+    pub fn android_chrome() -> Self {
+        Self {
+            os: Some(OsType::Android),
+            browser: Some(BrowserType::Chromium),
+            max_touch_points: Some(5),
+            outer_chrome_height: Some(0),
+            ..Self::default()
+        }
+    }
+
+    /// Preset for a mobile iOS Safari persona.
+    #[must_use]
+    pub fn ios_safari() -> Self {
+        Self {
+            os: Some(OsType::Ios),
+            browser: Some(BrowserType::MobileSafari),
+            max_touch_points: Some(5),
+            color_gamut: Some(ColorGamut::P3),
+            outer_chrome_height: Some(0),
+            ..Self::default()
+        }
     }
 }
 
@@ -2502,6 +2609,42 @@ impl FingerprintOptionsBuilder {
         self
     }
 
+    /// Sets explicit WebGL supported extension names.
+    pub fn webgl_extensions(mut self, extensions: Vec<String>) -> Self {
+        self.inner.webgl_extensions = Some(extensions);
+        self
+    }
+
+    /// Sets an independent deterministic seed for canvas noise.
+    pub fn canvas_seed(mut self, seed: u64) -> Self {
+        self.inner.canvas_seed = Some(seed);
+        self
+    }
+
+    /// Sets an independent deterministic seed for Web Audio noise.
+    pub fn audio_seed(mut self, seed: u64) -> Self {
+        self.inner.audio_seed = Some(seed);
+        self
+    }
+
+    /// Sets `StorageManager.estimate().quota` in GiB.
+    pub fn storage_quota_gb(mut self, gb: u64) -> Self {
+        self.inner.storage_quota_gb = Some(gb);
+        self
+    }
+
+    /// Sets the browser toolbar chrome height offset in CSS pixels.
+    pub fn outer_chrome_height(mut self, px: u32) -> Self {
+        self.inner.outer_chrome_height = Some(px);
+        self
+    }
+
+    /// Sets the minimum `window.history.length` reported on fresh tabs.
+    pub fn history_min_length(mut self, min_len: u32) -> Self {
+        self.inner.history_min_length = Some(min_len);
+        self
+    }
+
     /// Validates constraints and builds [`FingerprintOptions`].
     ///
     /// # Errors
@@ -2646,8 +2789,11 @@ impl FingerprintGenerator {
         }
         base_fp = builder.build().unwrap_or(base_fp);
 
-        let (gpu_vendor, gpu_renderer, gpu_extensions, mut webgl_params) =
+        let (gpu_vendor, gpu_renderer, mut gpu_extensions, mut webgl_params) =
             Self::build_gpu(&base_fp);
+        if let Some(ref exts) = options.webgl_extensions {
+            gpu_extensions.clone_from(exts);
+        }
         if let Some(ref params_override) = options.webgl_params {
             webgl_params = params_override.clone();
         }
@@ -2727,6 +2873,11 @@ impl FingerprintGenerator {
         }
         profile.performance_jitter_ms = options.performance_jitter_ms;
         profile.worker_spoofing = options.worker_spoofing;
+        profile.canvas_seed = options.canvas_seed;
+        profile.audio_seed = options.audio_seed;
+        profile.storage_quota_gb = options.storage_quota_gb;
+        profile.outer_chrome_height = options.outer_chrome_height;
+        profile.history_min_length = options.history_min_length;
 
         let user_agent = profile.user_agent.clone().unwrap_or_default();
         let client_hints = profile

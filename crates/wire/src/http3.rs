@@ -393,6 +393,18 @@ impl Http3Request {
         self.header("cookie", cookie)
     }
 
+    /// Sets a UTF-8 plain-text body and `content-type: text/plain; charset=utf-8`.
+    pub fn text_body(mut self, text: impl Into<String>) -> Self {
+        self.body = Some(text.into().into_bytes());
+        self.headers
+            .retain(|(k, _)| !k.eq_ignore_ascii_case("content-type"));
+        self.headers.push((
+            "content-type".to_owned(),
+            "text/plain; charset=utf-8".to_owned(),
+        ));
+        self
+    }
+
     /// Appends URL-encoded query parameters to the request URL.
     pub fn query<I, K, V>(mut self, params: I) -> Self
     where
