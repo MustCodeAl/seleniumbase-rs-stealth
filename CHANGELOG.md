@@ -5,6 +5,22 @@ All notable changes to the unified `seleniumbase-rs-stealth` facade and its
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). The crates are experimental
 and not published to crates.io, so their types and paths may change between commits.
 
+## [Unreleased]
+
+### Changed
+
+- **Layered single-crate architecture (`identity` → `client` → `network` → `session` + standalone `h3d/`)**:
+  - Collapsed the 5-crate facade workspace (`crates/{evasion,codec,scrape,wire}` + bloated root `src/`) into a single feature-gated library crate (`seleniumbase-rs-stealth`) with four strictly separated layers:
+    - **`identity`** *(always on, `--no-default-features`, zero BoringSSL)*: consolidated all fingerprinting into one `src/identity/fingerprint/` tree (`mod.rs`, `profile.rs`, `generator.rs`, `bayesian.rs`, `compare.rs`, `consistency.rs`, `file.rs`, `schema.rs`), deduplicating canonical `SpeechVoice`, `ColorScheme`, and `DynamicRange` (`HdrMode`), disambiguating `CoherenceAudit` from `CoherenceReport`, alongside `Spoof`, `StealthPolicy`, `mimic`, `randomize`, `profile_payloads`, and `capture`.
+    - **`client`** *(feature `client`, pure Rust, zero BoringSSL)*: replaced public `StealthPlugin` and `FingerprintPlugin` with module-native `StealthLayer` (`Default`, `balanced`, `strict`, `minimal`), keeping the core `Plugin` adapter `pub(crate)` internal; houses the 42-surface `StealthScriptBundle` / `StealthScriptOptions`, 32 JS `EvasionProvider`s, `StealthPlan`, unified engine extension traits (`LaunchOptionsFingerprintExt`, `BrowserConfigFingerprintExt`, `PageFingerprintExt`, `BaseCaseFingerprintExt`), and core Layer-0 re-exports.
+    - **`network`** *(feature `network-spec` pure Rust / zero BoringSSL; features `network` and `http3` opt into BoringSSL)*: absorbs pure wire specs (`network::spec`), proxy pools & geo routing (`network::proxy`), wire capture (`network::capture`), `WireFormat`, `MitmProxy`, `EphemeralCa`, and combines all wire-side HTTP/3 code (`http3.rs` + `capture_h3/`) into one unified `network::http3` module (`client`, `request`, `capture`, `tests`).
+    - **`session`** *(feature `session`, default, zero BoringSSL; `HttpSession` and `HybridSession` unlock with `network`)*: unifies the three transport-named session runners (`CdpSession` [formerly `BrowserScraper`], `HttpSession`, and `HybridSession` [formerly `StealthSession`]) alongside `challenge`, `jar`, `ledger`, `passport`, `SessionError` (formerly `ScrapeError`), and `SessionEvent` (formerly `ScrapeEvent`).
+  - Moved `crates/h3d/` to `h3d/` (synced to `v0.10.0` / MSRV `1.100`), removed the leftover `spike/http3/` scratch folder and `.DS_Store` files, and updated `.gitlab-ci.yml` (`RUST_VERSION: "1.100"`), `deny.toml`, `CLAUDE.md`, and `README.md`.
+
+### Fixed
+
+- Filtered plugin-disallowed Chromium flags (such as `IsolateOrigins`) via `seleniumbase_rs::plugin_api::switch_policy::refusal` inside the internal `StealthLaunchHook::before_launch` adapter so `with_fingerprint` and `with_stealth` never fail core capability checks at browser launch.
+
 ## [0.10.0] - 2026-11-26
 
 ### Added

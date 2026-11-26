@@ -1,0 +1,93 @@
+//! The `TracingEventSink`, which writes redacted scraper events to `tracing`.
+//!
+//! Each event becomes one `tracing` event on the [`TARGET`] with an `event` field naming it and
+//! one field per value. A [`SessionEvent`] holds only redacted URLs and egress keys, so nothing
+//! secret is formatted here. The sink does no I/O of its own, so it does not block; the
+//! subscriber decides where the line goes.
+
+use std::fmt;
+
+use crate::network::proxy::route::ProxyKey;
+use crate::session::ledger::events::{EventSink, SessionEvent};
+
+#[cfg(test)]
+mod tests;
+
+/// The `tracing` target of every event this sink writes.
+pub const TARGET: &str = "seleniumbase_rs_scrape";
+
+/// An event sink that writes to `tracing`.
+///
+/// Requests and decisions are logged at `DEBUG`, challenges, changes of fetch kind, proxy or fingerprint and
+/// identity moves at `INFO`, and a cooldown at `WARN`.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct TracingEventSink;
+
+/// An egress for a log field: `direct` or `scheme://host:port`.
+struct Shown<'a>(&'a Option<ProxyKey>);
+
+impl fmt::Display for Shown<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.0 {
+            Some(key) => write!(f, "{key}"),
+            None => f.write_str("direct"),
+        }
+    }
+}
+
+impl EventSink for TracingEventSink {
+    fn emit(&self, event: &SessionEvent) {
+        let name = event.name();
+        match event {
+            SessionEvent::Request {
+                url,
+                status,
+                fetch_kind,
+                elapsed_ms,
+            } => {
+                tracing::debug!(target: TARGET, event = name, %url, status, ?fetch_kind, elapsed_ms);
+            }
+            SessionEvent::ChallengeDetected {
+                url,
+                kind,
+                vendor,
+                fetch_kind,
+            } => {
+                tracing::info!(target: TARGET, event = name, %url, ?kind, ?vendor, ?fetch_kind);
+            }
+            SessionEvent::ChallengeSolved {
+                url,
+                kind,
+                attempts,
+                elapsed_ms,
+            } => {
+                tracing::info!(target: TARGET, event = name, %url, ?kind, attempts, elapsed_ms);
+            }
+            SessionEvent::ActionChosen { site, action } => {
+                tracing::debug!(target: TARGET, event = name, %site, ?action);
+            }
+            SessionEvent::FetchKindChanged { from, to, reason } => {
+                tracing::info!(target: TARGET, event = name, ?from, ?to, ?reason);
+            }
+            SessionEvent::ProxyRotated { from, to } => {
+                tracing::info!(target: TARGET, event = name, from = %Shown(from), to = %Shown(to));
+            }
+            SessionEvent::FingerprintRotated { from_seed, to_seed } => {
+                tracing::info!(target: TARGET, event = name, from_seed, to_seed);
+            }
+            SessionEvent::ClearanceExpiring {
+                site,
+                remaining_secs,
+            } => {
+                tracing::info!(target: TARGET, event = name, %site, remaining_secs);
+            }
+            SessionEvent::CooldownStarted { site, until } => {
+                tracing::warn!(target: TARGET, event = name, %site, until);
+            }
+            SessionEvent::IdentityExported { cookies }
+            | SessionEvent::IdentityRestored { cookies } => {
+                tracing::info!(target: TARGET, event = name, cookies);
+            }
+        }
+    }
+}

@@ -1,55 +1,83 @@
-//! Unified stealth and automation facade for `seleniumbase-rs`.
+//! Layered stealth module for [`seleniumbase_rs`].
 //!
-//! Re-exports all of [`seleniumbase_rs`] (including `sb_cdp` and `evasion`)
-//! alongside `codec` (feature `codec`), `scrape` (enabled by default), and
-//! `wire` (when the `wire` feature is enabled). The core paths stay as they
-//! are in `seleniumbase-rs`: `evasion::fingerprint::{CanvasNoise, Fingerprint,
-//! StealthPolicy}`, `sb_cdp`, and so on.
+//! Import this crate when core's lightweight undetected mode
+//! (`undetected::patcher`, `sb_cdp::human`) is not enough and you need
+//! coherent browser identity, client-side JS/CDP masking, wire-level
+//! TLS/HTTP2/HTTP3 impersonation, or resilient anti-bot sessions.
+//!
+//! Re-exports all of [`seleniumbase_rs`] alongside four strictly separated
+//! layers, each shipping with sensible defaults and deep controls underneath:
+//!
+//! 1. [`identity`] *(always enabled, `--no-default-features`, zero BoringSSL)*:
+//!    pure persona and fingerprint modeling: unified `fingerprint` module
+//!    (`Fingerprint`, `ProfileFingerprint`, `FingerprintGenerator`,
+//!    `FingerprintOptions`, `BayesianSampler`, `HeaderGenerator`,
+//!    `FingerprintConverter`, `audit_coherence`, `compare`, `consistency`,
+//!    `schema`), `Spoof<T>`, `StealthPolicy`, `mimic` specimens,
+//!    `profile_payloads`, and probe `capture`.
+//! 2. [`client`] *(feature `client`, pure Rust, zero BoringSSL)*: client-side
+//!    browser masking (`StealthLayer` with `Default`, `balanced`, `strict`,
+//!    `minimal`), 42-surface `StealthScriptBundle` / `StealthScriptOptions`,
+//!    32 modular JS `EvasionProvider` passes, `StealthPlan` CDP overrides,
+//!    engine extension traits (`LaunchOptions`, `BrowserConfig`, `Page`,
+//!    `BaseCase`), and core Layer-0 re-exports.
+//! 3. [`network`] *(feature `network-spec` zero BoringSSL; features `network`
+//!    and `http3` opt into BoringSSL/wreq + standalone `h3d/`)*: pure wire
+//!    `spec` tables (TLS `ClientHello`, JA3/JA4, H2, H3, headers, measured
+//!    browsers), `proxy` pools & geo routing, wire `capture`, `WireFormat`,
+//!    `MitmProxy`, `EphemeralCa`, and unified `http3` (`Http3Client`,
+//!    `Http3Pool`, `capture`).
+//! 4. [`session`] *(feature `session`, default, zero BoringSSL; `HttpSession`
+//!    and `HybridSession` unlock with `network`)*: stateful anti-bot sessions
+//!    ([`session::CdpSession`] for pure CDP, [`session::HttpSession`] for wire
+//!    HTTP/2+3, and [`session::HybridSession`] for dual-mode HTTP and real Chrome
+//!    behind `MitmProxy`), backed by `challenge` detection &
+//!    `MitigationPolicy`, `CookieJar`, `Ledger`, and `Passport`.
 
 #![forbid(unsafe_code)]
 
 #[doc(inline)]
 pub use seleniumbase_rs::*;
 
-#[doc(inline)]
-pub use seleniumbase_rs_evasion as evasion;
+#[cfg(feature = "session")]
+pub(crate) mod sync;
 
+pub mod identity;
+
+#[cfg(feature = "client")]
+pub mod client;
+
+#[cfg(feature = "network-spec")]
+#[warn(
+    clippy::pedantic,
+    clippy::allow_attributes_without_reason,
+    clippy::clone_on_ref_ptr,
+    clippy::map_err_ignore,
+    clippy::semicolon_outside_block,
+    clippy::unused_result_ok,
+    clippy::too_long_first_doc_paragraph
+)]
+pub mod network;
+
+#[cfg(feature = "session")]
+#[warn(
+    clippy::pedantic,
+    clippy::allow_attributes_without_reason,
+    clippy::clone_on_ref_ptr,
+    clippy::map_err_ignore,
+    clippy::semicolon_outside_block,
+    clippy::unused_result_ok,
+    clippy::too_long_first_doc_paragraph
+)]
+pub mod session;
+
+// Minimal Layer 1–2 entry points at crate root for ergonomic 2-line setup without mixing layers.
 #[doc(inline)]
-pub use seleniumbase_rs_evasion::{
-    BaseCaseFingerprintExt, FingerprintPlugin, LaunchOptionsFingerprintExt, PageFingerprintExt,
-    StealthPlan,
+pub use identity::{Fingerprint, OsType};
+
+#[cfg(feature = "client")]
+#[doc(inline)]
+pub use client::{
+    BaseCaseFingerprintExt, BrowserConfigFingerprintExt, LaunchOptionsFingerprintExt,
+    PageFingerprintExt, StealthLayer, StealthPlan,
 };
-
-pub mod fingerprint;
-pub use fingerprint::{
-    BatteryOverride, ColorScheme, ConnectionOverride, FingerprintGenerator, FingerprintOptions,
-    FingerprintOptionsBuilder, GeneratedFingerprint, ProfileFingerprint, ReducedMotion,
-    ScreenConstraints, SpeechVoice,
-};
-
-pub mod bayesian;
-pub use bayesian::{
-    audit_coherence, BayesianSampler, CoherenceReport, DeviceCategory, FingerprintConverter,
-    HeaderGenerator, RequestContext, SampleConstraints,
-};
-
-pub mod script;
-pub use script::{StealthScriptBundle, StealthScriptOptions};
-
-pub mod plugin;
-pub use plugin::StealthPlugin;
-
-pub mod ext;
-pub use ext::{StealthBaseCaseExt, StealthPageExt};
-
-#[cfg(feature = "codec")]
-#[doc(inline)]
-pub use seleniumbase_rs_codec as codec;
-
-#[cfg(feature = "scrape")]
-#[doc(inline)]
-pub use seleniumbase_rs_scrape as scrape;
-
-#[cfg(feature = "wire")]
-#[doc(inline)]
-pub use seleniumbase_rs_wire as wire;

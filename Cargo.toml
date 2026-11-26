@@ -1,66 +1,108 @@
 [package]
 name = "seleniumbase-rs-stealth"
-version.workspace = true
-edition.workspace = true
-rust-version.workspace = true
-license.workspace = true
-repository.workspace = true
-publish = false
-
-[features]
-default = ["scrape"]
-codec = ["dep:seleniumbase-rs-codec"]
-scrape = ["dep:seleniumbase-rs-scrape", "codec"]
-wire = ["dep:seleniumbase-rs-wire", "scrape"]
-# HTTP/3 through the sbrs-h3d helper (crates/h3d, docs/http3.md).
-http3 = ["wire", "seleniumbase-rs-wire/http3"]
-
-[dependencies]
-seleniumbase-rs = { workspace = true, features = ["plugins"] }
-seleniumbase-rs-evasion = { workspace = true }
-seleniumbase-rs-codec = { workspace = true, optional = true }
-seleniumbase-rs-scrape = { workspace = true, optional = true }
-seleniumbase-rs-wire = { workspace = true, optional = true }
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-
-[dev-dependencies]
-seleniumbase-rs = { workspace = true, features = ["plugins", "test-util"] }
-
-[lints]
-workspace = true
-
-[workspace]
-resolver = "3"
-members = [".", "crates/evasion", "crates/codec", "crates/scrape", "crates/wire"]
-
-[workspace.package]
 version = "0.10.0"
 edition = "2024"
 rust-version = "1.100"
 license = "MIT"
 repository = "https://github.com/MustCodeAl/seleniumbase-rs-stealth"
+publish = false
 
-[workspace.dependencies]
-# The core crate from GitHub, spelled the way users write it (plain git URL), so
-# Cargo resolves theirs and ours to one commit and types such as sb_cdp::Browser
-# match. For a local checkout, patch this source in .cargo/config.toml (not committed).
-seleniumbase-rs = { git = "https://github.com/MustCodeAl/seleniumbase-rs" }
-seleniumbase-rs-evasion = { path = "crates/evasion" }
-seleniumbase-rs-codec = { path = "crates/codec" }
-seleniumbase-rs-scrape = { path = "crates/scrape" }
-seleniumbase-rs-wire = { path = "crates/wire" }
+[features]
+# Default enables Layers 1–4 up through pure-CDP `session::CdpSession` with ZERO BoringSSL.
+# Use `default-features = false` for Layer 1 (`identity`) alone, or
+# `default-features = false, features = ["client"]` for Layers 1–2 (identity + browser masking).
+default = ["session"]
 
-[workspace.lints.clippy]
-pedantic = { level = "warn", priority = -1 }
-allow_attributes_without_reason = "warn"
-clone_on_ref_ptr = "warn"
-map_err_ignore = "warn"
-semicolon_outside_block = "warn"
-unused_result_ok = "warn"
-too_long_first_doc_paragraph = "warn"
+# Layer 2 (pure Rust, zero BoringSSL): client-side browser masking (`StealthLayer`, 42-surface
+# `StealthScriptBundle`, 32 JS providers, `StealthPlan`, engine extension traits).
+client = []
 
-[workspace.lints.rust]
+# Layer 3a (pure Rust, zero I/O, zero BoringSSL): TLS/JA3/JA4/H2/H3/header specs + proxy routing.
+network-spec = ["dep:ring", "dep:async-trait"]
+
+# Layer 4 (default, zero BoringSSL): `CdpSession`, challenge detection/mitigation, `CookieJar`,
+# `Ledger`, `Passport` (unlocks `HttpSession` and `HybridSession` when `network` is enabled).
+session = [
+    "client",
+    "network-spec",
+    "dep:futures-util",
+    "dep:http",
+    "dep:psl",
+    "dep:tokio",
+    "dep:tracing-subscriber",
+]
+
+# Layer 3b (BoringSSL / wreq): `WireFormat`, `MitmProxy`, `EphemeralCa`, `capture::h2`,
+# `http3::capture`, plus `session::HttpSession` and `session::HybridSession`.
+network = [
+    "session",
+    "dep:brotli",
+    "dep:btls",
+    "dep:bytes",
+    "dep:flate2",
+    "dep:http-body-util",
+    "dep:hyper",
+    "dep:hyper-util",
+    "dep:tokio-btls",
+    "dep:wreq",
+]
+
+# HTTP/3 client, pool, and `Alt-Svc` upgrade through the standalone `sbrs-h3d` helper (`h3d/`).
+http3 = ["network"]
+
+# Test-support helpers (record-mode mimic script, ClientHello test fixtures).
+test-util = []
+test-fixtures = ["network-spec"]
+
+[dependencies]
+# Core crate spelled as its plain git URL so Cargo resolves downstream callers and this crate
+# to one commit and shared types (`sb_cdp::Browser`, `Page`, `LaunchOptions`, `BrowserConfig`)
+# match. For a local checkout, patch this source in `.cargo/config.toml` (not committed).
+seleniumbase-rs = { git = "https://github.com/MustCodeAl/seleniumbase-rs", features = ["plugins"] }
+
+# Layers 1 & 2 (`identity` + `client`): pure Rust, zero BoringSSL.
+base64 = "0.23"
+jiff = "0.2.38"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tempfile = "3.27"
+thiserror = "2.0"
+tracing = "0.1"
+url = "2.5"
+
+# Layer 3a (`network-spec`: pure specs + proxy pool).
+psl = { version = "2.1.241", optional = true }
+ring = { version = "0.17", optional = true }
+
+# Layer 4 (`session`: CdpSession, challenge detection, ledger, cookie jar; zero BoringSSL).
+async-trait = { version = "0.1", optional = true }
+futures-util = { version = "0.3", default-features = false, features = ["std", "sink"], optional = true }
+http = { version = "1.5", optional = true }
+tokio = { version = "1.53", features = ["macros", "rt-multi-thread", "time", "signal", "sync", "process", "net", "io-util", "fs"], optional = true }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "json"], optional = true }
+
+# Layer 3b (`network`: wreq + BoringSSL).
+brotli = { version = "9", default-features = false, features = ["std"], optional = true }
+btls = { version = "=0.5.6", optional = true }
+bytes = { version = "1.12", optional = true }
+flate2 = { version = "1.1", default-features = false, features = ["zlib-rs"], optional = true }
+http-body-util = { version = "0.1.5", optional = true }
+hyper = { version = "1.12", default-features = false, features = ["server", "http1"], optional = true }
+hyper-util = { version = "0.1.21", default-features = false, features = ["tokio"], optional = true }
+tokio-btls = { version = "=0.5.6", optional = true }
+wreq = { version = "=6.0.0-rc.31", default-features = false, features = ["tokio-rt", "webpki-roots", "gzip", "deflate", "brotli", "zstd", "socks", "stream"], optional = true }
+
+[dev-dependencies]
+seleniumbase-rs = { git = "https://github.com/MustCodeAl/seleniumbase-rs", features = ["plugins", "test-util"] }
+async-trait = "0.1"
+futures-util = { version = "0.3", default-features = false, features = ["std"] }
+regex = "1"
+schemars = "1.2"
+syn = { version = "3", features = ["full", "visit"] }
+tokio = { version = "1.53", features = ["macros", "rt-multi-thread", "test-util"] }
+tokio-tungstenite = "0.30"
+
+[lints.rust]
 missing_debug_implementations = "warn"
 redundant_imports = "warn"
 redundant_lifetimes = "warn"
@@ -73,3 +115,96 @@ lto = "thin"
 codegen-units = 1
 strip = true
 
+# Integration tests, gated cleanly by layer feature.
+[[test]]
+name = "wire_measurement"
+required-features = ["network-spec", "test-fixtures"]
+
+[[test]]
+name = "session_domain_purity"
+required-features = ["session"]
+
+[[test]]
+name = "cdp_session"
+required-features = ["session"]
+
+[[test]]
+name = "cdp_session_chrome"
+required-features = ["session"]
+
+[[test]]
+name = "network_capture"
+required-features = ["session", "test-fixtures"]
+
+[[test]]
+name = "network_capture_chrome"
+required-features = ["session"]
+
+[[test]]
+name = "impersonate_capture_h2"
+required-features = ["network", "test-fixtures"]
+
+[[test]]
+name = "impersonate_capture_h2_chrome"
+required-features = ["network"]
+
+[[test]]
+name = "impersonate_http"
+required-features = ["network", "test-fixtures"]
+
+[[test]]
+name = "impersonate_http_chrome"
+required-features = ["network"]
+
+[[test]]
+name = "impersonate_mitm"
+required-features = ["network", "test-fixtures"]
+
+[[test]]
+name = "impersonate_mitm_chrome"
+required-features = ["network"]
+
+[[test]]
+name = "impersonate_wire"
+required-features = ["network", "test-fixtures"]
+
+[[test]]
+name = "hybrid_session"
+required-features = ["network", "test-fixtures"]
+
+[[test]]
+name = "hybrid_session_chrome"
+required-features = ["network"]
+
+# Runnable examples, gated cleanly by layer feature.
+[[example]]
+name = "cdp_session"
+required-features = ["session"]
+
+[[example]]
+name = "capture_hints"
+required-features = ["session"]
+
+[[example]]
+name = "capture_tls"
+required-features = ["session"]
+
+[[example]]
+name = "cookie_jar"
+required-features = ["session"]
+
+[[example]]
+name = "capture_h2"
+required-features = ["network"]
+
+[[example]]
+name = "custom_profile"
+required-features = ["network"]
+
+[[example]]
+name = "http_session"
+required-features = ["network"]
+
+[[example]]
+name = "hybrid_session"
+required-features = ["network"]

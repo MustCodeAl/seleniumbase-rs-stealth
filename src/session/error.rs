@@ -1,0 +1,228 @@
+//! The `SessionError` type, the one error enum the scrape layer returns, mapped to `SeleniumBaseError::Stealth` at the crate boundary.
+//!
+//! Every URL an error carries is a [`RedactedUrl`], so a password or a token in a query cannot
+//! reach a log through an error. A browser failure that names the URL it was loading is turned
+//! into [`SessionError::Navigation`] for the same reason; any other browser failure is kept as it
+//! came, because it names no address the caller did not already hold.
+
+use crate::identity::fingerprint::FingerprintError;
+use crate::network::proxy::geo::GeoError;
+use crate::network::proxy::redact::RedactedUrl;
+use crate::network::proxy::route::ProxyRouteError;
+use crate::session::challenge::detect::ChallengeKind;
+use crate::session::challenge::mitigation::GiveUpReason;
+use crate::session::ledger::state::LedgerError;
+use crate::session::passport::identity::IdentityError;
+use seleniumbase_rs::SeleniumBaseError;
+
+/// Why a scrape did not produce a page.
+#[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
+pub enum SessionError {
+    /// A proxy spec was refused.
+    #[error(transparent)]
+    Proxy(#[from] ProxyRouteError),
+    /// A country or locale could not be resolved.
+    #[error(transparent)]
+    Geo(#[from] GeoError),
+    /// The per-site state could not be read or written.
+    #[error(transparent)]
+    Ledger(#[from] LedgerError),
+    /// An identity was refused.
+    #[error(transparent)]
+    Identity(#[from] IdentityError),
+    /// A fingerprint could not be built.
+    ///
+    /// A fingerprint is never changed once it is built; a change builds the next one, and the
+    /// core refuses a combination that is not a fingerprint.
+    #[error(transparent)]
+    Fingerprint(#[from] FingerprintError),
+    /// A challenge was met and the attempts allowed ran out before it was passed.
+    #[error("a {kind:?} challenge at {url} was not passed in {attempts} attempts")]
+    Unsolved {
+        /// The URL that was requested, redacted.
+        url: RedactedUrl,
+        /// The challenge that stood in the way.
+        kind: ChallengeKind,
+        /// How many attempts were made.
+        attempts: u32,
+    },
+    /// The mitigation policy stopped.
+    #[error("gave up on {url}: {reason:?}")]
+    GaveUp {
+        /// The URL that was requested, redacted.
+        url: RedactedUrl,
+        /// Why the policy stopped.
+        reason: GiveUpReason,
+    },
+    /// The site is to be left alone for a while, so it was not requested.
+    #[error("{site} is to be left alone until {until} (seconds since the Unix epoch)")]
+    CoolingDown {
+        /// The site, as a registrable domain.
+        site: String,
+        /// When it may be tried again, in seconds since the Unix epoch.
+        until: u64,
+    },
+    /// The browser could not load the page.
+    #[error("navigation to {url} failed: {reason}")]
+    Navigation {
+        /// The URL that was requested, redacted.
+        url: RedactedUrl,
+        /// What the browser said.
+        reason: String,
+    },
+    /// An egress change was asked for and there is no other egress to change to.
+    #[error("no other egress is available")]
+    NoProxyLeft,
+    /// The browser failed in some other way.
+    #[error(transparent)]
+    Browser(SeleniumBaseError),
+}
+
+impl From<SeleniumBaseError> for SessionError {
+    /// A navigation failure becomes [`SessionError::Navigation`], which holds the URL redacted;
+    /// every other failure is wrapped as it is.
+    fn from(error: SeleniumBaseError) -> Self {
+        match error {
+            SeleniumBaseError::Navigation { url, reason } => Self::Navigation {
+                url: RedactedUrl::new(&url),
+                reason,
+            },
+            other => Self::Browser(other),
+        }
+    }
+}
+
+impl From<SessionError> for SeleniumBaseError {
+    /// A browser failure comes back as it was. Anything else becomes
+    /// [`SeleniumBaseError::Stealth`] with the message of the error, which holds no credential.
+    fn from(error: SessionError) -> Self {
+        match error {
+            SessionError::Browser(inner) => inner,
+            other => Self::stealth(other.to_string()),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::network::proxy::route::ProxyKey;
+
+    const SECRET_URL: &str = "https://alice:s3cret@shop.example/cart?token=hunter2&page=2";
+
+    fn assert_send_sync<T: Send + Sync>() {}
+
+    fn shown(error: &SessionError) -> String {
+        format!("{error} | {error:?}")
+    }
+
+    #[test]
+    fn the_error_can_cross_threads() {
+        assert_send_sync::<SessionError>();
+    }
+
+    #[test]
+    fn a_navigation_failure_keeps_the_url_only_redacted() {
+        let error = SessionError::from(SeleniumBaseError::navigation(
+            SECRET_URL,
+            "net::ERR_CONNECTION_RESET",
+        ));
+        assert!(matches!(error, SessionError::Navigation { .. }));
+        let text = shown(&error);
+        for secret in ["alice", "s3cret", "hunter2"] {
+            assert!(!text.contains(secret), "{secret} in {text}");
+        }
+        assert!(text.contains("page=2") && text.contains("ERR_CONNECTION_RESET"));
+    }
+
+    #[test]
+    fn any_other_browser_failure_is_wrapped_as_it_came() {
+        let error = SessionError::from(SeleniumBaseError::cdp_driver("target closed"));
+        assert!(matches!(
+            &error,
+            SessionError::Browser(SeleniumBaseError::CdpDriver(message)) if message == "target closed"
+        ));
+        assert_eq!(error.to_string(), "CDP driver error: target closed");
+    }
+
+    #[test]
+    fn a_browser_failure_returns_to_the_crate_error_unchanged() {
+        let back =
+            SeleniumBaseError::from(SessionError::Browser(SeleniumBaseError::cdp_driver("gone")));
+        assert!(matches!(back, SeleniumBaseError::CdpDriver(message) if message == "gone"));
+    }
+
+    #[test]
+    fn every_other_error_becomes_a_stealth_error_with_its_message() {
+        let unsolved = SessionError::Unsolved {
+            url: RedactedUrl::new(SECRET_URL),
+            kind: ChallengeKind::Interactive,
+            attempts: 3,
+        };
+        let message = unsolved.to_string();
+        let back = SeleniumBaseError::from(unsolved);
+        assert!(
+            matches!(&back, SeleniumBaseError::Stealth { reason } if *reason == message),
+            "{back:?}"
+        );
+        assert!(message.contains("Interactive") && message.contains("3 attempts"));
+    }
+
+    #[test]
+    fn no_variant_prints_a_credential() {
+        let url = RedactedUrl::new(SECRET_URL);
+        let errors = [
+            SessionError::Unsolved {
+                url: url.clone(),
+                kind: ChallengeKind::JsChallenge,
+                attempts: 2,
+            },
+            SessionError::GaveUp {
+                url: url.clone(),
+                reason: GiveUpReason::Blocked,
+            },
+            SessionError::Navigation {
+                url,
+                reason: "net::ERR_ABORTED".to_owned(),
+            },
+            SessionError::CoolingDown {
+                site: "shop.example".to_owned(),
+                until: 1_700_000_900,
+            },
+            SessionError::NoProxyLeft,
+        ];
+        for error in &errors {
+            let text = shown(error);
+            for secret in ["alice", "s3cret", "hunter2"] {
+                assert!(!text.contains(secret), "{secret} in {text}");
+            }
+        }
+    }
+
+    #[test]
+    fn the_domain_errors_convert_with_a_question_mark() {
+        fn egress() -> Result<(), SessionError> {
+            crate::network::proxy::route::ProxyRoute::parse("ftp://proxy.example:21", None)?;
+            Ok(())
+        }
+        fn geo() -> Result<(), SessionError> {
+            crate::network::proxy::geo::CountryCode::try_new("Germany")?;
+            Ok(())
+        }
+        fn identity() -> Result<(), SessionError> {
+            Err(IdentityError::Schema(9))?
+        }
+        assert!(matches!(egress(), Err(SessionError::Proxy(_))));
+        assert!(matches!(geo(), Err(SessionError::Geo(_))));
+        assert!(matches!(identity(), Err(SessionError::Identity(_))));
+        let key = ProxyKey {
+            scheme: "http".to_owned(),
+            host: "proxy.example".to_owned(),
+            port: 8080,
+            country: None,
+        };
+        let unknown = SessionError::from(GeoError::Unknown(key));
+        assert!(unknown.to_string().contains("http://proxy.example:8080"));
+    }
+}

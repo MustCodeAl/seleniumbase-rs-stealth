@@ -1,4 +1,7 @@
-target/
+/target
+/h3d/target
+Cargo.lock.bak
+**/*.rs.bk
 .DS_Store
+**/.DS_Store
 .tokensave/
-.cargo/

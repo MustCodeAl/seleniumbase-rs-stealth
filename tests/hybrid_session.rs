@@ -1,0 +1,30 @@
+//! The dual-mode `HybridSession`, with no Chrome.
+//!
+//! The HTTP leg is the real one: an `HttpSession` against a loopback TLS shop that trusts only its
+//! own ephemeral authority. The browser leg is scripted (`Browser::new_mocked`), so the traffic of
+//! a browser is not made, but everything around it is: the MITM proxy is started and the browser
+//! is launched behind it with the fingerprint of the identity. `tests/stealth_session_chrome.rs`
+//! runs the same story with the real Chrome.
+//!
+//! - `flows`: every transition of the state machine and the events that tell of it.
+//! - `identity`: export and restore, rotating the profile and the egress, and secrets.
+//! - `rotation`: the order of a rotation in the browser (the old Chrome is closed first) and a
+//!   rotation whose new Chrome cannot start.
+
+#![allow(
+    clippy::large_futures,
+    reason = "the tests await whole browser sessions; the size of a test future does not matter"
+)]
+
+#[path = "hybrid_session/browser.rs"]
+mod browser;
+#[path = "hybrid_session/flows.rs"]
+mod flows;
+#[path = "hybrid_session/identity.rs"]
+mod identity;
+#[path = "hybrid_session/rotation.rs"]
+mod rotation;
+#[path = "hybrid_session/site.rs"]
+mod site;
+#[path = "hybrid_session/world.rs"]
+mod world;

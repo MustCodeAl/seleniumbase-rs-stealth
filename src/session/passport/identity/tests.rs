@@ -1,0 +1,534 @@
+//! Tests of the identity: construction, serde, clearances, and the proxy and wire measurement checks.
+
+use super::fixtures::{
+    fingerprint, identity, identity_with_clearance, proxy, set_cookie, wire_measurement, MAJOR, NOW,
+};
+use super::*;
+use crate::identity::fingerprint::{BatteryProfile, ProxyConfig};
+use crate::network::proxy::geo::CountryCode;
+use crate::session::jar::store::SetCookieOutcome;
+use seleniumbase_rs::sb_cdp::human::humanize::Rng;
+
+/// A proxy password the tests look for in every output.
+const PASSWORD: &str = "hunter2-proxy-password";
+
+fn proxy_with(password: &str) -> ProxyConfig {
+    ProxyConfig {
+        r#type: "http".to_owned(),
+        host: "proxy.example".to_owned(),
+        port: 8080,
+        username: Some("alice".to_owned()),
+        password: Some(password.to_owned()),
+        save_traffic: false,
+    }
+}
+
+/// `fingerprint` with a proxy that has the password `password`.
+fn with_proxy(fingerprint: &Fingerprint, password: &str) -> Fingerprint {
+    fingerprint
+        .to_builder()
+        .proxy(proxy_with(password))
+        .build()
+        .expect("a fingerprint with a proxy builds")
+}
+
+fn json_of(identity: &Identity) -> String {
+    serde_json::to_string(identity).expect("an identity serializes")
+}
+
+#[test]
+fn a_new_identity_is_empty_and_current() {
+    let fresh = identity();
+    assert_eq!(fresh.schema, IDENTITY_SCHEMA);
+    assert_eq!(fresh.created_at, NOW);
+    assert!(
+        fresh.session.cookies().is_empty()
+            && fresh.clearances.is_empty()
+            && fresh.accept_ch.is_empty()
+    );
+    assert_eq!(fresh.proxy, Some(proxy("p1.example")));
+    assert_eq!(fresh.wire_measurement, wire_measurement());
+}
+
+#[test]
+fn new_clears_the_proxy_because_it_may_hold_a_password() {
+    let proxied = with_proxy(&fingerprint(), PASSWORD);
+    assert!(
+        proxied.proxy().is_value(),
+        "the proxy is there to be cleared"
+    );
+    let made = Identity::new(proxied, wire_measurement(), None, NOW).expect("coherent");
+    assert!(made.fingerprint.proxy().is_natural());
+    assert!(!json_of(&made).contains(PASSWORD));
+    assert!(!format!("{made:?}").contains(PASSWORD));
+}
+
+#[test]
+fn a_proxy_set_after_construction_is_still_not_serialized() {
+    let mut made = identity();
+    made.fingerprint = with_proxy(&made.fingerprint, PASSWORD);
+    let json = json_of(&made);
+    for secret in [PASSWORD, "alice", "proxy.example"] {
+        assert!(!json.contains(secret), "{secret} leaked into {json}");
+    }
+}
+
+#[test]
+fn verify_refuses_an_identity_that_carries_a_proxy() {
+    let mut made = identity();
+    made.fingerprint = with_proxy(&made.fingerprint, PASSWORD);
+    let error = made.validate().expect_err("a proxy is refused");
+    assert!(matches!(error, IdentityError::Incoherent(_)), "{error:?}");
+    assert!(!error.to_string().contains(PASSWORD));
+}
+
+#[test]
+fn no_random_proxy_password_reaches_the_json_the_debug_or_an_error() {
+    let mut rng = Rng::new(0x005E_C2E7);
+    for _ in 0..64 {
+        let secret = format!("pw-{:016x}", rng.next_u64());
+        let proxied = with_proxy(&fingerprint(), &secret);
+        let made = Identity::new(proxied, wire_measurement(), None, NOW).expect("coherent");
+        let mismatch = made
+            .check_proxy(Some(&proxy("other.example")))
+            .expect_err("a proxy is not the direct connection");
+        for text in [json_of(&made), format!("{made:?}"), mismatch.to_string()] {
+            assert!(!text.contains(&secret), "{secret} leaked into {text}");
+        }
+    }
+}
+
+#[test]
+fn new_refuses_an_incoherent_fingerprint() {
+    let fp = fingerprint()
+        .to_builder()
+        .platform("Win32")
+        .build()
+        .expect("builds");
+    let error = Identity::new(fp, wire_measurement(), None, NOW).expect_err("incoherent");
+    match error {
+        IdentityError::Incoherent(reasons) => {
+            assert!(
+                reasons.iter().any(|reason| reason.contains("platform")),
+                "{reasons:?}"
+            );
+        }
+        other => panic!("expected Incoherent, got {other:?}"),
+    }
+}
+
+#[test]
+fn a_battery_time_of_infinity_is_saved_and_read_back() {
+    // The core writes an infinite battery time as null and reads it back as infinity, so a
+    // default battery, which has an infinite time left, is a fingerprint that saves.
+    let fp = fingerprint()
+        .to_builder()
+        .battery(BatteryProfile::default())
+        .build()
+        .expect("builds");
+    let made = Identity::new(fp, wire_measurement(), None, NOW).expect("it saves and reads back");
+    let back: Identity = serde_json::from_str(&json_of(&made)).expect("reads back");
+    assert_eq!(back, made);
+    assert!(back.fingerprint.battery().is_value());
+}
+
+#[test]
+fn new_refuses_a_number_that_json_turns_into_nothing() {
+    let fp = fingerprint()
+        .to_builder()
+        .device_memory(f64::INFINITY)
+        .build()
+        .expect("builds");
+    let error = Identity::new(fp, wire_measurement(), None, NOW).expect_err("infinity is not JSON");
+    match error {
+        IdentityError::Incoherent(reasons) => {
+            assert!(reasons[0].contains("not finite"), "{reasons:?}");
+        }
+        other => panic!("expected Incoherent, got {other:?}"),
+    }
+}
+
+#[test]
+fn an_identity_survives_a_serde_round_trip() {
+    let mut made = identity_with_clearance();
+    made.accept_ch.insert(
+        "https://example.com".to_owned(),
+        vec!["Sec-CH-UA-Platform-Version".to_owned()],
+    );
+    let back: Identity = serde_json::from_str(&json_of(&made)).expect("reads back");
+    assert_eq!(back, made);
+    assert_eq!(back.clearances.len(), 1);
+    assert_eq!(back.wire_measurement.major, MAJOR);
+}
+
+#[test]
+fn an_identity_written_without_the_optional_parts_reads_with_defaults() {
+    let mut value = serde_json::to_value(identity()).expect("serializes");
+    let object = value.as_object_mut().expect("an object");
+    for key in ["accept_ch", "proxy", "clearances"] {
+        object.remove(key);
+    }
+    let back: Identity = serde_json::from_value(value).expect("reads");
+    assert!(back.accept_ch.is_empty() && back.proxy.is_none() && back.clearances.is_empty());
+}
+
+#[test]
+fn a_tampered_jar_does_not_deserialize() {
+    let mut value = serde_json::to_value(identity_with_clearance()).expect("serializes");
+    value["session"]["cookies"][0]["path"] = serde_json::json!("no-leading-slash");
+    let result: Result<Identity, _> = serde_json::from_value(value);
+    assert!(result.is_err(), "a cookie the jar refuses must not be read");
+}
+
+#[test]
+fn the_emulation_reads_and_writes_a_plain_browser_name() {
+    let json = serde_json::to_value(wire_measurement()).expect("serializes");
+    assert_eq!(json["kind"], "chrome");
+    assert_eq!(json["major"], MAJOR);
+    let back: WireMeasurementRef = serde_json::from_value(json.clone()).expect("reads");
+    assert_eq!(back, wire_measurement());
+    let mut unknown = json;
+    unknown["kind"] = serde_json::json!("netscape");
+    assert!(serde_json::from_value::<WireMeasurementRef>(unknown).is_err());
+}
+
+#[test]
+fn debug_shows_the_cookie_count_and_the_egress_and_nothing_else() {
+    let made = identity_with_clearance();
+    let text = format!("{made:?}");
+    assert!(text.contains("cookies: 1"), "{text}");
+    assert!(text.contains("p1.example"), "{text}");
+    for hidden in ["SECRET-CLEARANCE-VALUE", "cf_clearance", "Mozilla", "Apple"] {
+        assert!(!text.contains(hidden), "{hidden} leaked into {text}");
+    }
+}
+
+#[test]
+fn verify_accepts_a_good_identity_and_refuses_another_schema() {
+    assert_eq!(identity().validate(), Ok(()));
+    let mut future = identity();
+    future.schema = IDENTITY_SCHEMA + 1;
+    assert_eq!(
+        future.validate(),
+        Err(IdentityError::Schema(IDENTITY_SCHEMA + 1))
+    );
+}
+
+#[test]
+fn verify_refuses_a_fingerprint_that_no_longer_fits_its_os() {
+    let mut made = identity();
+    made.fingerprint = made
+        .fingerprint
+        .to_builder()
+        .platform("Win32")
+        .build()
+        .expect("builds");
+    assert!(matches!(made.validate(), Err(IdentityError::Incoherent(_))));
+}
+
+#[test]
+fn the_clearance_cookie_of_a_vendor_is_found_in_the_jar() {
+    let made = identity_with_clearance();
+    assert_eq!(
+        made.clearances,
+        vec![Clearance {
+            site: "example.com".to_owned(),
+            vendor: ProtectionVendor::Cloudflare,
+            cookie: "cf_clearance".to_owned(),
+            expires_at: NOW + 3600,
+        }]
+    );
+    let found = made.clearance_for("example.com").expect("a clearance");
+    assert_eq!(found.expires_at, NOW + 3600);
+}
+
+#[test]
+fn a_clearance_is_found_by_any_host_of_the_site_in_any_case() {
+    let made = identity_with_clearance();
+    for host in ["www.example.com", "EXAMPLE.com", "a.b.example.com"] {
+        assert!(made.clearance_for(host).is_some(), "{host}");
+    }
+    for other in ["example.org", "notexample.com", "com", ""] {
+        assert!(made.clearance_for(other).is_none(), "{other}");
+    }
+}
+
+#[test]
+fn only_clearance_cookies_count_and_the_record_holds_no_value() {
+    let mut made = identity();
+    set_cookie(
+        &mut made,
+        "https://example.com/",
+        "theme=dark; Max-Age=3600",
+    );
+    set_cookie(
+        &mut made,
+        "https://example.com/",
+        "datadome=SECRET-DD; Max-Age=7200; Secure",
+    );
+    made.refresh_clearances(NOW);
+    assert_eq!(made.clearances.len(), 1);
+    assert_eq!(made.clearances[0].vendor, ProtectionVendor::DataDome);
+    assert_eq!(made.clearances[0].cookie, "datadome");
+    assert!(!format!("{:?}", made.clearances).contains("SECRET-DD"));
+    assert_eq!(
+        made.session.cookies().len(),
+        2,
+        "the ordinary cookie is stored too"
+    );
+}
+
+#[test]
+fn an_expired_cookie_is_not_a_clearance() {
+    let mut made = identity_with_clearance();
+    made.refresh_clearances(NOW + 3600);
+    assert_eq!(made.clearances, Vec::new());
+    assert!(made.clearance_for("example.com").is_none());
+}
+
+#[test]
+fn a_session_clearance_has_no_known_end() {
+    let mut made = identity();
+    let outcome = set_cookie(
+        &mut made,
+        "https://example.com/",
+        "_px3=session-value; Path=/",
+    );
+    assert_eq!(outcome, SetCookieOutcome::Stored);
+    made.refresh_clearances(NOW);
+    let found = made.clearance_for("example.com").expect("a clearance");
+    assert_eq!(found.expires_at, NO_EXPIRY);
+    assert_eq!(found.vendor, ProtectionVendor::PerimeterX);
+}
+
+#[test]
+fn the_latest_expiry_per_cookie_wins_and_the_list_is_sorted() {
+    let mut made = identity();
+    set_cookie(
+        &mut made,
+        "https://a.example.com/x/",
+        "cf_clearance=one; Path=/x/; Max-Age=100",
+    );
+    set_cookie(
+        &mut made,
+        "https://a.example.com/y/",
+        "cf_clearance=two; Path=/y/; Max-Age=900",
+    );
+    set_cookie(
+        &mut made,
+        "https://shop.test/",
+        "datadome=three; Max-Age=500",
+    );
+    made.refresh_clearances(NOW);
+    let summary: Vec<(&str, &str, u64)> = made
+        .clearances
+        .iter()
+        .map(|c| (c.site.as_str(), c.cookie.as_str(), c.expires_at))
+        .collect();
+    assert_eq!(
+        summary,
+        vec![
+            ("example.com", "cf_clearance", NOW + 900),
+            ("shop.test", "datadome", NOW + 500)
+        ]
+    );
+}
+
+#[test]
+fn a_site_cleared_by_two_vendors_answers_with_the_longer_lived() {
+    let mut made = identity();
+    set_cookie(
+        &mut made,
+        "https://example.com/",
+        "cf_clearance=a; Max-Age=100",
+    );
+    set_cookie(&mut made, "https://example.com/", "datadome=b; Max-Age=900");
+    made.refresh_clearances(NOW);
+    assert_eq!(made.clearances.len(), 2);
+    let found = made.clearance_for("example.com").expect("a clearance");
+    assert_eq!(found.vendor, ProtectionVendor::DataDome);
+}
+
+#[test]
+fn refreshing_replaces_the_old_list() {
+    let mut made = identity_with_clearance();
+    made.clearances.push(Clearance {
+        site: "stale.test".to_owned(),
+        vendor: ProtectionVendor::Akamai,
+        cookie: "_abck".to_owned(),
+        expires_at: NOW + 10,
+    });
+    made.refresh_clearances(NOW);
+    assert_eq!(made.clearances.len(), 1);
+    assert_eq!(made.clearances[0].site, "example.com");
+}
+
+#[test]
+fn every_vendor_with_a_clearance_cookie_is_listed() {
+    // An exhaustive match: a new vendor stops this from compiling until it is added to VENDORS.
+    fn counted(vendor: ProtectionVendor) -> bool {
+        match vendor {
+            ProtectionVendor::Cloudflare
+            | ProtectionVendor::DataDome
+            | ProtectionVendor::PerimeterX
+            | ProtectionVendor::Akamai
+            | ProtectionVendor::Imperva
+            | ProtectionVendor::Kasada
+            | ProtectionVendor::AwsWaf => VENDORS.contains(&vendor),
+        }
+    }
+    assert!(VENDORS.into_iter().all(counted));
+    for vendor in VENDORS {
+        if let Some(name) = clearance_cookie(vendor) {
+            assert_eq!(vendor_of_cookie(name), Some(vendor));
+        }
+    }
+    assert_eq!(vendor_of_cookie("sessionid"), None);
+}
+
+#[test]
+fn the_same_egress_is_accepted() {
+    let made = identity();
+    assert_eq!(made.check_proxy(Some(&proxy("p1.example"))), Ok(()));
+}
+
+#[test]
+fn another_egress_is_refused_with_both_sides_named() {
+    let made = identity();
+    let other = proxy("p2.example");
+    let error = made.check_proxy(Some(&other)).expect_err("another proxy");
+    assert_eq!(
+        error,
+        IdentityError::ProxyMismatch {
+            expected: Some(proxy("p1.example")),
+            found: Some(other),
+        }
+    );
+    let text = error.to_string();
+    assert!(
+        text.contains("p1.example") && text.contains("p2.example"),
+        "{text}"
+    );
+}
+
+#[test]
+fn the_direct_connection_matches_only_the_direct_connection() {
+    let direct = Identity::new(fingerprint(), wire_measurement(), None, NOW).expect("coherent");
+    assert_eq!(direct.check_proxy(None), Ok(()));
+    let error = direct
+        .check_proxy(Some(&proxy("p1.example")))
+        .expect_err("a proxy is not direct");
+    assert!(matches!(
+        error,
+        IdentityError::ProxyMismatch { expected: None, .. }
+    ));
+    assert!(error.to_string().contains("no proxy"));
+    let bound = identity();
+    assert!(matches!(
+        bound.check_proxy(None),
+        Err(IdentityError::ProxyMismatch { found: None, .. })
+    ));
+}
+
+#[test]
+fn a_port_or_scheme_change_is_another_egress() {
+    let made = identity();
+    let mut other_port = proxy("p1.example");
+    other_port.port = 9090;
+    let mut other_scheme = proxy("p1.example");
+    other_scheme.scheme = "socks5".to_owned();
+    assert!(made.check_proxy(Some(&other_port)).is_err());
+    assert!(made.check_proxy(Some(&other_scheme)).is_err());
+}
+
+#[test]
+fn an_unknown_country_matches_but_two_known_ones_must_agree() {
+    let made = identity();
+    let mut unknown = proxy("p1.example");
+    unknown.country = None;
+    assert_eq!(made.check_proxy(Some(&unknown)), Ok(()));
+    let mut elsewhere = proxy("p1.example");
+    elsewhere.country = CountryCode::try_new("FR").ok();
+    assert!(made.check_proxy(Some(&elsewhere)).is_err());
+}
+
+#[test]
+fn the_emulation_check_names_the_majors() {
+    let made = identity();
+    assert_eq!(made.check_wire_measurement(&wire_measurement()), Ok(()));
+    let newer = WireMeasurementRef {
+        major: MAJOR + 1,
+        ..wire_measurement()
+    };
+    assert_eq!(
+        made.check_wire_measurement(&newer),
+        Err(IdentityError::WireMeasurementMismatch {
+            identity: MAJOR,
+            measured: MAJOR + 1
+        })
+    );
+    let other_os = WireMeasurementRef {
+        os: OsType::Windows,
+        ..wire_measurement()
+    };
+    assert!(matches!(
+        made.check_wire_measurement(&other_os),
+        Err(IdentityError::Incoherent(_))
+    ));
+}
+
+#[test]
+fn error_messages_are_readable() {
+    assert!(IdentityError::Schema(9).to_string().contains('9'));
+    let text = IdentityError::Incoherent(vec!["a".to_owned(), "b".to_owned()]).to_string();
+    assert!(text.contains("a; b"), "{text}");
+}
+
+#[test]
+fn the_cookies_are_a_core_session_and_survive_a_file() {
+    let identity = identity_with_clearance();
+    let clearance = identity
+        .session
+        .cookies()
+        .iter()
+        .find(|cookie| cookie.name == "cf_clearance")
+        .expect("the clearance cookie is in the session");
+    assert_eq!(clearance.domain.trim_start_matches('.'), "example.com");
+    assert!(clearance.secure && clearance.http_only);
+
+    let json = serde_json::to_value(&identity).expect("serializes");
+    assert_eq!(json["schema"], 2);
+    assert!(json.get("cookies").is_none(), "{json}");
+    assert_eq!(json["session"]["cookies"][0]["name"], "cf_clearance");
+    let back: Identity = serde_json::from_value(json).expect("deserializes");
+    assert_eq!(back, identity);
+    assert_eq!(back.cookie_jar(NOW).len(), 1);
+}
+
+#[test]
+fn replacing_the_cookies_keeps_the_local_storage() {
+    let mut identity = identity();
+    let storage = BTreeMap::from([("cart".to_owned(), "3".to_owned())]);
+    identity.session = Session::builder()
+        .local_storage("https://example.com", storage.clone())
+        .build();
+    let jar = identity_with_clearance().cookie_jar(NOW);
+
+    identity.replace_cookies(&jar, NOW);
+
+    assert_eq!(identity.session.cookies().len(), 1);
+    assert_eq!(identity.session.origin(), Some("https://example.com"));
+    assert_eq!(identity.session.local_storage(), &storage);
+    let back: Identity =
+        serde_json::from_str(&serde_json::to_string(&identity).expect("serializes"))
+            .expect("reads");
+    assert_eq!(back.session.local_storage(), &storage);
+}
+
+#[test]
+fn an_identity_of_the_first_layout_is_refused() {
+    let mut json = serde_json::to_value(identity()).expect("serializes");
+    json["schema"] = serde_json::json!(1);
+    let old: Identity = serde_json::from_value(json).expect("the fields still read");
+    assert!(matches!(old.validate(), Err(IdentityError::Schema(1))));
+}
