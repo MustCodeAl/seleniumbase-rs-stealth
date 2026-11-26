@@ -10,7 +10,7 @@ use crate::ledger::events::ScrapeEvent;
 use crate::passport::identity::{IdentityError, NO_EXPIRY};
 use crate::runtime::browser_scraper::launcher::{claimed_major, host_os};
 use seleniumbase_rs::browser::config::Browser;
-use seleniumbase_rs::evasion::humanize::Rng;
+use seleniumbase_rs_evasion::humanize::Rng;
 
 const URL: &str = "https://shop.example/";
 

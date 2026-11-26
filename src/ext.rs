@@ -5,10 +5,11 @@
 //! direct application of [`StealthScriptBundle`] and [`ProfileFingerprint`].
 
 use seleniumbase_rs::error::SeleniumBaseError;
-use seleniumbase_rs::evasion::capture::CapturedFingerprint;
-use seleniumbase_rs::evasion::fingerprint::{Fingerprint, FingerprintComparison};
 use seleniumbase_rs::sb_cdp::Page;
 use seleniumbase_rs::BaseCase;
+use seleniumbase_rs_evasion::capture::CapturedFingerprint;
+use seleniumbase_rs_evasion::fingerprint::{Fingerprint, FingerprintComparison};
+use seleniumbase_rs_evasion::{BaseCaseFingerprintExt, PageFingerprintExt};
 
 use crate::fingerprint::{GeneratedFingerprint, ProfileFingerprint};
 use crate::script::StealthScriptBundle;
@@ -159,7 +160,7 @@ impl StealthBaseCaseExt for BaseCase {
 mod tests {
     use super::*;
     use crate::fingerprint::FingerprintGenerator;
-    use seleniumbase_rs::evasion::fingerprint::OsType;
+    use seleniumbase_rs_evasion::fingerprint::OsType;
 
     fn assert_page_ext<T: StealthPageExt>() {}
     fn assert_base_case_ext<T: StealthBaseCaseExt>() {}

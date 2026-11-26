@@ -13,13 +13,13 @@ use super::{
     CERT_COMPRESSION_BROTLI, CERT_COMPRESSION_ZLIB, MAX_DECOMPRESSED_CERTIFICATE,
 };
 use seleniumbase_rs::browser::config::Browser;
-use seleniumbase_rs::evasion::fingerprint::OsType;
 use seleniumbase_rs_codec::akamai::Akamai;
 use seleniumbase_rs_codec::client_hello::ext_id;
 use seleniumbase_rs_codec::h2_spec::H2Spec;
 use seleniumbase_rs_codec::ids::{CIPHER_SUITES, SIGNATURE_ALGORITHMS};
 use seleniumbase_rs_codec::measurement::{self, WireMeasurement};
 use seleniumbase_rs_codec::tls_spec::{Alps, TlsSpec};
+use seleniumbase_rs_evasion::fingerprint::OsType;
 
 /// The names `BoringSSL` gives the groups the measured Chrome offers.
 const BORINGSSL_GROUP_NAMES: [(u16, &str); 4] = [

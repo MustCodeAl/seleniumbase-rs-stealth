@@ -17,16 +17,16 @@ use std::fmt;
 
 use serde::{Deserialize, Deserializer, Serialize};
 
-pub use seleniumbase_rs::evasion::fingerprint::BrandVersion;
-use seleniumbase_rs::evasion::fingerprint::{
+pub use seleniumbase_rs_evasion::fingerprint::BrandVersion;
+use seleniumbase_rs_evasion::fingerprint::{
     AudioNoise, BatteryProfile, BrowserType, CanvasNoise, ClientHints as CoreClientHints,
     ConnectionProfile, Fingerprint, FingerprintBuilder, FingerprintError, OsType, Spoof,
     WebRtcPolicy,
 };
-use seleniumbase_rs::evasion::randomize::{
+use seleniumbase_rs_evasion::randomize::{
     chromium_hints, edge_hints, known_full_version, Locale, PRESET_CHROMIUM_MAJOR,
 };
-use seleniumbase_rs::evasion::settings::{
+use seleniumbase_rs_evasion::settings::{
     ColorGamut, DynamicRange, Geolocation, MediaFeatures, WebGl,
 };
 

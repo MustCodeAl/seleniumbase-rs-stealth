@@ -15,6 +15,7 @@ http3 = []
 
 [dependencies]
 seleniumbase-rs.workspace = true
+seleniumbase-rs-evasion.workspace = true
 seleniumbase-rs-codec.workspace = true
 seleniumbase-rs-scrape.workspace = true
 base64 = "0.23"

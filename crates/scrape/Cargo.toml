@@ -11,6 +11,7 @@ workspace = true
 
 [dependencies]
 seleniumbase-rs.workspace = true
+seleniumbase-rs-evasion.workspace = true
 seleniumbase-rs-codec.workspace = true
 async-trait = "0.1"
 futures-util = { version = "0.3", default-features = false, features = ["std", "sink"] }

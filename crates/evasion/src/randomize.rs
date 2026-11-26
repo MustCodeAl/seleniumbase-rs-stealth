@@ -811,7 +811,7 @@ impl Locale {
     /// # Examples
     ///
     /// ```
-    /// use seleniumbase_rs::evasion::randomize::Locale;
+    /// use seleniumbase_rs_evasion::randomize::Locale;
     ///
     /// assert_eq!(
     ///     Locale::accept_language_list(&["de-DE", " de ", "de", "en-US"]).as_deref(),
@@ -3217,7 +3217,7 @@ mod tests {
             OsType::Android,
             OsType::Ios,
         ] {
-            let fp = crate::evasion::fingerprint::Fingerprint::randomized(os, 1);
+            let fp = crate::fingerprint::Fingerprint::randomized(os, 1);
             assert_eq!(fp.os_type(), os);
             assert!(fp.validate().is_coherent());
         }
@@ -3227,7 +3227,7 @@ mod tests {
     fn the_noise_seed_of_an_identity_is_the_seed_it_was_drawn_from() {
         for os in [OsType::Windows, OsType::Ios] {
             for seed in [0, 3, 42, u64::MAX] {
-                let fp = crate::evasion::fingerprint::Fingerprint::randomized(os, seed);
+                let fp = crate::fingerprint::Fingerprint::randomized(os, seed);
                 assert_eq!(fp.seed(), seed, "{os:?}");
             }
         }
@@ -3344,7 +3344,7 @@ mod tests {
         assert_eq!(gecko_oscpu(OsType::Ios), None);
         assert_eq!(gecko_build_id(), "20181001000000");
 
-        let ff = crate::evasion::fingerprint::Fingerprint::builder()
+        let ff = crate::fingerprint::Fingerprint::builder()
             .browser_type(BrowserType::Firefox)
             .os_type(OsType::Linux)
             .user_agent(firefox_user_agent(OsType::Linux, 134))
@@ -3381,7 +3381,7 @@ mod tests {
             OsType::Ios,
         ] {
             for seed in 1..=25 {
-                let fp = crate::evasion::fingerprint::Fingerprint::randomized(os, seed);
+                let fp = crate::fingerprint::Fingerprint::randomized(os, seed);
                 let report = fp.validate();
                 assert!(
                     report.errors.is_empty(),

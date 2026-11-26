@@ -65,8 +65,8 @@ use crate::egress::route::{ProxyKey, ProxyRoute};
 use crate::error::ScrapeError;
 use crate::ledger::events::{EventSink, ScrapeEvent};
 use crate::ledger::state::Ledger;
-use seleniumbase_rs::evasion::fingerprint::Fingerprint;
 use seleniumbase_rs::sb_cdp::{Browser, LaunchOptions, Page, SessionStore};
+use seleniumbase_rs_evasion::fingerprint::Fingerprint;
 
 use super::cdp::{NavResponse, ProxyLocale};
 use super::proxy_switch::ProxySwitch;

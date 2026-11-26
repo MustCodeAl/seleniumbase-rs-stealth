@@ -4,12 +4,12 @@
 use super::{WireFormat, WireFormatError, WireProtocol};
 use crate::convert::ConvertError;
 use seleniumbase_rs::browser::config::Browser;
-use seleniumbase_rs::evasion::fingerprint::{Fingerprint, OsType, Spoof};
 use seleniumbase_rs_codec::client_hello::ext_id;
 use seleniumbase_rs_codec::h2_spec::H2SpecError;
 use seleniumbase_rs_codec::header_spec::{ClientHeaders, HeaderSource, RequestShape};
 use seleniumbase_rs_codec::measurement::{self, KnownGap, WireMeasurement, WireMeasurementError};
 use seleniumbase_rs_codec::tls_spec::TlsSpecError;
+use seleniumbase_rs_evasion::fingerprint::{Fingerprint, OsType, Spoof};
 use seleniumbase_rs_scrape::egress::geo::{Locale, LocaleExt};
 
 /// The measured Chrome file, including the evidence the headers were derived from.
@@ -275,7 +275,7 @@ fn a_fingerprint_of_an_unmeasured_system_or_another_browser_is_refused() {
     ));
     let firefox = Fingerprint::randomized_with_major(OsType::Macos, 3, 155)
         .to_builder()
-        .browser_type(seleniumbase_rs::evasion::fingerprint::BrowserType::Firefox)
+        .browser_type(seleniumbase_rs_evasion::fingerprint::BrowserType::Firefox)
         .build()
         .expect("builds");
     assert!(matches!(

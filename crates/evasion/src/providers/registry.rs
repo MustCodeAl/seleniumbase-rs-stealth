@@ -3,7 +3,7 @@
 use super::builtin;
 use super::context::EvasionContext;
 use super::EvasionProvider;
-use crate::evasion::fingerprint::Fingerprint;
+use crate::fingerprint::Fingerprint;
 
 /// An ordered collection of [`EvasionProvider`]s.
 #[derive(Default)]
@@ -126,8 +126,8 @@ pub const SESSION_OMITTED_PROVIDERS: [&str; 2] = ["plugins", "connection"];
 /// # Examples
 ///
 /// ```rust
-/// use seleniumbase_rs::evasion::fingerprint::Fingerprint;
-/// use seleniumbase_rs::evasion::providers::{session_registry, EvasionContext};
+/// use seleniumbase_rs_evasion::fingerprint::Fingerprint;
+/// use seleniumbase_rs_evasion::providers::{session_registry, EvasionContext};
 ///
 /// let fp = Fingerprint::windows_desktop();
 /// let script = session_registry(&fp).bootstrap(&EvasionContext::new(&fp));

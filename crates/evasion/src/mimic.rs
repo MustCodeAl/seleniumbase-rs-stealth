@@ -2,7 +2,7 @@
 //!
 //! A [`Specimen`] names a real browser release, device model, locale or recorded
 //! output bundle. Settings in a [`Fingerprint`](crate::Fingerprint) can mimic a specimen
-//! using [`Spoof::Mimic`](crate::evasion::spoof::Spoof::Mimic).
+//! using [`Spoof::Mimic`](crate::spoof::Spoof::Mimic).
 
 use std::fmt;
 use std::str::FromStr;
@@ -143,7 +143,7 @@ impl UnknownSpecimen {
     }
 }
 
-impl From<UnknownSpecimen> for crate::error::SeleniumBaseError {
+impl From<UnknownSpecimen> for seleniumbase_rs::error::SeleniumBaseError {
     fn from(err: UnknownSpecimen) -> Self {
         Self::InvalidConfig(err.to_string())
     }
@@ -775,10 +775,7 @@ mod tests {
 
     #[test]
     fn every_place_is_a_row_of_the_locale_table() {
-        assert_eq!(
-            Place::all().count(),
-            crate::evasion::randomize::LOCALES.len()
-        );
+        assert_eq!(Place::all().count(), crate::randomize::LOCALES.len());
         assert!(Place::named("en-us-new-york").is_ok());
         assert!(Place::named("de-de-berlin").is_ok());
         assert!(Place::named("pt-br-sao-paulo").is_ok());

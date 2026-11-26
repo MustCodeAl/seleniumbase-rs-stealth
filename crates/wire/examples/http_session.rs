@@ -27,8 +27,8 @@ use std::error::Error;
 use std::process::ExitCode;
 
 use seleniumbase_rs::browser::config::Browser;
-use seleniumbase_rs::Fingerprint;
 use seleniumbase_rs_codec::measurement;
+use seleniumbase_rs_evasion::Fingerprint;
 use seleniumbase_rs_scrape::Identity;
 use seleniumbase_rs_scrape::WireMeasurementRef;
 use seleniumbase_rs_wire::HttpSession;

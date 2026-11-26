@@ -1,7 +1,7 @@
 //! Context handed to every provider when generating its script.
 
 use super::config::EvasionConfig;
-use crate::evasion::fingerprint::Fingerprint;
+use crate::fingerprint::Fingerprint;
 
 /// Context handed to every provider when generating its script.
 #[derive(Clone, Debug)]
@@ -42,7 +42,7 @@ impl<'a> EvasionContext<'a> {
     /// # Examples
     ///
     /// ```
-    /// use seleniumbase_rs::evasion::providers::EvasionContext;
+    /// use seleniumbase_rs_evasion::providers::EvasionContext;
     ///
     /// assert_eq!(EvasionContext::escape("it's"), "it\\'s");
     /// ```
@@ -65,7 +65,7 @@ impl<'a> EvasionContext<'a> {
     /// # Examples
     ///
     /// ```
-    /// use seleniumbase_rs::evasion::providers::EvasionContext;
+    /// use seleniumbase_rs_evasion::providers::EvasionContext;
     ///
     /// assert_eq!(EvasionContext::number(1.5), "1.5");
     /// assert_eq!(EvasionContext::number(f64::INFINITY), "Infinity");

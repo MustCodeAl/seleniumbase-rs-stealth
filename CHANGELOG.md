@@ -5,6 +5,17 @@ All notable changes to the unified `seleniumbase-rs-stealth` facade and its
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). The crates are experimental
 and not published to crates.io, so their types and paths may change between commits.
 
+## [0.10.0] - unreleased
+
+### Added
+
+- **`seleniumbase-rs-evasion` (`crates/evasion`)**: Wired the evasion crate extracted from `seleniumbase-rs` core (`capture`, `evasions`, `fingerprint`, `identity`, `js`, `mimic`, `policy`, `profile_payloads`, `providers`, `randomize`, `settings`, `spoof`, `uc`, plus `fingerprint!` macro and `schemas/fingerprint.schema.json`), re-exporting core-owned `patcher`, `dprocess`, `reactor`, `behavior`, `humanize`, and `cdp` modules under one canonical namespace.
+- **`identity` bridge (`StealthPlan`, `FingerprintPlugin`, `LaunchOptionsFingerprintExt`, `PageFingerprintExt`, `BaseCaseFingerprintExt`)**: Added ADR 004 `FingerprintPlugin` and extension traits layering fingerprints onto `LaunchOptions`, `sb_cdp::Page`, and `BaseCase` while preserving explicit caller launch overrides.
+
+### Changed
+
+- Migrated `seleniumbase-rs-stealth`, `seleniumbase-rs-codec`, `seleniumbase-rs-scrape`, and `seleniumbase-rs-wire` from `seleniumbase_rs::evasion::*` to `seleniumbase_rs_evasion::*` against `seleniumbase-rs` 0.10.0, re-exporting `pub use seleniumbase_rs_evasion as evasion` from the `seleniumbase-rs-stealth` facade.
+
 ## [0.9.4] - 2026-11-26
 
 ### Added

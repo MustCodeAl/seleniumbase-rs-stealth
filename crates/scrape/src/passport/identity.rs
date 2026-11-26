@@ -24,8 +24,8 @@ use crate::challenge::detect::{clearance_cookie, ProtectionVendor};
 use crate::egress::route::ProxyKey;
 use crate::jar::store::{site_of, CookieJar};
 use seleniumbase_rs::browser::config::Browser;
-use seleniumbase_rs::evasion::fingerprint::{Fingerprint, FingerprintError, OsType, Spoof};
 use seleniumbase_rs::sb_cdp::{Cookie, Session};
+use seleniumbase_rs_evasion::fingerprint::{Fingerprint, FingerprintError, OsType, Spoof};
 
 #[cfg(test)]
 pub(crate) mod fixtures;

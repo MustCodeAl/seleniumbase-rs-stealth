@@ -8,7 +8,7 @@
 //!   JavaScript runs),
 //! * `Page.evaluate` after navigation (rustwright / Playwright-compatible
 //!   mode), or
-//! * execution by a [`BrowserSession`](crate::browser::session::BrowserSession)
+//! * execution by a [`BrowserSession`](seleniumbase_rs::browser::session::BrowserSession)
 //!   helper.
 //!
 //! The evasions operate at the prototype and protocol layers to maintain coherent
@@ -18,16 +18,16 @@ use std::collections::HashMap;
 
 use base64::Engine;
 
-use crate::evasion::fingerprint::{
+use crate::fingerprint::{
     BrandVersion, Dimension, Fingerprint, OsType, QuicMode, WebRtcPolicy, TASKBAR_HEIGHT,
 };
-use crate::evasion::providers::{default_registry, session_registry, EvasionContext};
-use crate::evasion::randomize::{chromium_hints, edge_hints, PRESET_CHROMIUM_MAJOR};
+use crate::providers::{default_registry, session_registry, EvasionContext};
+use crate::randomize::{chromium_hints, edge_hints, PRESET_CHROMIUM_MAJOR};
 
 /// Generates a single combined bootstrap script for the given fingerprint.
 ///
-/// This delegates to the [provider registry](crate::evasion::providers), which
-/// assembles every applicable [`EvasionProvider`](crate::evasion::providers::EvasionProvider)
+/// This delegates to the [provider registry](crate::providers), which
+/// assembles every applicable [`EvasionProvider`](crate::providers::EvasionProvider)
 /// in priority order. The returned script is wrapped in an IIFE and modifies
 /// prototype-level properties so spoofed values survive `getOwnPropertyNames`
 /// scans and re-define attempts by page scripts.
@@ -41,7 +41,7 @@ pub fn bootstrap_script(fp: &Fingerprint) -> String {
 
 /// The script a session that drives a real Chrome runs before any page script.
 ///
-/// It is the [session registry](crate::evasion::providers::session_registry)'s:
+/// It is the [session registry](crate::providers::session_registry)'s:
 /// [`bootstrap_script`] without the providers for `navigator.plugins`,
 /// `mimeTypes`, `pdfViewerEnabled` and `navigator.connection`, which Chrome
 /// answers for itself. The pure CDP engine and the WebDriver sessions both use
@@ -736,7 +736,7 @@ fn major_of(version: &str) -> Option<u32> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::evasion::fingerprint::{Fingerprint, FingerprintBuilder, Spoof};
+    use crate::fingerprint::{FingerprintBuilder, Spoof};
 
     fn built(builder: FingerprintBuilder) -> Fingerprint {
         builder.build().expect("the builder builds")

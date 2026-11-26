@@ -12,14 +12,14 @@
 //! reroute traffic, start pages that are not web pages, and a `folder_id` that
 //! would leave `./profile-data`.
 //!
-//! [`BrowserConfig`]: crate::browser::config::BrowserConfig
-//! [`Fingerprint`]: crate::evasion::fingerprint::Fingerprint
-//! [`BaseCase`]: crate::BaseCase
+//! [`BrowserConfig`]: seleniumbase_rs::browser::config::BrowserConfig
+//! [`Fingerprint`]: crate::fingerprint::Fingerprint
+//! [`BaseCase`]: seleniumbase_rs::BaseCase
 //!
 //! # Examples
 //!
 //! ```
-//! use seleniumbase_rs::profile_payloads::ProfileParams;
+//! use seleniumbase_rs_evasion::profile_payloads::ProfileParams;
 //! use serde_json::json;
 //!
 //! let params: ProfileParams = serde_json::from_value(json!({

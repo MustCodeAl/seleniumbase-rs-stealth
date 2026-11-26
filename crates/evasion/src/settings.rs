@@ -7,7 +7,7 @@
 //! obvious tuple, so a builder call reads like the thing it sets:
 //!
 //! ```
-//! use seleniumbase_rs::evasion::fingerprint::{Fingerprint, Spoof};
+//! use seleniumbase_rs_evasion::fingerprint::{Fingerprint, Spoof};
 //!
 //! let fp = Fingerprint::builder()
 //!     .screen(1920, 1080)
@@ -15,7 +15,7 @@
 //!     .webgl(("Google Inc. (NVIDIA)", "ANGLE (NVIDIA, GeForce RTX 4070)"))
 //!     .webrtc(Spoof::Off)
 //!     .build()?;
-//! # Ok::<(), seleniumbase_rs::evasion::fingerprint::FingerprintError>(())
+//! # Ok::<(), seleniumbase_rs_evasion::fingerprint::FingerprintError>(())
 //! ```
 
 use serde::{Deserialize, Serialize};
@@ -396,7 +396,7 @@ impl KeyboardLayout {
     /// # Examples
     ///
     /// ```
-    /// use seleniumbase_rs::evasion::fingerprint::KeyboardLayout;
+    /// use seleniumbase_rs_evasion::fingerprint::KeyboardLayout;
     ///
     /// assert_eq!(KeyboardLayout::for_locale("de-DE"), Some(KeyboardLayout::Qwertz));
     /// assert_eq!(KeyboardLayout::for_locale("fr-CA"), None);

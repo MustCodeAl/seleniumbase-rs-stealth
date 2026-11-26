@@ -8,10 +8,10 @@ use std::fmt::Write as _;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use seleniumbase_rs::evasion::fingerprint::{
+use seleniumbase_rs_evasion::fingerprint::{
     AudioNoise, BrowserType, CanvasNoise, Fingerprint, OsType,
 };
-use seleniumbase_rs::evasion::randomize::PRESET_CHROMIUM_MAJOR;
+use seleniumbase_rs_evasion::randomize::PRESET_CHROMIUM_MAJOR;
 
 use crate::fingerprint::{
     AudioMetadata, BatteryMetadata, ClientHintsHighEntropy, ColorScheme, DisplayMetadata,
@@ -856,7 +856,7 @@ struct ScriptParams {
     performance_jitter_ms: f64,
     worker_spoofing: bool,
     timezone: Option<String>,
-    webrtc_policy: Option<seleniumbase_rs::WebRtcPolicy>,
+    webrtc_policy: Option<seleniumbase_rs_evasion::fingerprint::WebRtcPolicy>,
     storage_quota_gb: Option<u64>,
     outer_chrome_height: u32,
     history_min_length: u32,
@@ -2482,7 +2482,7 @@ impl ScriptParams {
     }
 
     fn push_webrtc_guard(&self, out: &mut String) {
-        use seleniumbase_rs::WebRtcPolicy;
+        use seleniumbase_rs_evasion::fingerprint::WebRtcPolicy;
         let Some(policy) = self.webrtc_policy else {
             return;
         };
@@ -3168,7 +3168,7 @@ mod tests {
             AudioDynamicsCompressor, BatteryOverride, ColorScheme, FingerprintOptions, HdrMode,
             ReducedMotion, SpeechVoice,
         };
-        use seleniumbase_rs::evasion::settings::ColorGamut;
+        use seleniumbase_rs_evasion::settings::ColorGamut;
 
         let opts = FingerprintOptions::builder()
             .os(OsType::Macos)

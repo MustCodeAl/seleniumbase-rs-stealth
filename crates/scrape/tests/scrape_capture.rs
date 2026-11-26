@@ -3,12 +3,12 @@
 
 use std::time::Duration;
 
-use seleniumbase_rs::evasion::fingerprint::{ClientHints, OsType};
 use seleniumbase_rs_codec::client_hello::ClientHello;
 use seleniumbase_rs_codec::h2_frames::{encode_frame, frame_type, CLIENT_PREFACE};
 use seleniumbase_rs_codec::ja3::Ja3;
 use seleniumbase_rs_codec::ja4::Ja4;
 use seleniumbase_rs_codec::tls_spec::{KnownGap, TlsSpec};
+use seleniumbase_rs_evasion::fingerprint::{ClientHints, OsType};
 use seleniumbase_rs_scrape::runtime::capture::hints::cross_check;
 use seleniumbase_rs_scrape::runtime::capture::record::to_hex;
 use seleniumbase_rs_scrape::runtime::capture::stream::{h2c_reply, http1_response};

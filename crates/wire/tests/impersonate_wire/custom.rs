@@ -6,7 +6,6 @@
 //! reason and must never reach a client.
 
 use seleniumbase_rs::browser::config::Browser;
-use seleniumbase_rs::evasion::fingerprint::{BrandVersion, ClientHints};
 use seleniumbase_rs_codec::akamai::Akamai;
 use seleniumbase_rs_codec::client_hello::{ext_id, ClientHello};
 use seleniumbase_rs_codec::h2_spec::H2SpecError;
@@ -15,6 +14,7 @@ use seleniumbase_rs_codec::ja3::peetprint::PeetprintSlot;
 use seleniumbase_rs_codec::ja3::{Ja3, Peetprint};
 use seleniumbase_rs_codec::ja4::{Ja4, Ja4Order, Ja4Raw};
 use seleniumbase_rs_codec::tls_spec::TlsSpecError;
+use seleniumbase_rs_evasion::fingerprint::{BrandVersion, ClientHints};
 use seleniumbase_rs_wire::client::{WireFormat, WireFormatError, WireProtocol};
 use seleniumbase_rs_wire::convert::ConvertError;
 

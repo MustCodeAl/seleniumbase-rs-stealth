@@ -18,9 +18,9 @@
 //!   before.
 
 use super::{EvasionContext, EvasionProvider, SB_PREAMBLE};
-use crate::evasion::fingerprint::{api_expected, BrowserType, TASKBAR_HEIGHT};
+use crate::fingerprint::{api_expected, BrowserType, TASKBAR_HEIGHT};
 
-use crate::evasion::fingerprint::{
+use crate::fingerprint::{
     gpu_architecture, gpu_maker, is_mobile_gpu, languages_for_locale, AudioNoise, CanvasNoise,
     Dimension, Fingerprint, Geolocation, OsType, AUDIO_SEED_MASK,
 };
@@ -2260,7 +2260,7 @@ impl EvasionProvider for ClientHintsProvider {
                     .to_owned(),
             );
         };
-        let brand_json = |list: &[crate::evasion::fingerprint::BrandVersion]| {
+        let brand_json = |list: &[crate::fingerprint::BrandVersion]| {
             list.iter()
                 .map(|b| {
                     format!(
@@ -2339,7 +2339,7 @@ impl EvasionProvider for ClientHintsProvider {
 /// the fingerprint is applied over the DevTools protocol,
 /// `Emulation.setTimezoneOverride` already changes all of them in the browser
 /// itself and this provider is not needed (see
-/// [`StealthPolicy::native_spoofing`](crate::evasion::fingerprint::StealthPolicy::native_spoofing)).
+/// [`StealthPolicy::native_spoofing`](crate::fingerprint::StealthPolicy::native_spoofing)).
 #[derive(Clone, Copy, Debug, Default)]
 pub struct TimezoneProvider;
 
@@ -2626,7 +2626,7 @@ impl EvasionProvider for GeolocationProvider {
 /// persona's answer: `KeyY` types `z` on a German machine. The methods, the
 /// iterator and the `size` getter are replaced on `KeyboardLayoutMap.prototype`
 /// and answer from a map of the 48 keys of the
-/// [`KeyboardLayout`](crate::evasion::fingerprint::KeyboardLayout), so no
+/// [`KeyboardLayout`](crate::fingerprint::KeyboardLayout), so no
 /// instance gets a property of its own. Only a Chromium persona runs it: Firefox
 /// and Safari have no `navigator.keyboard`.
 #[derive(Clone, Copy, Debug, Default)]
@@ -2821,7 +2821,7 @@ impl EvasionProvider for IframeProvider {
 /// page is running in a controllable environment. This provider does not
 /// change the return value's API surface; it only ensures the shadow root is
 /// reachable via `element.shadowRoot`. It runs unless
-/// [`StealthPolicy::open_shadow_roots`](crate::evasion::fingerprint::StealthPolicy::open_shadow_roots)
+/// [`StealthPolicy::open_shadow_roots`](crate::fingerprint::StealthPolicy::open_shadow_roots)
 /// is turned off.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct AttachShadowProvider;
@@ -2927,10 +2927,9 @@ impl EvasionProvider for TrackerBlockProvider {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::evasion::fingerprint::{
-        BatteryProfile, BrandVersion, ClientHints, ConnectionProfile, Fingerprint,
-        FingerprintBuilder, Geolocation, KeyboardLayout, MediaDevices, Spoof, StealthPolicy,
-        WebRtcAddresses,
+    use crate::fingerprint::{
+        BatteryProfile, BrandVersion, ClientHints, ConnectionProfile, FingerprintBuilder,
+        KeyboardLayout, MediaDevices, Spoof, StealthPolicy, WebRtcAddresses,
     };
 
     fn ctx_for(fp: &Fingerprint) -> EvasionContext<'_> {
@@ -2949,12 +2948,12 @@ mod tests {
     /// A fingerprint that makes every provider apply.
     fn everything() -> Fingerprint {
         windows_with(|b| {
-            b.audio_noise(crate::evasion::fingerprint::AudioNoise::Persistent)
+            b.audio_noise(crate::fingerprint::AudioNoise::Persistent)
                 .media_devices((1, 1, 1))
                 .policy(StealthPolicy::max())
                 .fonts(["Arial"])
                 .geolocation((1.0, 2.0))
-                .webgl(crate::evasion::fingerprint::WebGl::new("V", "R").ids("0x10de", "0x1f91"))
+                .webgl(crate::fingerprint::WebGl::new("V", "R").ids("0x10de", "0x1f91"))
                 .webrtc(("203.0.113.9", "10.0.0.2"))
                 .client_hints(ClientHints {
                     brands: vec![BrandVersion::new("Chromium", "124")],
@@ -3110,7 +3109,7 @@ mod tests {
 
     #[test]
     fn a_webgl_half_that_is_not_given_stays_the_browsers_own() {
-        let fp = windows_with(|b| b.webgl(crate::evasion::fingerprint::WebGl::renderer_only("R")));
+        let fp = windows_with(|b| b.webgl(crate::fingerprint::WebGl::renderer_only("R")));
         let script = WebglProvider.script(&ctx_for(&fp)).unwrap();
         assert!(script.contains("const vendor = null;"), "{script}");
         assert!(script.contains("const renderer = 'R';"), "{script}");
@@ -3224,19 +3223,17 @@ mod tests {
     #[test]
     fn audio_noise_is_seeded_unless_it_is_random() {
         let with = |noise| windows_with(|b| b.audio_noise(noise));
-        let persistent = with(crate::evasion::fingerprint::AudioNoise::Persistent);
+        let persistent = with(crate::fingerprint::AudioNoise::Persistent);
         assert_eq!(
             AudioNoiseProvider.script(&ctx_for(&persistent)),
             AudioNoiseProvider.script(&ctx_for(&persistent))
         );
-        let random = with(crate::evasion::fingerprint::AudioNoise::Random);
+        let random = with(crate::fingerprint::AudioNoise::Random);
         assert_ne!(
             AudioNoiseProvider.script(&ctx_for(&random)),
             AudioNoiseProvider.script(&ctx_for(&random))
         );
-        assert!(
-            !AudioNoiseProvider.applies(&with(crate::evasion::fingerprint::AudioNoise::Natural))
-        );
+        assert!(!AudioNoiseProvider.applies(&with(crate::fingerprint::AudioNoise::Natural)));
     }
 
     #[test]
@@ -3411,8 +3408,7 @@ mod tests {
     fn noise_does_not_depend_on_a_running_generator() {
         // The old noise advanced a shared generator on every read; a stateless
         // hash is what makes two reads agree.
-        let fp =
-            windows_with(|b| b.audio_noise(crate::evasion::fingerprint::AudioNoise::Persistent));
+        let fp = windows_with(|b| b.audio_noise(crate::fingerprint::AudioNoise::Persistent));
         for provider in [
             &CanvasNoiseProvider as &dyn EvasionProvider,
             &AudioNoiseProvider,
@@ -3812,22 +3808,20 @@ mod tests {
         assert_eq!(DomRectProvider.priority(), 58);
 
         assert!(!DomRectProvider.applies(&Fingerprint::default()));
-        let canvas_only = built(
-            Fingerprint::builder()
-                .canvas_noise(crate::evasion::fingerprint::CanvasNoise::Persistent),
-        );
+        let canvas_only =
+            built(Fingerprint::builder().canvas_noise(crate::fingerprint::CanvasNoise::Persistent));
         let fonts_only = built(Fingerprint::builder().fonts(["Arial"]));
         assert!(DomRectProvider.applies(&canvas_only));
         assert!(DomRectProvider.applies(&fonts_only));
 
         let a = built(
             Fingerprint::builder()
-                .canvas_noise(crate::evasion::fingerprint::CanvasNoise::Persistent)
+                .canvas_noise(crate::fingerprint::CanvasNoise::Persistent)
                 .seed(42),
         );
         let b = built(
             Fingerprint::builder()
-                .canvas_noise(crate::evasion::fingerprint::CanvasNoise::Persistent)
+                .canvas_noise(crate::fingerprint::CanvasNoise::Persistent)
                 .seed(43),
         );
         let script_a1 = DomRectProvider.script(&ctx_for(&a)).unwrap();
@@ -3853,7 +3847,7 @@ mod tests {
     #[test]
     fn canvas_noise_provider_patches_measure_text_and_offscreen_canvas() {
         let fp = windows_with(|b| {
-            b.canvas_noise(crate::evasion::fingerprint::CanvasNoise::Persistent)
+            b.canvas_noise(crate::fingerprint::CanvasNoise::Persistent)
                 .seed(1234)
         });
         let script = CanvasNoiseProvider.script(&ctx_for(&fp)).unwrap();
@@ -3873,7 +3867,7 @@ mod tests {
     #[test]
     fn audio_noise_provider_patches_analyser_methods_and_latency_on_prototypes() {
         let fp = windows_with(|b| {
-            b.audio_noise(crate::evasion::fingerprint::AudioNoise::Persistent)
+            b.audio_noise(crate::fingerprint::AudioNoise::Persistent)
                 .seed(77)
         });
         let script = AudioNoiseProvider.script(&ctx_for(&fp)).unwrap();
@@ -3894,7 +3888,7 @@ mod tests {
     #[test]
     fn webgl_provider_fixes_webgl2_enums_separates_gpu_caps_and_noises_read_pixels() {
         let desktop_no_canvas =
-            windows_with(|b| b.canvas_noise(crate::evasion::fingerprint::CanvasNoise::Natural));
+            windows_with(|b| b.canvas_noise(crate::fingerprint::CanvasNoise::Natural));
         let desktop_script = WebglProvider.script(&ctx_for(&desktop_no_canvas)).unwrap();
         assert!(!desktop_script.contains("35864"));
         for needle in [
@@ -3927,7 +3921,7 @@ mod tests {
         assert!(android_script.contains("const maxCombinedTexUnits = 32;"));
 
         let with_canvas = windows_with(|b| {
-            b.canvas_noise(crate::evasion::fingerprint::CanvasNoise::Persistent)
+            b.canvas_noise(crate::fingerprint::CanvasNoise::Persistent)
                 .seed(999)
         });
         let canvas_script = WebglProvider.script(&ctx_for(&with_canvas)).unwrap();

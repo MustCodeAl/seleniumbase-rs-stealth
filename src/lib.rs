@@ -11,6 +11,15 @@
 #[doc(inline)]
 pub use seleniumbase_rs::*;
 
+#[doc(inline)]
+pub use seleniumbase_rs_evasion as evasion;
+
+#[doc(inline)]
+pub use seleniumbase_rs_evasion::{
+    BaseCaseFingerprintExt, FingerprintPlugin, LaunchOptionsFingerprintExt, PageFingerprintExt,
+    StealthPlan,
+};
+
 pub mod fingerprint;
 pub use fingerprint::{
     BatteryOverride, ColorScheme, ConnectionOverride, FingerprintGenerator, FingerprintOptions,

@@ -51,7 +51,6 @@ use wreq::{Emulation, Group, RequestBuilder};
 use self::identity::{identity_for, DEFAULT_LOCALE_TAG};
 use super::convert::{self, ConvertError};
 use seleniumbase_rs::browser::config::Browser;
-use seleniumbase_rs::evasion::fingerprint::{BrowserType, Fingerprint, OsType};
 use seleniumbase_rs_codec::akamai::AkamaiError;
 use seleniumbase_rs_codec::client_hello::ext_id;
 use seleniumbase_rs_codec::h2_spec::{H2Spec, H2SpecError};
@@ -64,6 +63,7 @@ use seleniumbase_rs_codec::measurement::{
     self, KnownGap, WireMeasurement as Measured, WireMeasurementError,
 };
 use seleniumbase_rs_codec::tls_spec::{TlsSpec, TlsSpecError};
+use seleniumbase_rs_evasion::fingerprint::{BrowserType, Fingerprint, OsType};
 use seleniumbase_rs_scrape::egress::geo::{Locale, LocaleExt};
 
 pub use self::custom::WireFormatBuilder;

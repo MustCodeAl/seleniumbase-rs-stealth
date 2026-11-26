@@ -4,14 +4,14 @@
 //! script could read: the navigator, the Client Hints, the screen, the time
 //! zone, the WebGL strings, the media devices, the battery, the connection, the
 //! speech voices, Bluetooth, and a few readings that no setting holds. The two
-//! engines run it ([`Page::capture_fingerprint`](crate::sb_cdp::Page) for the pure
-//! CDP engine, [`BaseCase::capture_fingerprint`](crate::BaseCase) for WebDriver)
+//! engines run it ([`Page::capture_fingerprint`](seleniumbase_rs::sb_cdp::Page) for the pure
+//! CDP engine, [`BaseCase::capture_fingerprint`](seleniumbase_rs::BaseCase) for WebDriver)
 //! and hand the answer to [`CapturedFingerprint::from_probe`], which maps it in
 //! one place, so both engines give the same fingerprint for the same browser.
 //!
-//! A setting the page answered is a [`Value`](crate::evasion::spoof::Spoof::Value),
-//! or [`Off`](crate::evasion::spoof::Spoof::Off) for an API that is not there. A
-//! setting it could not answer stays [`Natural`](crate::evasion::spoof::Spoof::Natural),
+//! A setting the page answered is a [`Value`](crate::spoof::Spoof::Value),
+//! or [`Off`](crate::spoof::Spoof::Off) for an API that is not there. A
+//! setting it could not answer stays [`Natural`](crate::spoof::Spoof::Natural),
 //! and says why in [`CapturedFingerprint::unmapped`] under `unanswered`. The
 //! result is the ordinary v2 [`Fingerprint`], so
 //! [`save`](Fingerprint::save) writes the one file format every tool reads.
@@ -19,7 +19,7 @@
 //! # Examples
 //!
 //! ```
-//! use seleniumbase_rs::evasion::capture::CapturedFingerprint;
+//! use seleniumbase_rs_evasion::capture::CapturedFingerprint;
 //! use serde_json::json;
 //!
 //! // What the script returned for a page (shortened).
@@ -58,7 +58,7 @@ use super::settings::{DynamicRange, HoverType, PointerType};
 
 use super::js::capture_js::CAPTURE_JS;
 use super::spoof::Spoof;
-use crate::error::SeleniumBaseError;
+use seleniumbase_rs::error::SeleniumBaseError;
 
 /// The version of the readings the capture script returns. A reading of another
 /// version is refused, not guessed at.
@@ -1064,25 +1064,25 @@ fn note_unanswered(unanswered: &mut Map<String, Value>, setting: &str, reason: O
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::evasion::fingerprint::{Dimension, OsType};
+    use crate::fingerprint::{Dimension, OsType};
 
     const CHROME_MACOS: &str =
-        include_str!("../../tests/fixtures/fingerprint/probe_chrome_macos.json");
+        include_str!("../tests/fixtures/fingerprint/probe_chrome_macos.json");
     const FIREFOX_LINUX: &str =
-        include_str!("../../tests/fixtures/fingerprint/probe_firefox_linux.json");
+        include_str!("../tests/fixtures/fingerprint/probe_firefox_linux.json");
     const CHROME_INSECURE: &str =
-        include_str!("../../tests/fixtures/fingerprint/probe_chrome_insecure.json");
-    const SAFARI_IOS: &str = include_str!("../../tests/fixtures/fingerprint/probe_safari_ios.json");
+        include_str!("../tests/fixtures/fingerprint/probe_chrome_insecure.json");
+    const SAFARI_IOS: &str = include_str!("../tests/fixtures/fingerprint/probe_safari_ios.json");
     /// Recorded by `tests/sb_cdp_capture_chrome.rs` from a headless Chrome 155 on a Mac.
     const REAL_HEADLESS: &str =
-        include_str!("../../tests/fixtures/fingerprint/probe_chrome_real_headless.json");
+        include_str!("../tests/fixtures/fingerprint/probe_chrome_real_headless.json");
 
     const AT: &str = "2026-10-18T12:00:00Z";
     /// A Windows preset applied in JavaScript alone to a headless Chrome on a
     /// Mac: every surface the settings reach says Windows, every other one
     /// says Mac. Written by hand from a real capture of each half.
     const WINDOWS_ON_MAC: &str =
-        include_str!("../../tests/fixtures/fingerprint/probe_chrome_windows_on_mac.json");
+        include_str!("../tests/fixtures/fingerprint/probe_chrome_windows_on_mac.json");
 
     #[test]
     fn the_consistency_readings_reach_unmapped_under_their_own_keys() {

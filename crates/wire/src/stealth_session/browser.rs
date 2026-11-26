@@ -13,6 +13,7 @@ use super::{StealthError, Wiring};
 use crate::client::WireFormatError;
 use crate::mitm::MitmProxy;
 use seleniumbase_rs::sb_cdp::{Browser, Page, SolveOptions};
+use seleniumbase_rs_evasion::LaunchOptionsFingerprintExt;
 use seleniumbase_rs_scrape::challenge::detect::{ChallengeKind, Detection};
 use seleniumbase_rs_scrape::error::ScrapeError;
 use seleniumbase_rs_scrape::jar::store::CookieJar;
@@ -50,14 +51,8 @@ impl BrowserLeg {
         identity: &Identity,
         measured: u32,
     ) -> Result<Self, StealthError> {
-        let options = mitm.configure_launch(
-            wiring
-                .launch
-                .clone()
-                .into_builder()
-                .fingerprint(&identity.fingerprint)
-                .build()?,
-        )?;
+        let options =
+            mitm.configure_launch(wiring.launch.with_fingerprint(&identity.fingerprint)?)?;
         let browser = wiring.launcher.launch(options).await?;
         match Self::settle(&browser, identity, measured, (wiring.clock)()).await {
             Ok(page) => Ok(Self {

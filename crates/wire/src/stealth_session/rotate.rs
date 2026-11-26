@@ -3,8 +3,8 @@
 use super::{StealthError, StealthSession};
 use crate::client::WireFormat;
 use seleniumbase_rs::browser::config::Browser;
-use seleniumbase_rs::evasion::fingerprint::{Fingerprint, OsType};
-use seleniumbase_rs::evasion::humanize::Rng;
+use seleniumbase_rs_evasion::fingerprint::{Fingerprint, OsType};
+use seleniumbase_rs_evasion::humanize::Rng;
 use seleniumbase_rs_scrape::challenge::mitigation::FetchKind;
 use seleniumbase_rs_scrape::egress::route::{ProxyKey, ProxyRoute};
 use seleniumbase_rs_scrape::error::ScrapeError;
@@ -347,7 +347,7 @@ mod tests {
         identity.fingerprint = identity
             .fingerprint
             .to_builder()
-            .proxy(seleniumbase_rs::evasion::fingerprint::ProxyConfig {
+            .proxy(seleniumbase_rs_evasion::fingerprint::ProxyConfig {
                 host: "proxy.example".to_owned(),
                 ..Default::default()
             })

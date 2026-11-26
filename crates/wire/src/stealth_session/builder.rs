@@ -15,9 +15,9 @@ use crate::mitm::MitmOptions;
 use seleniumbase_rs::browser::config::Browser as BrowserName;
 use seleniumbase_rs::config::proxy_list::RotationStrategy;
 use seleniumbase_rs::error::SeleniumBaseError;
-use seleniumbase_rs::evasion::fingerprint::{Fingerprint, OsType};
 use seleniumbase_rs::sb_cdp::{Browser, LaunchOptions};
 use seleniumbase_rs_codec::measurement;
+use seleniumbase_rs_evasion::fingerprint::{Fingerprint, OsType};
 use seleniumbase_rs_scrape::challenge::mitigation::{
     MitigationPolicy, DEFAULT_MAX_CHALLENGE_ATTEMPTS,
 };

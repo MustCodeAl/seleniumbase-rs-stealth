@@ -5,11 +5,11 @@
 
 use std::sync::Arc;
 
-use seleniumbase_rs::evasion::fingerprint::{Fingerprint, OsType};
 use seleniumbase_rs::plugin_api::{
     async_trait, Capability, Category, HostScope, LaunchSettings, Metadata, PageHandle, Plugin,
     Requirements, Result as PluginResult,
 };
+use seleniumbase_rs_evasion::fingerprint::{Fingerprint, OsType};
 
 use crate::fingerprint::{FingerprintGenerator, GeneratedFingerprint, ProfileFingerprint};
 use crate::script::{StealthScriptBundle, StealthScriptOptions};
@@ -148,16 +148,16 @@ impl PageScriptTarget for seleniumbase_rs::sb_cdp::Page {
 }
 
 fn convert_webrtc_policy(
-    policy: seleniumbase_rs::evasion::fingerprint::WebRtcPolicy,
+    policy: seleniumbase_rs_evasion::fingerprint::WebRtcPolicy,
 ) -> seleniumbase_rs::plugin_api::WebRtcPolicy {
     match policy {
-        seleniumbase_rs::evasion::fingerprint::WebRtcPolicy::DisableNonProxiedUdp => {
+        seleniumbase_rs_evasion::fingerprint::WebRtcPolicy::DisableNonProxiedUdp => {
             seleniumbase_rs::plugin_api::WebRtcPolicy::DisableNonProxiedUdp
         }
-        seleniumbase_rs::evasion::fingerprint::WebRtcPolicy::PublicAndPrivateInterfaces => {
+        seleniumbase_rs_evasion::fingerprint::WebRtcPolicy::PublicAndPrivateInterfaces => {
             seleniumbase_rs::plugin_api::WebRtcPolicy::DefaultPublicAndPrivateInterfaces
         }
-        seleniumbase_rs::evasion::fingerprint::WebRtcPolicy::PublicInterfaceOnly => {
+        seleniumbase_rs_evasion::fingerprint::WebRtcPolicy::PublicInterfaceOnly => {
             seleniumbase_rs::plugin_api::WebRtcPolicy::DefaultPublicInterfaceOnly
         }
         _ => seleniumbase_rs::plugin_api::WebRtcPolicy::DisableNonProxiedUdp,
@@ -326,7 +326,7 @@ mod tests {
             screen_width: Some(1280),
             screen_height: Some(720),
             webrtc_policy: Some(
-                seleniumbase_rs::evasion::fingerprint::WebRtcPolicy::PublicInterfaceOnly,
+                seleniumbase_rs_evasion::fingerprint::WebRtcPolicy::PublicInterfaceOnly,
             ),
             ..ProfileFingerprint::default()
         };
@@ -368,13 +368,13 @@ mod tests {
 
         assert_eq!(
             convert_webrtc_policy(
-                seleniumbase_rs::evasion::fingerprint::WebRtcPolicy::DisableNonProxiedUdp
+                seleniumbase_rs_evasion::fingerprint::WebRtcPolicy::DisableNonProxiedUdp
             ),
             seleniumbase_rs::plugin_api::WebRtcPolicy::DisableNonProxiedUdp
         );
         assert_eq!(
             convert_webrtc_policy(
-                seleniumbase_rs::evasion::fingerprint::WebRtcPolicy::PublicAndPrivateInterfaces
+                seleniumbase_rs_evasion::fingerprint::WebRtcPolicy::PublicAndPrivateInterfaces
             ),
             seleniumbase_rs::plugin_api::WebRtcPolicy::DefaultPublicAndPrivateInterfaces
         );

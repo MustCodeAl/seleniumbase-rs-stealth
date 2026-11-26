@@ -317,7 +317,7 @@ fn problems(file: &Value) -> Vec<String> {
 
 #[test]
 fn every_preset_a_drawn_identity_and_a_capture_is_valid_against_the_schema() {
-    use crate::evasion::fingerprint::OsType;
+    use crate::fingerprint::OsType;
 
     let mut files = vec![
         Fingerprint::windows_desktop(),
@@ -338,15 +338,14 @@ fn every_preset_a_drawn_identity_and_a_capture_is_valid_against_the_schema() {
         files.push(Fingerprint::randomized(os, 17));
     }
     for fixture in [
-        include_str!("../../../tests/fixtures/fingerprint/probe_chrome_macos.json"),
-        include_str!("../../../tests/fixtures/fingerprint/probe_firefox_linux.json"),
-        include_str!("../../../tests/fixtures/fingerprint/probe_safari_ios.json"),
-        include_str!("../../../tests/fixtures/fingerprint/probe_chrome_real_headless.json"),
+        include_str!("../../tests/fixtures/fingerprint/probe_chrome_macos.json"),
+        include_str!("../../tests/fixtures/fingerprint/probe_firefox_linux.json"),
+        include_str!("../../tests/fixtures/fingerprint/probe_safari_ios.json"),
+        include_str!("../../tests/fixtures/fingerprint/probe_chrome_real_headless.json"),
     ] {
         let raw: Value = serde_json::from_str(fixture).unwrap();
         let captured =
-            crate::evasion::capture::CapturedFingerprint::from_probe(&raw, "2026-10-18T12:00:00Z")
-                .unwrap();
+            crate::capture::CapturedFingerprint::from_probe(&raw, "2026-10-18T12:00:00Z").unwrap();
         files.push(captured.fingerprint);
     }
 

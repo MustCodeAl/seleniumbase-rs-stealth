@@ -1,14 +1,14 @@
 use serde::{Deserialize, Serialize};
 
-use crate::browser::config::{Browser, BrowserConfig, DriverMode};
-use crate::error::SeleniumBaseError;
-use crate::evasion::fingerprint as evasion_fp;
-use crate::evasion::fingerprint::{
+use crate::fingerprint as evasion_fp;
+use crate::fingerprint::{
     AudioNoise, BatteryProfile, CanvasNoise, ClientHints, ConnectionProfile, Fingerprint,
     FingerprintBuilder, Geolocation, KeyboardLayout, MediaDeviceSpec, MediaDevices, MediaFeatures,
     OsType, QuicMode, ScreenSize, SpeechVoice, Spoof, StealthPolicy, WebGl, WebRtcAddresses,
     WebRtcPolicy,
 };
+use seleniumbase_rs::browser::config::{Browser, BrowserConfig, DriverMode};
+use seleniumbase_rs::error::SeleniumBaseError;
 
 /// Top-level external browser profile payload.
 ///
@@ -1451,12 +1451,12 @@ impl ProfileParams {
         let mut config = BrowserConfig::default();
         config.session.webdriver_url = Some(container_url.into());
         config.session.mode = Some(mode);
-        config.browser = crate::browser::options::BrowserSettings {
+        config.browser = seleniumbase_rs::browser::options::BrowserSettings {
             kind: self.browser(),
             headless: self.is_headless,
             user_agent: fingerprint.user_agent().value().cloned(),
             lang: fingerprint.locale().value().cloned(),
-            proxy: crate::browser::options::ProxySettings {
+            proxy: seleniumbase_rs::browser::options::ProxySettings {
                 server: fingerprint
                     .proxy()
                     .value()
@@ -1472,7 +1472,11 @@ impl ProfileParams {
                 .is_some_and(|proxy| proxy.save_traffic),
             ..Default::default()
         };
-        config.fingerprint = Some(fingerprint);
+        if let Ok(plugins) = seleniumbase_rs::plugin_api::PluginSet::new()
+            .with(crate::identity::FingerprintPlugin::new(fingerprint))
+        {
+            config.plugins = plugins.into();
+        }
 
         for extra in self.extra_args() {
             config.browser.chromium.args.push(extra);
@@ -1569,9 +1573,9 @@ impl ProfileParams {
     ///
     /// Switches that run programs, load code, open remote control or move
     /// traffic are left out; see
-    /// [`permitted_switch`](crate::evasion::evasions::permitted_switch).
+    /// [`permitted_switch`](crate::evasions::permitted_switch).
     pub fn extra_args(&self) -> Vec<String> {
-        crate::evasion::evasions::switches_to_args(
+        crate::evasions::switches_to_args(
             self.parameters
                 .fingerprint
                 .cmd_params
@@ -1588,7 +1592,7 @@ impl ProfileParams {
     /// flag, or `block` or `prompt` for the position, sets nothing.
     pub async fn apply_runtime_overrides(
         &self,
-        sb: &mut crate::BaseCase,
+        sb: &mut seleniumbase_rs::BaseCase,
     ) -> Result<(), SeleniumBaseError> {
         let fingerprint = self.to_fingerprint();
         if let Some(screen) = fingerprint.screen().value() {
@@ -1608,7 +1612,7 @@ impl ProfileParams {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::evasion::fingerprint::Dimension;
+    use crate::fingerprint::Dimension;
     use serde_json::json;
 
     #[test]

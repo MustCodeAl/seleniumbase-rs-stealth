@@ -7,7 +7,7 @@ use serde::Serialize;
 use serde_json::{json, Map, Value};
 
 use super::{Contradiction, Fingerprint};
-use crate::evasion::capture::CapturedFingerprint;
+use crate::capture::CapturedFingerprint;
 
 /// The names of the settings, in the order of the file. A test keeps this list
 /// equal to the `Spoof` fields of the fingerprint.
@@ -128,7 +128,7 @@ impl CapturedFingerprint {
     /// # Examples
     ///
     /// ```
-    /// use seleniumbase_rs::evasion::capture::CapturedFingerprint;
+    /// use seleniumbase_rs_evasion::capture::CapturedFingerprint;
     /// use serde_json::json;
     ///
     /// // A Windows persona whose WebGPU adapter is Apple's: the GPU gives the Mac away.
@@ -187,7 +187,7 @@ impl Fingerprint {
     /// # Examples
     ///
     /// ```
-    /// use seleniumbase_rs::Fingerprint;
+    /// use seleniumbase_rs_evasion::Fingerprint;
     ///
     /// let windows = Fingerprint::windows_desktop();
     /// let tokyo = windows.to_builder().timezone("Asia/Tokyo").build()?;
@@ -201,7 +201,7 @@ impl Fingerprint {
     /// // What `windows` leaves natural is not compared, so this side agrees.
     /// let bare = Fingerprint::builder().timezone("America/New_York").build()?;
     /// assert!(bare.diff(&windows).is_empty());
-    /// # Ok::<(), seleniumbase_rs::FingerprintError>(())
+    /// # Ok::<(), seleniumbase_rs_evasion::FingerprintError>(())
     /// ```
     #[must_use]
     pub fn diff(&self, other: &Self) -> Vec<SettingDiff> {
@@ -223,7 +223,7 @@ impl Fingerprint {
     /// # Examples
     ///
     /// ```
-    /// use seleniumbase_rs::Fingerprint;
+    /// use seleniumbase_rs_evasion::Fingerprint;
     ///
     /// let claimed = Fingerprint::windows_desktop();
     ///
@@ -238,7 +238,7 @@ impl Fingerprint {
     /// assert!(!comparison.is_verified(), "most of the claim was not read");
     /// assert!(comparison.matched.contains(&"timezone"));
     /// assert!(comparison.unverifiable.contains(&"user_agent"));
-    /// # Ok::<(), seleniumbase_rs::FingerprintError>(())
+    /// # Ok::<(), seleniumbase_rs_evasion::FingerprintError>(())
     /// ```
     #[must_use]
     pub fn compare_to(&self, observed: &Self) -> FingerprintComparison {
@@ -251,12 +251,12 @@ impl Fingerprint {
     /// # Examples
     ///
     /// ```
-    /// use seleniumbase_rs::Fingerprint;
+    /// use seleniumbase_rs_evasion::Fingerprint;
     ///
     /// let fp = Fingerprint::builder().timezone("Europe/Berlin").screen(800, 600).build()?;
     ///
     /// assert_eq!(fp.claimed_settings(), ["timezone", "screen"]);
-    /// # Ok::<(), seleniumbase_rs::FingerprintError>(())
+    /// # Ok::<(), seleniumbase_rs_evasion::FingerprintError>(())
     /// ```
     #[must_use]
     pub fn claimed_settings(&self) -> Vec<&'static str> {
@@ -452,7 +452,7 @@ fn same_json(a: &Value, b: &Value) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::evasion::fingerprint::{
+    use crate::fingerprint::{
         FingerprintBuilder, MediaDeviceSpec, OsType, ProxyConfig, SpeechVoice, Spoof, WebGl,
     };
 

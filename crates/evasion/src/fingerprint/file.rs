@@ -6,7 +6,7 @@ use std::io::Write;
 use std::path::Path;
 
 use super::Fingerprint;
-use crate::error::SeleniumBaseError;
+use seleniumbase_rs::error::SeleniumBaseError;
 
 /// The most a fingerprint file may hold. A real one is a few kilobytes; the cap
 /// keeps a wrong path (a log, a disk image) from being read into memory.
@@ -30,7 +30,7 @@ impl Fingerprint {
     /// # Examples
     ///
     /// ```
-    /// use seleniumbase_rs::Fingerprint;
+    /// use seleniumbase_rs_evasion::Fingerprint;
     ///
     /// let fp = Fingerprint::from_json(r#"{ "timezone": "Europe/Berlin" }"#)?;
     /// assert_eq!(fp.timezone().as_str(), Some("Europe/Berlin"));
@@ -106,7 +106,7 @@ impl Fingerprint {
     /// # Examples
     ///
     /// ```
-    /// use seleniumbase_rs::Fingerprint;
+    /// use seleniumbase_rs_evasion::Fingerprint;
     ///
     /// let dir = tempfile::tempdir()?;
     /// let path = dir.path().join("profiles").join("windows.json");
@@ -204,7 +204,7 @@ fn misplaced_setting(text: &str) -> Option<(String, serde_json::Value)> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::evasion::fingerprint::Spoof;
+    use crate::fingerprint::Spoof;
 
     fn presets() -> Vec<(&'static str, Fingerprint)> {
         vec![
@@ -233,7 +233,7 @@ mod tests {
     #[test]
     fn a_drawn_identity_survives_a_save_and_a_load_with_its_infinite_battery_times() {
         let dir = tempfile::tempdir().unwrap();
-        let drawn = Fingerprint::randomized(crate::evasion::fingerprint::OsType::Macos, 99);
+        let drawn = Fingerprint::randomized(crate::fingerprint::OsType::Macos, 99);
         let path = dir.path().join("drawn.json");
 
         drawn.save(&path).unwrap();

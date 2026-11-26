@@ -6,8 +6,8 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use seleniumbase_rs::browser::config::Browser;
-use seleniumbase_rs::evasion::fingerprint::{Fingerprint, OsType};
 use seleniumbase_rs_codec::measurement;
+use seleniumbase_rs_evasion::fingerprint::{Fingerprint, OsType};
 use seleniumbase_rs_scrape::challenge::mitigation::{FetchKind, MitigationPolicy};
 use seleniumbase_rs_scrape::egress::geo::CountryCode;
 use seleniumbase_rs_scrape::ledger::events::{CollectingEventSink, ScrapeEvent};

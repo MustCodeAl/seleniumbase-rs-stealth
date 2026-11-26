@@ -6,7 +6,7 @@ use super::fixtures::{every_event, SECRETS};
 use super::*;
 use crate::passport::identity::fixtures::proxy;
 use crate::passport::policy::DemoteReason;
-use seleniumbase_rs::evasion::humanize::Rng;
+use seleniumbase_rs_evasion::humanize::Rng;
 
 fn json(event: &ScrapeEvent) -> serde_json::Value {
     serde_json::to_value(event).expect("an event serializes")

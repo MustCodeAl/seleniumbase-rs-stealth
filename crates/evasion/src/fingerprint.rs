@@ -17,13 +17,13 @@
 //! A fingerprint is built once, with [`Fingerprint::builder()`], and not
 //! changed afterwards. To change one, take [`to_builder`](Fingerprint::to_builder)
 //! and build again. Hand the result to
-//! [`StealthOptions`](crate::evasion::options::StealthOptions), to a
-//! [`BrowserConfig`](crate::BrowserConfig) or to the pure CDP launch options.
+//! [`StealthOptions`](crate::options::StealthOptions), to a
+//! [`BrowserConfig`](seleniumbase_rs::BrowserConfig) or to the pure CDP launch options.
 //!
 //! # Example
 //!
 //! ```rust
-//! use seleniumbase_rs::evasion::fingerprint::{
+//! use seleniumbase_rs_evasion::fingerprint::{
 //!     CanvasNoise, Fingerprint, Spoof, StealthPolicy,
 //! };
 //!
@@ -41,7 +41,7 @@
 //! // The random position is a spot in Berlin, because the time zone is given.
 //! let place = fp.geolocation().value().expect("a drawn position");
 //! assert!((place.latitude - 52.5).abs() < 0.5);
-//! # Ok::<(), seleniumbase_rs::evasion::fingerprint::FingerprintError>(())
+//! # Ok::<(), seleniumbase_rs_evasion::fingerprint::FingerprintError>(())
 //! ```
 
 use std::collections::HashMap;
@@ -154,6 +154,29 @@ pub enum WebRtcPolicy {
     DisableNonProxiedUdp,
     PublicAndPrivateInterfaces,
     PublicInterfaceOnly,
+}
+
+impl From<WebRtcPolicy> for seleniumbase_rs::WebRtcPolicy {
+    fn from(policy: WebRtcPolicy) -> Self {
+        match policy {
+            WebRtcPolicy::DisableNonProxiedUdp => Self::DisableNonProxiedUdp,
+            WebRtcPolicy::PublicAndPrivateInterfaces => Self::PublicAndPrivateInterfaces,
+            WebRtcPolicy::PublicInterfaceOnly => Self::PublicInterfaceOnly,
+        }
+    }
+}
+
+impl From<seleniumbase_rs::WebRtcPolicy> for WebRtcPolicy {
+    fn from(policy: seleniumbase_rs::WebRtcPolicy) -> Self {
+        match policy {
+            seleniumbase_rs::WebRtcPolicy::DisableNonProxiedUdp => Self::DisableNonProxiedUdp,
+            seleniumbase_rs::WebRtcPolicy::PublicAndPrivateInterfaces => {
+                Self::PublicAndPrivateInterfaces
+            }
+            seleniumbase_rs::WebRtcPolicy::PublicInterfaceOnly => Self::PublicInterfaceOnly,
+            _ => Self::DisableNonProxiedUdp,
+        }
+    }
 }
 
 /// Proxy configuration for a profile.
@@ -446,7 +469,7 @@ pub enum FingerprintError {
     },
 }
 
-impl From<FingerprintError> for crate::error::SeleniumBaseError {
+impl From<FingerprintError> for seleniumbase_rs::error::SeleniumBaseError {
     fn from(error: FingerprintError) -> Self {
         Self::Stealth {
             reason: error.to_string(),
@@ -802,7 +825,7 @@ macro_rules! accessors {
 /// # Examples
 ///
 /// ```
-/// use seleniumbase_rs::evasion::fingerprint::{Fingerprint, Spoof};
+/// use seleniumbase_rs_evasion::fingerprint::{Fingerprint, Spoof};
 ///
 /// let fp = Fingerprint::windows_desktop();
 /// assert_eq!(fp.screen().value().map(|s| s.width), Some(1920));
@@ -811,7 +834,7 @@ macro_rules! accessors {
 /// let wider = fp.to_builder().screen(2560, 1440).build()?;
 /// assert_eq!(wider.screen().value().map(|s| s.width), Some(2560));
 /// assert!(wider.hardware_concurrency().is_value());
-/// # Ok::<(), seleniumbase_rs::evasion::fingerprint::FingerprintError>(())
+/// # Ok::<(), seleniumbase_rs_evasion::fingerprint::FingerprintError>(())
 /// ```
 #[derive(Clone, Debug, PartialEq, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
@@ -1042,12 +1065,12 @@ impl Fingerprint {
     /// # Examples
     ///
     /// ```
-    /// use seleniumbase_rs::evasion::fingerprint::{Dimension, Fingerprint};
+    /// use seleniumbase_rs_evasion::fingerprint::{Dimension, Fingerprint};
     ///
     /// let fp = Fingerprint::builder().timezone("Europe/Berlin").build()?;
     /// assert!(fp.is_masked(Dimension::Timezone));
     /// assert!(!fp.is_masked(Dimension::Screen));
-    /// # Ok::<(), seleniumbase_rs::evasion::fingerprint::FingerprintError>(())
+    /// # Ok::<(), seleniumbase_rs_evasion::fingerprint::FingerprintError>(())
     /// ```
     #[must_use]
     pub fn is_masked(&self, dimension: Dimension) -> bool {
@@ -1436,7 +1459,7 @@ impl Fingerprint {
     /// # Examples
     ///
     /// ```
-    /// use seleniumbase_rs::{Fingerprint, OsType};
+    /// use seleniumbase_rs_evasion::{Fingerprint, OsType};
     ///
     /// let fp = Fingerprint::randomized(OsType::Macos, 7);
     ///
@@ -1469,9 +1492,9 @@ impl Fingerprint {
     /// - Fonts, media devices and WebRTC addresses are left alone, and the proxy
     ///   is left off. Ask for them with [`Spoof::Random`] on a builder.
     /// - It describes an identity, not a browser. Give it to a browser with
-    ///   [`BrowserConfigBuilder::fingerprint`](crate::BrowserConfigBuilder::fingerprint)
+    ///   [`BrowserConfigBuilder::fingerprint`](seleniumbase_rs::BrowserConfigBuilder::fingerprint)
     ///   (WebDriver and UC sessions), with
-    ///   [`LaunchOptionsBuilder::fingerprint`](crate::sb_cdp::LaunchOptionsBuilder::fingerprint)
+    ///   [`LaunchOptionsBuilder::fingerprint`](seleniumbase_rs::sb_cdp::LaunchOptionsBuilder::fingerprint)
     ///   (the pure CDP engine, for every tab), or with the evasion registry. The
     ///   browser itself stays what it is: a fingerprint of another operating
     ///   system does not change the binary's real behaviour.
@@ -1769,7 +1792,7 @@ macro_rules! setters {
 /// # Examples
 ///
 /// ```
-/// use seleniumbase_rs::evasion::fingerprint::{
+/// use seleniumbase_rs_evasion::fingerprint::{
 ///     Dimension, Fingerprint, Spoof, StealthPolicy,
 /// };
 ///
@@ -1786,7 +1809,7 @@ macro_rules! setters {
 /// // An `Off` where it means nothing is an error that names the setting.
 /// let refused = Fingerprint::builder().timezone(Spoof::Off).build();
 /// assert!(refused.is_err());
-/// # Ok::<(), seleniumbase_rs::evasion::fingerprint::FingerprintError>(())
+/// # Ok::<(), seleniumbase_rs_evasion::fingerprint::FingerprintError>(())
 /// ```
 #[derive(Clone, Debug, Default)]
 pub struct FingerprintBuilder {

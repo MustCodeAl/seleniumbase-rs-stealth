@@ -40,8 +40,8 @@
 //! # Example
 //!
 //! ```rust
-//! use seleniumbase_rs::evasion::fingerprint::Fingerprint;
-//! use seleniumbase_rs::evasion::providers::{default_registry, EvasionContext};
+//! use seleniumbase_rs_evasion::fingerprint::Fingerprint;
+//! use seleniumbase_rs_evasion::providers::{default_registry, EvasionContext};
 //!
 //! let fp = Fingerprint::windows_desktop();
 //! let ctx = EvasionContext::new(&fp);
@@ -60,7 +60,7 @@ pub use registry::{
     default_registry, session_registry, EvasionRegistry, SESSION_OMITTED_PROVIDERS,
 };
 
-use crate::evasion::fingerprint::Fingerprint;
+use crate::fingerprint::Fingerprint;
 
 /// JavaScript that puts the shared `sb` helpers in scope for a snippet.
 ///
@@ -417,7 +417,7 @@ mod tests {
     // Hardening: what a session leaves to the browser
     // ------------------------------------------------------------------
 
-    use crate::evasion::fingerprint::{
+    use crate::fingerprint::{
         AudioNoise, BatteryProfile, BrandVersion, CanvasNoise, ClientHints, ConnectionProfile,
         FingerprintBuilder, KeyboardLayout, SpeechVoice, Spoof, StealthPolicy,
     };

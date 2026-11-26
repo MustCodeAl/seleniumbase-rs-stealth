@@ -37,8 +37,8 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use seleniumbase_rs::evasion::fingerprint::{BrandVersion, ClientHints, Fingerprint, OsType};
-use seleniumbase_rs::evasion::randomize::chromium_hints;
+use seleniumbase_rs_evasion::fingerprint::{BrandVersion, ClientHints, Fingerprint, OsType};
+use seleniumbase_rs_evasion::randomize::chromium_hints;
 
 /// The token that carries the Chrome major version in a user agent.
 const CHROME_TOKEN: &str = "Chrome/";

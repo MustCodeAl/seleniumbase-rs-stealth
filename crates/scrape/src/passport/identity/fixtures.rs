@@ -7,7 +7,7 @@ use crate::egress::geo::CountryCode;
 use crate::egress::route::ProxyKey;
 use crate::jar::store::SetCookieOutcome;
 use seleniumbase_rs::browser::config::Browser;
-use seleniumbase_rs::evasion::fingerprint::{Fingerprint, OsType};
+use seleniumbase_rs_evasion::fingerprint::{Fingerprint, OsType};
 
 /// An arbitrary "now", in seconds since the Unix epoch.
 pub(crate) const NOW: u64 = 1_800_000_000;

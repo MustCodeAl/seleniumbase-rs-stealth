@@ -4,7 +4,7 @@
 //! the QUIC transport parameters in wire order, the HTTP/3 SETTINGS frame entries,
 //! and the pseudo-header order (`:method`, `:authority`, `:scheme`, `:path`).
 
-use seleniumbase_rs::evasion::fingerprint::OsType;
+use seleniumbase_rs_evasion::fingerprint::OsType;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 

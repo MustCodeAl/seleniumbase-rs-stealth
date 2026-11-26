@@ -6,8 +6,8 @@ use super::fixtures::{
 use super::*;
 use crate::egress::geo::CountryCode;
 use crate::jar::store::SetCookieOutcome;
-use seleniumbase_rs::evasion::fingerprint::{BatteryProfile, ProxyConfig};
-use seleniumbase_rs::evasion::humanize::Rng;
+use seleniumbase_rs_evasion::fingerprint::{BatteryProfile, ProxyConfig};
+use seleniumbase_rs_evasion::humanize::Rng;
 
 /// A proxy password the tests look for in every output.
 const PASSWORD: &str = "hunter2-proxy-password";

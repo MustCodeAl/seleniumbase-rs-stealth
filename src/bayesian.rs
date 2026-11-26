@@ -7,8 +7,8 @@
 
 use std::collections::BTreeMap;
 
-use seleniumbase_rs::evasion::fingerprint::{BrowserType, FingerprintError, OsType};
-use seleniumbase_rs::evasion::randomize::PRESET_CHROMIUM_MAJOR;
+use seleniumbase_rs_evasion::fingerprint::{BrowserType, FingerprintError, OsType};
+use seleniumbase_rs_evasion::randomize::PRESET_CHROMIUM_MAJOR;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 

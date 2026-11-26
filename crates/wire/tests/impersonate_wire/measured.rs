@@ -4,7 +4,6 @@
 //! `codec::emulation`, and from the evidence that file keeps.
 
 use seleniumbase_rs::browser::config::Browser;
-use seleniumbase_rs::evasion::fingerprint::OsType;
 use seleniumbase_rs_codec::client_hello::{ext_id, is_grease, without_grease, ClientHello};
 use seleniumbase_rs_codec::h2_spec::H2Spec;
 use seleniumbase_rs_codec::header_spec::RequestShape;
@@ -13,6 +12,7 @@ use seleniumbase_rs_codec::ja3::Peetprint;
 use seleniumbase_rs_codec::ja4::{Ja4, Ja4AField};
 use seleniumbase_rs_codec::measurement::{self, KnownGap, WireMeasurement};
 use seleniumbase_rs_codec::tls_spec::TlsSpec;
+use seleniumbase_rs_evasion::fingerprint::OsType;
 use seleniumbase_rs_wire::client::{WireFormat, WireProtocol};
 
 use crate::exchange::{exchange, exchange_with, Via};

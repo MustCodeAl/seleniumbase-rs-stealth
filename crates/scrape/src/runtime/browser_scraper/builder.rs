@@ -21,8 +21,9 @@ use crate::runtime::proxy_switch::{ContextProxySwitch, ProxySwitch};
 use crate::runtime::tracing_sink::TracingEventSink;
 use seleniumbase_rs::config::proxy_list::RotationStrategy;
 use seleniumbase_rs::error::SeleniumBaseError;
-use seleniumbase_rs::evasion::fingerprint::Fingerprint;
 use seleniumbase_rs::sb_cdp::{Browser, LaunchOptions, SessionStore};
+use seleniumbase_rs_evasion::fingerprint::Fingerprint;
+use seleniumbase_rs_evasion::LaunchOptionsFingerprintExt;
 
 /// Tells the scraper the time, in seconds since the Unix epoch. Tests replace it.
 pub type Clock = Arc<dyn Fn() -> u64 + Send + Sync>;
@@ -300,12 +301,7 @@ async fn start_browser(
     mut persona: Persona,
     proxy: Egress,
 ) -> Result<BrowserScraper, ScrapeError> {
-    let options = wiring
-        .launch
-        .clone()
-        .into_builder()
-        .fingerprint(&persona.fingerprint)
-        .build()?;
+    let options = wiring.launch.with_fingerprint(&persona.fingerprint)?;
     let browser = wiring.launcher.launch(options).await?;
     let page = match wiring.open_page(&browser, proxy.current.as_ref()).await {
         Ok(page) => page,

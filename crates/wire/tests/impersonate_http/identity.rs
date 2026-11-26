@@ -2,7 +2,7 @@
 //! the systems that were never measured.
 
 use seleniumbase_rs::browser::config::Browser;
-use seleniumbase_rs::evasion::fingerprint::OsType;
+use seleniumbase_rs_evasion::fingerprint::OsType;
 use seleniumbase_rs_scrape::passport::identity::{IdentityError, WireMeasurementRef};
 use seleniumbase_rs_wire::client::WireFormatError;
 use seleniumbase_rs_wire::http_session::{HttpError, HttpSession, HttpSessionOptions};
@@ -172,9 +172,9 @@ fn an_identity_that_carries_a_proxy_in_its_fingerprint_is_refused() {
     tainted.fingerprint = tainted
         .fingerprint
         .to_builder()
-        .proxy(seleniumbase_rs::ProxyConfig {
+        .proxy(seleniumbase_rs_evasion::ProxyConfig {
             host: "proxy.example".to_owned(),
-            ..seleniumbase_rs::ProxyConfig::default()
+            ..seleniumbase_rs_evasion::ProxyConfig::default()
         })
         .build()
         .expect("a fingerprint with a proxy builds");

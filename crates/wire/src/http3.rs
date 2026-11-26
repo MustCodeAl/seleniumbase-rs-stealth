@@ -20,7 +20,7 @@ use std::time::Duration;
 
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine as _;
-use seleniumbase_rs::evasion::fingerprint::{BrowserType, OsType};
+use seleniumbase_rs_evasion::fingerprint::{BrowserType, OsType};
 use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncBufReadExt as _, AsyncWriteExt as _, BufReader, Lines};
 use tokio::process::{Child, ChildStdin, ChildStdout};
@@ -191,13 +191,13 @@ impl Http3Options {
         self.for_browser(BrowserType::Chromium, major, os)
     }
 
-    /// Sets the profile to match a [`Fingerprint`](seleniumbase_rs::Fingerprint).
+    /// Sets the profile to match a [`Fingerprint`](seleniumbase_rs_evasion::Fingerprint).
     ///
     /// When the fingerprint carries no version, uses the current stable Chromium major.
-    pub fn for_fingerprint(mut self, fingerprint: &seleniumbase_rs::Fingerprint) -> Self {
+    pub fn for_fingerprint(mut self, fingerprint: &seleniumbase_rs_evasion::Fingerprint) -> Self {
         let major = fingerprint
             .core_version()
-            .unwrap_or(seleniumbase_rs::evasion::randomize::CURRENT_STABLE_MAJOR);
+            .unwrap_or(seleniumbase_rs_evasion::randomize::CURRENT_STABLE_MAJOR);
         let os = fingerprint.os_type();
         let ua = fingerprint.user_agent().value().map_or("", String::as_str);
         if ua.contains("Edg/") {

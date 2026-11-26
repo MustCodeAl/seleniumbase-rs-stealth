@@ -185,7 +185,7 @@ pub enum ProxyRouteError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use seleniumbase_rs::evasion::humanize::Rng;
+    use seleniumbase_rs_evasion::humanize::Rng;
 
     /// Compiles only for a type that does not implement `Serialize`.
     trait AmbiguousIfSerialize<A> {

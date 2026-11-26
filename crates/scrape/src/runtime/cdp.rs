@@ -26,12 +26,12 @@ use crate::egress::redact::RedactedUrl;
 use crate::egress::route::ProxyRoute;
 use crate::error::ScrapeError;
 use crate::jar::store::CookieJar;
-use seleniumbase_rs::evasion::behavior::Behavior;
-use seleniumbase_rs::evasion::fingerprint::Fingerprint;
 use seleniumbase_rs::sb_cdp::{CdpEvent, Page, Session, SolveOptions};
 use seleniumbase_rs::utilities::retry::{poll_until, RetryPolicy};
 use seleniumbase_rs::utils::urls::normalize_page_url;
 use seleniumbase_rs::SeleniumBaseError;
+use seleniumbase_rs_evasion::behavior::Behavior;
+use seleniumbase_rs_evasion::fingerprint::Fingerprint;
 
 #[cfg(test)]
 pub(crate) mod testkit;

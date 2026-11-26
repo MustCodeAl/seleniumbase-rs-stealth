@@ -326,7 +326,7 @@ pub enum SetCookieError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use seleniumbase_rs::evasion::humanize::Rng;
+    use seleniumbase_rs_evasion::humanize::Rng;
 
     const NOW: u64 = 1_700_000_000;
 

@@ -2,7 +2,7 @@
 //! failure says.
 
 use seleniumbase_rs::browser::config::Browser;
-use seleniumbase_rs::evasion::fingerprint::OsType;
+use seleniumbase_rs_evasion::fingerprint::OsType;
 use seleniumbase_rs_scrape::passport::identity::WireMeasurementRef;
 use seleniumbase_rs_wire::http_session::{HttpError, HttpSession, HttpSessionOptions};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};

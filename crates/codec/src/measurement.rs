@@ -18,7 +18,7 @@
 //! for a Chrome version or system the crate does not ship (no other browser is measured).
 //!
 //! ```
-//! use seleniumbase_rs::evasion::fingerprint::OsType;
+//! use seleniumbase_rs_evasion::fingerprint::OsType;
 //! use seleniumbase_rs_codec::measurement::{self, WireMeasurementError};
 //! use seleniumbase_rs::browser::config::Browser;
 //!
@@ -42,7 +42,7 @@ use super::header_spec::{HeaderSpec, HeaderSpecError};
 pub use super::tls_spec::KnownGap;
 use super::tls_spec::TlsSpec;
 use seleniumbase_rs::browser::config::Browser;
-use seleniumbase_rs::evasion::fingerprint::{ClientHints, OsType};
+use seleniumbase_rs_evasion::fingerprint::{ClientHints, OsType};
 
 /// The measured files this crate ships: the file name and its text.
 ///

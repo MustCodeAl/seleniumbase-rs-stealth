@@ -7,21 +7,28 @@ license.workspace = true
 repository.workspace = true
 publish = false
 
+[features]
+test-util = []
+
 [dependencies]
-seleniumbase-rs = { workspace = true }
+seleniumbase-rs = { workspace = true, features = ["plugins"] }
+base64 = "0.23"
+jiff = "0.2.38"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-rand = "0.9"
-rand_chacha = "0.9"
-tracing = "0.1"
+tempfile = "3.27"
 thiserror = "2.0"
-dirs = "6.0"
+tracing = "0.1"
 url = "2.5"
-base64 = "0.22"
 
 [dev-dependencies]
+seleniumbase-rs = { workspace = true, features = ["plugins", "test-util"] }
+regex = "1"
 schemars = "1.2"
-tempfile = "3.14"
+tokio = { version = "1.53", features = ["macros", "rt-multi-thread"] }
 
-[lints]
-workspace = true
+[lints.rust]
+missing_debug_implementations = "warn"
+redundant_imports = "warn"
+redundant_lifetimes = "warn"
+unused_lifetimes = "warn"

@@ -8,9 +8,9 @@
 //! ```
 
 use seleniumbase_rs::browser::config::Browser;
-use seleniumbase_rs::evasion::fingerprint::{ClientHints, OsType};
 use seleniumbase_rs_codec::client_hello::ClientHello;
 use seleniumbase_rs_codec::tls_spec::TlsSpec;
+use seleniumbase_rs_evasion::fingerprint::{ClientHints, OsType};
 use seleniumbase_rs_scrape::runtime::capture::{
     measure_hints, measure_tls, BrowserVersion, ChromeOptions, EntryId, MeasuredFile,
 };

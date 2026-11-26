@@ -17,9 +17,9 @@ use std::fs;
 use std::path::Path;
 
 use seleniumbase_rs::browser::config::Browser;
-use seleniumbase_rs::evasion::fingerprint::OsType;
 use seleniumbase_rs_codec::akamai::{Akamai, PseudoHeader};
 use seleniumbase_rs_codec::measurement::{self, WireMeasurement};
+use seleniumbase_rs_evasion::fingerprint::OsType;
 use seleniumbase_rs_scrape::runtime::capture::args::ToolArgs;
 use seleniumbase_rs_wire::capture_h2::{derive, measure_and_write, MeasuredDoc, Passes, PROBES};
 

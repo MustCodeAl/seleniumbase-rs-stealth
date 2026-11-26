@@ -12,10 +12,10 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use seleniumbase_rs::browser::config::Browser;
-use seleniumbase_rs::evasion::fingerprint::OsType;
 use seleniumbase_rs_codec::akamai::{Akamai, PseudoHeader};
 use seleniumbase_rs_codec::h2_spec::H2Spec;
 use seleniumbase_rs_codec::measurement::{self, source_names};
+use seleniumbase_rs_evasion::fingerprint::OsType;
 
 fn root() -> &'static Path {
     Path::new(env!("CARGO_MANIFEST_DIR"))

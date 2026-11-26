@@ -13,8 +13,8 @@
 //! test harness shows for a passing test only with `-- --nocapture`.
 
 use seleniumbase_rs::browser::config::Browser;
-use seleniumbase_rs::evasion::fingerprint::OsType;
 use seleniumbase_rs_codec::measurement;
+use seleniumbase_rs_evasion::fingerprint::OsType;
 
 /// The operating system this machine runs, as the persona of a real browser on it.
 fn host_os() -> OsType {

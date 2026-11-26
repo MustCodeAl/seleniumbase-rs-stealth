@@ -3,12 +3,12 @@
 use super::{WireFormat, WireFormatError};
 use crate::convert;
 use seleniumbase_rs::browser::config::Browser;
-use seleniumbase_rs::evasion::fingerprint::{Fingerprint, OsType};
 use seleniumbase_rs_codec::akamai::Akamai;
 use seleniumbase_rs_codec::header_spec::{ClientHeaders, HeaderSource, HeaderSpec, RequestShape};
 use seleniumbase_rs_codec::ja3::{Ja3, Peetprint};
 use seleniumbase_rs_codec::ja4::{Ja4Order, Ja4Raw};
 use seleniumbase_rs_codec::tls_spec::{TlsSpec, TlsSpecError};
+use seleniumbase_rs_evasion::fingerprint::{Fingerprint, OsType};
 
 /// One change to the header lists, applied in the order it was asked for.
 #[derive(Debug, Clone)]

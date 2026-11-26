@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::h2_frames::{encode_frame, frame_type, read_preface, CLIENT_PREFACE};
-use seleniumbase_rs::evasion::fingerprint::Spoof;
+use seleniumbase_rs_evasion::fingerprint::Spoof;
 
 /// Synthetic captures in the shape of a browser's: the names are real, the values are made up.
 const DOCUMENT: [(&str, &str); 14] = [

@@ -1,5 +1,5 @@
 //! Whether a browser agrees with itself: the rules behind
-//! [`CapturedFingerprint::contradictions`](crate::evasion::capture::CapturedFingerprint::contradictions).
+//! [`CapturedFingerprint::contradictions`](crate::capture::CapturedFingerprint::contradictions).
 //!
 //! A detector does not need to know the real machine. It needs two surfaces
 //! that disagree: a WebGL renderer that names an NVIDIA card next to a WebGPU
@@ -21,7 +21,7 @@ use serde::Serialize;
 use serde_json::{json, Map, Value};
 
 use super::{BrowserType, KeyboardLayout, OsType};
-use crate::evasion::capture::CapturedFingerprint;
+use crate::capture::CapturedFingerprint;
 
 /// How loudly a detector reacts to a contradiction.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
@@ -1689,10 +1689,10 @@ mod tests {
     /// Mac: every surface the settings reach says Windows, every other one
     /// says Mac. Written by hand from a real capture of each half.
     const WINDOWS_ON_MAC: &str =
-        include_str!("../../../tests/fixtures/fingerprint/probe_chrome_windows_on_mac.json");
+        include_str!("../../tests/fixtures/fingerprint/probe_chrome_windows_on_mac.json");
     /// A Chrome on a Mac that agrees with itself.
     const CHROME_MACOS: &str =
-        include_str!("../../../tests/fixtures/fingerprint/probe_chrome_macos.json");
+        include_str!("../../tests/fixtures/fingerprint/probe_chrome_macos.json");
     const ANDROID_UA: &str = "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 \
                               (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36";
 
@@ -1807,7 +1807,7 @@ mod tests {
 
     #[test]
     fn the_battery_of_a_preset_is_not_a_battery_shape() {
-        let battery = crate::evasion::fingerprint::BatteryProfile::default();
+        let battery = crate::fingerprint::BatteryProfile::default();
         let mut raw = probe();
         set(&mut raw, "battery.level", json!(battery.level));
         set(&mut raw, "battery.charging", json!(battery.charging));

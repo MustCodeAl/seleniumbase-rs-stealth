@@ -9,8 +9,8 @@ use serde_json::json;
 
 use crate::error::ScrapeError;
 use seleniumbase_rs::error::SeleniumBaseError;
-use seleniumbase_rs::evasion::fingerprint::{Fingerprint, OsType};
 use seleniumbase_rs::sb_cdp::{Browser, LaunchOptions};
+use seleniumbase_rs_evasion::fingerprint::{Fingerprint, OsType};
 
 /// The protocol command that names the browser product and version.
 const VERSION_COMMAND: &str = "Browser.getVersion";

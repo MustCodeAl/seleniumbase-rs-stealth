@@ -6,9 +6,9 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
 use super::route::{ProxyKey, ProxyRoute};
-use seleniumbase_rs::evasion::fingerprint::{Fingerprint, FingerprintError, Geolocation};
-use seleniumbase_rs::evasion::humanize::Rng;
-pub use seleniumbase_rs::evasion::randomize::{Locale, LOCALES};
+use seleniumbase_rs_evasion::fingerprint::{Fingerprint, FingerprintError, Geolocation};
+use seleniumbase_rs_evasion::humanize::Rng;
+pub use seleniumbase_rs_evasion::randomize::{Locale, LOCALES};
 
 /// An ISO 3166-1 alpha-2 country code, upper case. Only a valid one can be built.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -254,7 +254,7 @@ impl GeoResolver for StaticGeoResolver {
 mod tests {
     use super::*;
     use futures_util::FutureExt;
-    use seleniumbase_rs::evasion::fingerprint::{OsType, Spoof};
+    use seleniumbase_rs_evasion::fingerprint::{OsType, Spoof};
 
     fn country(code: &str) -> CountryCode {
         CountryCode::try_new(code).expect("valid code")

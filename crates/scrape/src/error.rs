@@ -12,8 +12,8 @@ use crate::egress::redact::RedactedUrl;
 use crate::egress::route::ProxyRouteError;
 use crate::ledger::state::LedgerError;
 use crate::passport::identity::IdentityError;
-use seleniumbase_rs::evasion::fingerprint::FingerprintError;
 use seleniumbase_rs::SeleniumBaseError;
+use seleniumbase_rs_evasion::fingerprint::FingerprintError;
 
 /// Why a scrape did not produce a page.
 #[derive(Debug, thiserror::Error)]

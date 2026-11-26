@@ -1,7 +1,7 @@
 //! The identity headers of a profile: the user agent, the client hints and `Accept-Language`.
 
-use seleniumbase_rs::evasion::fingerprint::ClientHints;
 use seleniumbase_rs_codec::header_spec::ClientHeaders;
+use seleniumbase_rs_evasion::fingerprint::ClientHints;
 
 /// The locale whose `Accept-Language` a measured profile starts with.
 pub(super) const DEFAULT_LOCALE_TAG: &str = "en-US";
