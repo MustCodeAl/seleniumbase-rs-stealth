@@ -304,4 +304,84 @@ mod tests {
         assert!(!lang_arg.contains(";q="), "no q-values: {lang_arg}");
         assert!(settings.webrtc_policy.is_some());
     }
+
+    #[test]
+    fn plugin_from_profile_script_options_per_launch_and_webrtc_mapping() {
+        struct RecordingTarget(std::sync::Mutex<Vec<String>>);
+        impl PageScriptTarget for RecordingTarget {
+            fn add_init_script(
+                &self,
+                script: &str,
+            ) -> impl std::future::Future<
+                Output = Result<(), seleniumbase_rs::error::SeleniumBaseError>,
+            > + Send {
+                self.0.lock().unwrap().push(script.to_owned());
+                std::future::ready(Ok(()))
+            }
+        }
+
+        let profile = ProfileFingerprint {
+            user_agent: Some("CustomUA/1.0".to_owned()),
+            languages: vec!["fr-FR;q=0.9".to_owned()],
+            screen_width: Some(1280),
+            screen_height: Some(720),
+            webrtc_policy: Some(
+                seleniumbase_rs::evasion::fingerprint::WebRtcPolicy::PublicInterfaceOnly,
+            ),
+            ..ProfileFingerprint::default()
+        };
+
+        let plugin = StealthPlugin::from_profile(profile)
+            .with_script_options(&StealthScriptOptions::minimal());
+        assert_eq!(plugin.name(), "stealth");
+        assert!(plugin.fingerprint().is_none());
+        assert!(plugin.profile().is_some());
+        assert_eq!(plugin.requirements(), Requirements::empty());
+        assert!(plugin.per_launch().is_some());
+
+        // Deduplicates --disable-blink-features=AutomationControlled if already present.
+        let mut launch = LaunchSettings::default();
+        launch
+            .args
+            .push("--disable-blink-features=AutomationControlled".to_owned());
+        let rt = seleniumbase_rs::tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("tokio runtime");
+        rt.block_on(plugin.before_launch(&mut launch))
+            .expect("before_launch");
+        assert_eq!(
+            launch
+                .args
+                .iter()
+                .filter(|a| *a == "--disable-blink-features=AutomationControlled")
+                .count(),
+            1
+        );
+        assert!(launch.args.iter().any(|a| a == "--user-agent=CustomUA/1.0"));
+        assert!(launch.args.iter().any(|a| a == "--lang=fr-FR"));
+        assert!(launch.args.iter().any(|a| a == "--window-size=1280,720"));
+        assert_eq!(
+            launch.webrtc_policy,
+            Some(seleniumbase_rs::plugin_api::WebRtcPolicy::DefaultPublicInterfaceOnly)
+        );
+
+        assert_eq!(
+            convert_webrtc_policy(
+                seleniumbase_rs::evasion::fingerprint::WebRtcPolicy::DisableNonProxiedUdp
+            ),
+            seleniumbase_rs::plugin_api::WebRtcPolicy::DisableNonProxiedUdp
+        );
+        assert_eq!(
+            convert_webrtc_policy(
+                seleniumbase_rs::evasion::fingerprint::WebRtcPolicy::PublicAndPrivateInterfaces
+            ),
+            seleniumbase_rs::plugin_api::WebRtcPolicy::DefaultPublicAndPrivateInterfaces
+        );
+
+        let target = RecordingTarget(std::sync::Mutex::new(Vec::new()));
+        rt.block_on(plugin.inject_script(&target))
+            .expect("inject_script");
+        assert_eq!(target.0.lock().unwrap().len(), 1);
+    }
 }

@@ -813,4 +813,87 @@ mod tests {
         assert!(parsed.get("profile").is_some());
         assert!(parsed.get("display").is_some());
     }
+
+    #[test]
+    fn sampler_covers_batch_os_variants_version_validation_and_coherence_checks() {
+        // Invalid version_range errors even without strict mode.
+        let bad_ver = BayesianSampler::sample(&SampleConstraints::new().version_range(150, 140))
+            .expect_err("min > max must fail");
+        assert!(matches!(bad_ver, FingerprintError::Incoherent { .. }));
+
+        // Strict browser incompatibility with iOS fails cleanly; non-strict falls back.
+        let ios_chrome = SampleConstraints::new()
+            .os([OsType::Ios])
+            .browsers([BrowserType::Chromium])
+            .strict(true);
+        assert!(BayesianSampler::sample(&ios_chrome).is_err());
+
+        let ios_fallback = BayesianSampler::sample(&ios_chrome.strict(false)).expect("fallback");
+        assert_eq!(
+            ios_fallback.profile.browser,
+            Some(BrowserType::MobileSafari)
+        );
+
+        // Non-strict impossible OS+device falls back to Windows.
+        let win_mobile_fallback = BayesianSampler::sample(
+            &SampleConstraints::new()
+                .os([OsType::Windows])
+                .device(DeviceCategory::Mobile)
+                .strict(false),
+        )
+        .expect("non-strict fallback");
+        assert_eq!(win_mobile_fallback.profile.os, Some(OsType::Windows));
+
+        // Batch + explicit locales, screen, timezone, color_scheme, and Linux/Android sampling.
+        let constraints = SampleConstraints::new()
+            .os([OsType::Linux, OsType::Android])
+            .locales(vec!["de-DE".to_owned()])
+            .screen(ScreenConstraints::new().min_width(1000).max_width(2000))
+            .seed(101);
+        let mut with_tz = constraints.clone();
+        with_tz.timezone = Some("Europe/Berlin".to_owned());
+        with_tz.color_scheme = Some(ColorScheme::Dark);
+        let batch = BayesianSampler::sample_batch(&with_tz, 4).expect("batch");
+        assert_eq!(batch.len(), 4);
+        assert_eq!(batch[0].profile.timezone.as_deref(), Some("Europe/Berlin"));
+        assert_eq!(batch[0].profile.color_scheme, Some(ColorScheme::Dark));
+
+        // Fetch and Subresource contexts emit expected Sec-Fetch headers.
+        let fetch_hdrs = HeaderGenerator::generate(&batch[0], RequestContext::Fetch, None);
+        assert!(fetch_hdrs
+            .iter()
+            .any(|(k, v)| k == "Sec-Fetch-Mode" && v == "cors"));
+        let sub_hdrs = HeaderGenerator::generate(&batch[0], RequestContext::Subresource, None);
+        assert!(sub_hdrs
+            .iter()
+            .any(|(k, v)| k == "Sec-Fetch-Dest" && v == "script"));
+
+        // Audit contradictions: Windows UA + MacIntel platform + Apple GPU + macOS Client Hints.
+        let mut bad_win = BayesianSampler::sample(
+            &SampleConstraints::new()
+                .os([OsType::Windows])
+                .browsers([BrowserType::Chromium])
+                .seed(11),
+        )
+        .expect("win");
+        bad_win.profile.platform = Some("MacIntel".to_owned());
+        bad_win.gpu.renderer = "Apple M3".to_owned();
+        if let Some(ch) = bad_win.profile.client_hints.as_mut() {
+            ch.platform = "macOS".to_owned();
+        }
+        let report = audit_coherence(&bad_win);
+        assert!(report.issues.len() >= 3);
+        assert!(report.score < 50);
+
+        // macOS UA + Win32 platform + Windows Client Hints.
+        let mut bad_mac =
+            BayesianSampler::sample(&SampleConstraints::new().os([OsType::Macos]).seed(12))
+                .expect("mac");
+        bad_mac.profile.platform = Some("Win32".to_owned());
+        if let Some(ch) = bad_mac.profile.client_hints.as_mut() {
+            ch.platform = "Windows".to_owned();
+        }
+        let mac_report = audit_coherence(&bad_mac);
+        assert!(mac_report.issues.len() >= 2);
+    }
 }
