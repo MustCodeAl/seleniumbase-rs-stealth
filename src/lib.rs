@@ -12,10 +12,13 @@
 pub use seleniumbase_rs::*;
 
 pub mod fingerprint;
-pub use fingerprint::{FingerprintGenerator, GeneratedFingerprint, ProfileFingerprint};
+pub use fingerprint::{
+    ConnectionOverride, FingerprintGenerator, FingerprintOptions, FingerprintOptionsBuilder,
+    GeneratedFingerprint, ProfileFingerprint, ScreenConstraints,
+};
 
 pub mod script;
-pub use script::StealthScriptBundle;
+pub use script::{StealthScriptBundle, StealthScriptOptions};
 
 pub mod plugin;
 pub use plugin::StealthPlugin;

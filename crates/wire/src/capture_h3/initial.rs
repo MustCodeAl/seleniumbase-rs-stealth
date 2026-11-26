@@ -663,7 +663,7 @@ pub fn client_hello_json(hello: &ClientHello) -> Value {
             let params = parse_transport_params(data);
             json!({
                 "extension": format!("{id:#06x}"),
-                "params": params.as_ref().map(|p| p.iter().map(tp_json).collect::<Vec<_>>()).unwrap_or_default(),
+                "params": params.as_ref().map_or_default(|p| p.iter().map(tp_json).collect::<Vec<_>>()),
                 "error": params.err(),
                 "raw_hex": hex(data),
             })

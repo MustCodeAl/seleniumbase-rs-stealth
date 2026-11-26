@@ -6,6 +6,7 @@
 
 use std::fmt;
 use std::net::SocketAddr;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -70,10 +71,12 @@ pub struct HttpSessionOptions {
     pub(super) rate_limit: Option<(usize, Duration)>,
     pub(super) sink: Arc<dyn EventSink>,
     pub(super) trust: Option<CertStore>,
+    pub(super) root_cert_der: Option<PathBuf>,
     pub(super) resolve: Vec<(String, SocketAddr)>,
     pub(super) bypass: Vec<String>,
     pub(super) direct_behind_browser_proxy: bool,
     pub(super) installed_major: Option<u32>,
+    pub(super) http3_alt_svc: bool,
     pub(super) clock: Clock,
 }
 
@@ -120,10 +123,12 @@ impl HttpSessionOptions {
             rate_limit: None,
             sink: Arc::new(NoopEventSink),
             trust: None,
+            root_cert_der: None,
             resolve: Vec::new(),
             bypass: Vec::new(),
             direct_behind_browser_proxy: false,
             installed_major: None,
+            http3_alt_svc: false,
             clock: system_clock(),
         }
     }
@@ -195,6 +200,25 @@ impl HttpSessionOptions {
     #[must_use]
     pub fn trust(mut self, store: CertStore) -> Self {
         self.trust = Some(store);
+        self
+    }
+
+    /// An extra DER-encoded root certificate path forwarded to `sbrs-h3d --root-cert-der` for
+    /// HTTP/3 requests.
+    #[must_use]
+    pub fn root_cert_der(mut self, path: impl Into<PathBuf>) -> Self {
+        self.root_cert_der = Some(path.into());
+        self
+    }
+
+    /// Enables opportunistic HTTP/3 upgrades when an origin advertises `h3` via `Alt-Svc`.
+    ///
+    /// Off by default. When enabled, subsequent hops to an origin that advertised `h3` attempt
+    /// HTTP/3 first and fall back to HTTP/2 if the HTTP/3 attempt fails. Explicit
+    /// `HttpRequest::protocol(WireProtocol::Http3)` always stays strict HTTP/3.
+    #[must_use]
+    pub fn http3_alt_svc(mut self, enabled: bool) -> Self {
+        self.http3_alt_svc = enabled;
         self
     }
 

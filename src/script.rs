@@ -22,6 +22,202 @@ use crate::fingerprint::{
 const AUDIO_SEED_MASK: u64 = 0x5DEE_CE66;
 const DOM_SEED_MASK: u64 = 0xA5A5_5A5A;
 
+/// Selective injection toggles for [`StealthScriptBundle`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[allow(
+    clippy::struct_excessive_bools,
+    reason = "each boolean directly toggles one independent WebIDL/JS evasion surface"
+)]
+pub struct StealthScriptOptions {
+    /// Clean automation markers and spoof `navigator.webdriver = false`.
+    pub webdriver: bool,
+    /// Inject `window.chrome` (`app`, `csi`, `loadTimes`, `runtime`) for Chromium personas.
+    pub chrome_runtime: bool,
+    /// Align `Notification.permission` and `Permissions.prototype.query`.
+    pub permissions: bool,
+    /// Spoof `navigator.plugins` and `navigator.mimeTypes`.
+    pub plugins_mime: bool,
+    /// Spoof WebGL 1 & 2 parameters, extensions, and `readPixels` LSB jitter.
+    pub webgl: bool,
+    /// Spoof `navigator.gpu` WebGPU adapter info and limits.
+    pub webgpu: bool,
+    /// Inject deterministic canvas 2D noise.
+    pub canvas_noise: bool,
+    /// Inject deterministic `OffscreenCanvas` noise.
+    pub offscreen_canvas: bool,
+    /// Inject Web Audio context and signal noise.
+    pub audio_noise: bool,
+    /// Inject `Element.getBoundingClientRect` / `Range.getClientRects` jitter.
+    pub dom_rect_noise: bool,
+    /// Spoof `screen` and `window.devicePixelRatio` geometry.
+    pub screen_geometry: bool,
+    /// Spoof `navigator.userAgentData` high-entropy Client Hints.
+    pub client_hints: bool,
+    /// Spoof `navigator.mediaDevices.enumerateDevices`.
+    pub media_devices: bool,
+    /// Propagate `navigator.webdriver` spoofing into `HTMLIFrameElement.contentWindow`.
+    pub iframe_content_window: bool,
+    /// Scrub automation/CDP evaluation frames from `Error.prototype.stack`.
+    pub error_stack_scrub: bool,
+}
+
+impl Default for StealthScriptOptions {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl StealthScriptOptions {
+    /// Creates options with all evasions enabled.
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            webdriver: true,
+            chrome_runtime: true,
+            permissions: true,
+            plugins_mime: true,
+            webgl: true,
+            webgpu: true,
+            canvas_noise: true,
+            offscreen_canvas: true,
+            audio_noise: true,
+            dom_rect_noise: true,
+            screen_geometry: true,
+            client_hints: true,
+            media_devices: true,
+            iframe_content_window: true,
+            error_stack_scrub: true,
+        }
+    }
+
+    /// Creates minimal options enabling only `webdriver`, `chrome_runtime`, `permissions`, and `error_stack_scrub`.
+    #[must_use]
+    pub const fn minimal() -> Self {
+        Self {
+            webdriver: true,
+            chrome_runtime: true,
+            permissions: true,
+            plugins_mime: false,
+            webgl: false,
+            webgpu: false,
+            canvas_noise: false,
+            offscreen_canvas: false,
+            audio_noise: false,
+            dom_rect_noise: false,
+            screen_geometry: false,
+            client_hints: false,
+            media_devices: false,
+            iframe_content_window: false,
+            error_stack_scrub: true,
+        }
+    }
+
+    /// Enables or disables `webdriver` and automation marker cleanup.
+    #[must_use]
+    pub const fn webdriver(mut self, enabled: bool) -> Self {
+        self.webdriver = enabled;
+        self
+    }
+
+    /// Enables or disables `window.chrome` runtime spoofing.
+    #[must_use]
+    pub const fn chrome_runtime(mut self, enabled: bool) -> Self {
+        self.chrome_runtime = enabled;
+        self
+    }
+
+    /// Enables or disables `Notification` / `Permissions` alignment.
+    #[must_use]
+    pub const fn permissions(mut self, enabled: bool) -> Self {
+        self.permissions = enabled;
+        self
+    }
+
+    /// Enables or disables `navigator.plugins` / `mimeTypes` spoofing.
+    #[must_use]
+    pub const fn plugins_mime(mut self, enabled: bool) -> Self {
+        self.plugins_mime = enabled;
+        self
+    }
+
+    /// Enables or disables WebGL parameter and `readPixels` spoofing.
+    #[must_use]
+    pub const fn webgl(mut self, enabled: bool) -> Self {
+        self.webgl = enabled;
+        self
+    }
+
+    /// Enables or disables `navigator.gpu` WebGPU spoofing.
+    #[must_use]
+    pub const fn webgpu(mut self, enabled: bool) -> Self {
+        self.webgpu = enabled;
+        self
+    }
+
+    /// Enables or disables 2D canvas noise.
+    #[must_use]
+    pub const fn canvas_noise(mut self, enabled: bool) -> Self {
+        self.canvas_noise = enabled;
+        self
+    }
+
+    /// Enables or disables `OffscreenCanvas` noise.
+    #[must_use]
+    pub const fn offscreen_canvas(mut self, enabled: bool) -> Self {
+        self.offscreen_canvas = enabled;
+        self
+    }
+
+    /// Enables or disables Web Audio noise.
+    #[must_use]
+    pub const fn audio_noise(mut self, enabled: bool) -> Self {
+        self.audio_noise = enabled;
+        self
+    }
+
+    /// Enables or disables `DOMRect` jitter.
+    #[must_use]
+    pub const fn dom_rect_noise(mut self, enabled: bool) -> Self {
+        self.dom_rect_noise = enabled;
+        self
+    }
+
+    /// Enables or disables `screen` geometry spoofing.
+    #[must_use]
+    pub const fn screen_geometry(mut self, enabled: bool) -> Self {
+        self.screen_geometry = enabled;
+        self
+    }
+
+    /// Enables or disables `navigator.userAgentData` Client Hints spoofing.
+    #[must_use]
+    pub const fn client_hints(mut self, enabled: bool) -> Self {
+        self.client_hints = enabled;
+        self
+    }
+
+    /// Enables or disables `navigator.mediaDevices.enumerateDevices` spoofing.
+    #[must_use]
+    pub const fn media_devices(mut self, enabled: bool) -> Self {
+        self.media_devices = enabled;
+        self
+    }
+
+    /// Enables or disables `HTMLIFrameElement.contentWindow` webdriver propagation.
+    #[must_use]
+    pub const fn iframe_content_window(mut self, enabled: bool) -> Self {
+        self.iframe_content_window = enabled;
+        self
+    }
+
+    /// Enables or disables `Error.prototype.stack` CDP frame scrubbing.
+    #[must_use]
+    pub const fn error_stack_scrub(mut self, enabled: bool) -> Self {
+        self.error_stack_scrub = enabled;
+        self
+    }
+}
+
 /// Bundle of JavaScript injection scripts for stealth evasions.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct StealthScriptBundle {
@@ -39,6 +235,16 @@ impl StealthScriptBundle {
     /// Creates a stealth bundle from a complete [`GeneratedFingerprint`] bundle.
     #[must_use]
     pub fn from_generated(generated: &GeneratedFingerprint) -> Self {
+        Self::from_generated_with(generated, &StealthScriptOptions::default())
+    }
+
+    /// Creates a stealth bundle from a complete [`GeneratedFingerprint`] with selective
+    /// [`StealthScriptOptions`].
+    #[must_use]
+    pub fn from_generated_with(
+        generated: &GeneratedFingerprint,
+        options: &StealthScriptOptions,
+    ) -> Self {
         let params = ScriptParams::from_parts(
             &generated.profile,
             Some(&generated.gpu),
@@ -51,13 +257,20 @@ impl StealthScriptBundle {
             generated.profile.network.as_ref(),
         );
         Self {
-            script: params.render(),
+            script: params.render_with(options),
         }
     }
 
     /// Creates a stealth bundle from a [`ProfileFingerprint`].
     #[must_use]
     pub fn from_profile(profile: &ProfileFingerprint) -> Self {
+        Self::from_profile_with(profile, &StealthScriptOptions::default())
+    }
+
+    /// Creates a stealth bundle from a [`ProfileFingerprint`] with selective
+    /// [`StealthScriptOptions`].
+    #[must_use]
+    pub fn from_profile_with(profile: &ProfileFingerprint, options: &StealthScriptOptions) -> Self {
         let params = ScriptParams::from_parts(
             profile,
             None,
@@ -70,7 +283,7 @@ impl StealthScriptBundle {
             profile.network.as_ref(),
         );
         Self {
-            script: params.render(),
+            script: params.render_with(options),
         }
     }
 
@@ -410,25 +623,47 @@ impl ScriptParams {
         }
     }
 
-    fn render(&self) -> String {
+    fn render_with(&self, options: &StealthScriptOptions) -> String {
         let mut out = String::with_capacity(16 * 1024);
         out.push_str("(function() {\n  'use strict';\n\n");
         Self::push_native_helpers(&mut out);
-        Self::push_markers_webdriver_and_stack(&mut out);
+        if options.webdriver || options.iframe_content_window || options.error_stack_scrub {
+            Self::push_markers_webdriver_and_stack(&mut out);
+        }
         self.push_navigator(&mut out);
-        self.push_client_hints(&mut out);
-        self.push_screen(&mut out);
-        self.push_dom_rects(&mut out);
-        self.push_canvas_noise(&mut out);
-        self.push_offscreen_canvas_noise(&mut out);
+        if options.client_hints {
+            self.push_client_hints(&mut out);
+        }
+        if options.screen_geometry {
+            self.push_screen(&mut out);
+        }
+        if options.dom_rect_noise {
+            self.push_dom_rects(&mut out);
+        }
+        if options.canvas_noise {
+            self.push_canvas_noise(&mut out);
+        }
+        if options.offscreen_canvas {
+            self.push_offscreen_canvas_noise(&mut out);
+        }
         self.push_fonts_and_measure_text(&mut out);
-        self.push_webgl_parameters(&mut out);
-        self.push_webgl_extras(&mut out);
-        self.push_webgpu(&mut out);
-        self.push_audio_context(&mut out);
-        self.push_audio_signal_noise(&mut out);
-        self.push_devices_battery_network(&mut out);
-        self.push_chrome_and_permissions(&mut out);
+        if options.webgl {
+            self.push_webgl_parameters(&mut out);
+            self.push_webgl_extras(&mut out);
+        }
+        if options.webgpu {
+            self.push_webgpu(&mut out);
+        }
+        if options.audio_noise {
+            self.push_audio_context(&mut out);
+            self.push_audio_signal_noise(&mut out);
+        }
+        if options.media_devices {
+            self.push_devices_battery_network(&mut out);
+        }
+        if options.chrome_runtime || options.permissions {
+            self.push_chrome_and_permissions(&mut out);
+        }
         out.push_str("})();\n");
         out
     }
@@ -1711,5 +1946,17 @@ mod tests {
         assert!(!script.contains("window.chrome = {"));
         assert!(script.contains("delete Object.getPrototypeOf(navigator).getBattery"));
         assert!(script.contains("delete Object.getPrototypeOf(navigator).connection"));
+    }
+
+    #[test]
+    fn selective_script_options_omit_disabled_evasions() {
+        let profile = ProfileFingerprint::default();
+        let minimal = StealthScriptOptions::minimal();
+        let js = StealthScriptBundle::from_profile_with(&profile, &minimal).into_script();
+        assert!(js.contains("navigator"));
+        assert!(js.contains("webdriver"));
+        assert!(!js.contains("patchWebGLParams"));
+        assert!(!js.contains("AudioBuffer.prototype"));
+        assert!(!js.contains("enumerateDevices"));
     }
 }

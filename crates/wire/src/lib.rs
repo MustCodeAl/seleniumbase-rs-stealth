@@ -29,7 +29,9 @@ pub mod tls_server;
 
 pub use client::{WireFormat, WireFormatBuilder, WireFormatError, WireProtocol};
 #[cfg(feature = "http3")]
-pub use http3::{Http3Client, Http3Error, Http3Options, Http3Request, Http3Response};
+pub use http3::{
+    Http3Client, Http3Error, Http3Options, Http3Pool, Http3Request, Http3RequestKind, Http3Response,
+};
 pub use http_session::{
     HttpAttempt, HttpError, HttpFetch, HttpRequest, HttpResponse, HttpRules, HttpSession,
     HttpSessionOptions, HttpVerdict, Method, ResponseHeaders,

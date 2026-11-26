@@ -10,14 +10,17 @@
 //! Every request goes over HTTP/3 only; nothing falls back to HTTP/2. A program that wants a
 //! fallback sends the request again through [`HttpSession`](crate::HttpSession).
 
+use std::fmt;
 use std::net::IpAddr;
 use std::path::PathBuf;
 use std::process::Stdio;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine as _;
+use seleniumbase_rs::evasion::fingerprint::{BrowserType, OsType};
 use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncBufReadExt as _, AsyncWriteExt as _, BufReader, Lines};
 use tokio::process::{Child, ChildStdin, ChildStdout};
@@ -62,12 +65,56 @@ pub enum Http3Error {
     },
 }
 
+/// Request header template category selected by `sbrs-h3d`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+#[non_exhaustive]
+pub enum Http3RequestKind {
+    /// Top-level document navigation (`--request-kind navigation`).
+    #[default]
+    Navigation,
+    /// Subresource or CORS fetch (`--request-kind subresource`).
+    Subresource,
+}
+
+impl Http3RequestKind {
+    /// Returns the CLI identifier accepted by `sbrs-h3d --request-kind`.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Navigation => "navigation",
+            Self::Subresource => "subresource",
+        }
+    }
+}
+
+impl fmt::Display for Http3RequestKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl FromStr for Http3RequestKind {
+    type Err = Http3Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "navigation" => Ok(Self::Navigation),
+            "subresource" => Ok(Self::Subresource),
+            other => Err(Http3Error::Reply(format!(
+                "unknown HTTP/3 request kind: {other}"
+            ))),
+        }
+    }
+}
+
 /// How to start the helper.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[must_use]
 pub struct Http3Options {
     program: PathBuf,
     profile: Option<String>,
+    request_kind: Option<Http3RequestKind>,
     root_cert_der: Option<PathBuf>,
     resolve: Vec<(String, IpAddr)>,
     proxy: Option<String>,
@@ -79,6 +126,7 @@ impl Default for Http3Options {
             program: std::env::var_os(HELPER_VAR)
                 .map_or_else(|| PathBuf::from("sbrs-h3d"), PathBuf::from),
             profile: None,
+            request_kind: None,
             root_cert_der: None,
             resolve: Vec::new(),
             proxy: None,
@@ -104,36 +152,73 @@ impl Http3Options {
         self
     }
 
+    /// Sets the profile to match the specified browser family, major version, and operating system.
+    ///
+    /// `sbrs-h3d` resolves the generated selector to the exact `phantom-profile` catalog entry when
+    /// available or the closest matching browser family and OS entry.
+    pub fn for_browser(mut self, browser: BrowserType, major: u32, os: OsType) -> Self {
+        let family = match browser {
+            BrowserType::Firefox => "firefox",
+            BrowserType::MobileSafari => "safari",
+            BrowserType::Chromium | _ => "chrome",
+        };
+        let os_slug = match os {
+            OsType::Windows => "windows",
+            OsType::Linux => "linux",
+            OsType::Android => "android",
+            OsType::Ios => {
+                if browser == BrowserType::MobileSafari {
+                    "ios"
+                } else {
+                    "macos"
+                }
+            }
+            OsType::Macos | _ => "macos",
+        };
+        self.profile = Some(format!("{family}-{major}-{os_slug}"));
+        self
+    }
+
     /// Sets the profile to match the specified Chromium major and operating system.
     ///
     /// Uses the requested Chromium major and OS. Callers that need a specific
     /// profile string should use [`Self::profile`].
-    pub fn for_version(
-        mut self,
-        major: u32,
-        os: seleniumbase_rs::evasion::fingerprint::OsType,
-    ) -> Self {
-        let preferred = match os {
-            seleniumbase_rs::evasion::fingerprint::OsType::Windows => "windows",
-            seleniumbase_rs::evasion::fingerprint::OsType::Linux => "linux",
-            seleniumbase_rs::evasion::fingerprint::OsType::Android => "android",
-            seleniumbase_rs::evasion::fingerprint::OsType::Ios
-            | seleniumbase_rs::evasion::fingerprint::OsType::Macos
-            | _ => "macos",
-        };
-        self.profile = Some(format!("chrome-{major}-{preferred}"));
-        self
+    pub fn for_version(self, major: u32, os: OsType) -> Self {
+        self.for_browser(BrowserType::Chromium, major, os)
     }
 
     /// Sets the profile to match a [`Fingerprint`](seleniumbase_rs::Fingerprint).
     ///
     /// When the fingerprint carries no version, uses the current stable Chromium major.
-    pub fn for_fingerprint(self, fingerprint: &seleniumbase_rs::Fingerprint) -> Self {
+    pub fn for_fingerprint(mut self, fingerprint: &seleniumbase_rs::Fingerprint) -> Self {
         let major = fingerprint
             .core_version()
             .unwrap_or(seleniumbase_rs::evasion::randomize::CURRENT_STABLE_MAJOR);
         let os = fingerprint.os_type();
-        self.for_version(major, os)
+        let ua = fingerprint.user_agent().value().map_or("", String::as_str);
+        if ua.contains("Edg/") {
+            let slug = match os {
+                OsType::Android => "android",
+                _ => "windows",
+            };
+            self.profile = Some(format!("edge-{major}-{slug}"));
+            return self;
+        }
+        if ua.contains("OPR/") {
+            let slug = match os {
+                OsType::Android => "android",
+                _ => "windows",
+            };
+            self.profile = Some(format!("opera-{major}-{slug}"));
+            return self;
+        }
+        self.for_browser(fingerprint.browser_type(), major, os)
+    }
+
+    /// Sets the request header template category (`navigation` or `subresource`).
+    pub fn request_kind(mut self, kind: Http3RequestKind) -> Self {
+        self.request_kind = Some(kind);
+        self
     }
 
     /// One more certificate to trust, as a DER file: for a local test server.
@@ -148,16 +233,53 @@ impl Http3Options {
         self
     }
 
-    /// A proxy to route requests through (e.g. SOCKS5, HTTP CONNECT, or CONNECT-UDP).
+    /// A proxy to route requests through (SOCKS5 UDP relay or CONNECT-UDP / MASQUE).
     pub fn proxy(mut self, proxy: impl Into<String>) -> Self {
         self.proxy = Some(proxy.into());
         self
+    }
+
+    /// Routes QUIC datagrams through a SOCKS5 UDP relay (`socks5://` or `socks5h://`).
+    ///
+    /// Bare `host:port` values default to `socks5h://` so target hostnames resolve at the proxy.
+    pub fn socks5(mut self, proxy: impl Into<String>) -> Self {
+        let raw = proxy.into();
+        let normalized = if raw.contains("://") {
+            raw
+        } else {
+            format!("socks5h://{raw}")
+        };
+        self.proxy = Some(normalized);
+        self
+    }
+
+    /// Routes QUIC datagrams through an RFC 9298 CONNECT-UDP (MASQUE) endpoint or URI template.
+    ///
+    /// Bare `host:port` values default to `connect-udp://host:port`.
+    pub fn connect_udp(mut self, template: impl Into<String>) -> Self {
+        let raw = template.into();
+        let normalized = if raw.contains("://") {
+            raw
+        } else {
+            format!("connect-udp://{raw}")
+        };
+        self.proxy = Some(normalized);
+        self
+    }
+
+    /// Builds a reusable [`Http3Pool`] retaining up to `max_idle` helper processes for these options.
+    #[must_use]
+    pub fn pool(self, max_idle: usize) -> Http3Pool {
+        Http3Pool::with_max_idle(self, max_idle)
     }
 
     fn arguments(&self) -> Vec<String> {
         let mut arguments = Vec::new();
         if let Some(profile) = &self.profile {
             arguments.extend(["--profile".to_owned(), profile.clone()]);
+        }
+        if let Some(kind) = self.request_kind {
+            arguments.extend(["--request-kind".to_owned(), kind.as_str().to_owned()]);
         }
         if let Some(path) = &self.root_cert_der {
             arguments.extend(["--root-cert-der".to_owned(), path.display().to_string()]);
@@ -241,11 +363,17 @@ impl Http3Request {
     }
 
     /// Serializes `value` as JSON body and sets `content-type: application/json`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`serde_json::Error`] if `value` cannot be serialized as JSON.
     pub fn json<T: serde::Serialize>(mut self, value: &T) -> Result<Self, serde_json::Error> {
         let bytes = serde_json::to_vec(value)?;
         self.body = Some(bytes);
-        self.headers.retain(|(k, _)| !k.eq_ignore_ascii_case("content-type"));
-        self.headers.push(("content-type".to_owned(), "application/json".to_owned()));
+        self.headers
+            .retain(|(k, _)| !k.eq_ignore_ascii_case("content-type"));
+        self.headers
+            .push(("content-type".to_owned(), "application/json".to_owned()));
         Ok(self)
     }
 
@@ -307,6 +435,10 @@ impl Http3Response {
     }
 
     /// Decodes the response body as a UTF-8 string.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`std::string::FromUtf8Error`] if the body is not valid UTF-8.
     pub fn text(&self) -> Result<String, std::string::FromUtf8Error> {
         String::from_utf8(self.body.clone())
     }
@@ -318,6 +450,10 @@ impl Http3Response {
     }
 
     /// Deserializes the response body as JSON.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`serde_json::Error`] if the body is not valid JSON for `T`.
     pub fn json<T: serde::de::DeserializeOwned>(&self) -> Result<T, serde_json::Error> {
         serde_json::from_slice(&self.body)
     }
@@ -359,7 +495,7 @@ struct Failure {
 /// A running `sbrs-h3d`. Requests are sent one at a time; the helper ends when this is dropped.
 #[derive(Debug)]
 pub struct Http3Client {
-    _child: Child,
+    child: Child,
     stdin: ChildStdin,
     stdout: Lines<BufReader<ChildStdout>>,
     next_id: u64,
@@ -387,11 +523,18 @@ impl Http3Client {
             return Err(missing(std::io::Error::other("no stdin or stdout")));
         };
         Ok(Self {
-            _child: child,
+            child,
             stdin,
             stdout: BufReader::new(stdout).lines(),
             next_id: 1,
         })
+    }
+
+    /// Whether the helper process is still running.
+    ///
+    /// A helper whose exit status cannot be read counts as ended.
+    pub fn is_alive(&mut self) -> bool {
+        matches!(self.child.try_wait(), Ok(None))
     }
 
     /// Sends `request` over HTTP/3 and waits for its response.
@@ -474,11 +617,13 @@ pub struct Http3Pool {
 
 impl Http3Pool {
     /// Creates a new pool for the given `options` with a default capacity of 4 idle clients.
+    #[must_use]
     pub fn new(options: Http3Options) -> Self {
         Self::with_max_idle(options, 4)
     }
 
     /// Creates a new pool with the specified idle client capacity.
+    #[must_use]
     pub fn with_max_idle(options: Http3Options, max_idle: usize) -> Self {
         Self {
             options,
@@ -487,18 +632,42 @@ impl Http3Pool {
         }
     }
 
-    /// Acquires an idle client from the pool or starts a new one.
-    pub async fn acquire(&self) -> Result<Http3Client, Http3Error> {
-        let mut guard = self.clients.lock().await;
-        if let Some(client) = guard.pop() {
-            Ok(client)
-        } else {
-            Http3Client::start(&self.options)
-        }
+    /// The options every helper of this pool is started with.
+    #[must_use]
+    pub fn options(&self) -> &Http3Options {
+        &self.options
     }
 
-    /// Releases a client back to the pool for reuse if under `max_idle`.
-    pub async fn release(&self, client: Http3Client) {
+    /// How many idle helpers the pool keeps at most.
+    #[must_use]
+    pub fn max_idle(&self) -> usize {
+        self.max_idle
+    }
+
+    /// Acquires an idle client from the pool or starts a new one.
+    ///
+    /// An idle helper that has exited since it was released is dropped, never returned.
+    ///
+    /// # Errors
+    ///
+    /// [`Http3Error::HelperMissing`] when a new helper cannot be started.
+    pub async fn acquire(&self) -> Result<Http3Client, Http3Error> {
+        let mut guard = self.clients.lock().await;
+        while let Some(mut client) = guard.pop() {
+            if client.is_alive() {
+                return Ok(client);
+            }
+        }
+        drop(guard);
+        Http3Client::start(&self.options)
+    }
+
+    /// Releases a client back to the pool for reuse if it is alive and the pool is under
+    /// `max_idle`.
+    pub async fn release(&self, mut client: Http3Client) {
+        if !client.is_alive() {
+            return;
+        }
         let mut guard = self.clients.lock().await;
         if guard.len() < self.max_idle {
             guard.push(client);
@@ -506,6 +675,10 @@ impl Http3Pool {
     }
 
     /// Sends a request using a pooled client, returning the client to the pool upon completion.
+    ///
+    /// # Errors
+    ///
+    /// See [`Http3Client::send`]; a failed send drops its helper instead of pooling it.
     pub async fn send(&self, request: Http3Request) -> Result<Http3Response, Http3Error> {
         let mut client = self.acquire().await?;
         let res = client.send(request).await;
@@ -655,6 +828,7 @@ mod tests {
     fn the_options_become_the_helpers_command_line() {
         let options = Http3Options::new()
             .profile("chrome-154-macos")
+            .request_kind(Http3RequestKind::Subresource)
             .root_cert_der("/tmp/cert.der")
             .resolve("localhost", IpAddr::from([127, 0, 0, 1]))
             .proxy("socks5://127.0.0.1:1080");
@@ -663,6 +837,8 @@ mod tests {
             [
                 "--profile",
                 "chrome-154-macos",
+                "--request-kind",
+                "subresource",
                 "--root-cert-der",
                 "/tmp/cert.der",
                 "--resolve",
@@ -671,5 +847,52 @@ mod tests {
                 "socks5://127.0.0.1:1080",
             ]
         );
+    }
+
+    #[test]
+    fn options_build_browser_selectors_and_proxy_shortcuts() {
+        let chrome = Http3Options::new().for_browser(BrowserType::Chromium, 157, OsType::Windows);
+        assert!(chrome
+            .arguments()
+            .contains(&"chrome-157-windows".to_owned()));
+
+        let firefox = Http3Options::new().for_browser(BrowserType::Firefox, 157, OsType::Windows);
+        assert!(firefox
+            .arguments()
+            .contains(&"firefox-157-windows".to_owned()));
+
+        let safari = Http3Options::new().for_browser(BrowserType::MobileSafari, 26, OsType::Ios);
+        assert!(safari.arguments().contains(&"safari-26-ios".to_owned()));
+
+        let socks = Http3Options::new().socks5("127.0.0.1:1080");
+        assert!(socks
+            .arguments()
+            .contains(&"socks5h://127.0.0.1:1080".to_owned()));
+
+        let masque = Http3Options::new().connect_udp("masque.example:443");
+        assert!(masque
+            .arguments()
+            .contains(&"connect-udp://masque.example:443".to_owned()));
+    }
+
+    #[tokio::test]
+    async fn pool_drops_exited_helper_before_returning_it() {
+        let dir = tempfile::tempdir().expect("a folder");
+        // First helper answers one request and exits immediately; second answers request 2.
+        let program = fake_helper(
+            dir.path(),
+            &[r#"{"id":1,"status":200,"protocol":"h3","headers":[],"body":""}"#],
+        );
+        let pool = Http3Options::new().program(&program).pool(2);
+        let mut client = pool.acquire().await.expect("starts");
+        let resp = client
+            .send(Http3Request::get("https://localhost/one"))
+            .await
+            .expect("first ok");
+        assert_eq!(resp.status(), 200);
+        // Wait briefly for the fake shell script to exit.
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        pool.release(client).await;
+        assert_eq!(pool.clients.lock().await.len(), 0);
     }
 }

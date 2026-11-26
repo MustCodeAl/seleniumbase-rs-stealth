@@ -26,7 +26,9 @@ use seleniumbase_rs::evasion::fingerprint::{
 use seleniumbase_rs::evasion::randomize::{
     chromium_hints, edge_hints, known_full_version, Locale, PRESET_CHROMIUM_MAJOR,
 };
-use seleniumbase_rs::evasion::settings::{ColorGamut, DynamicRange, MediaFeatures, WebGl};
+use seleniumbase_rs::evasion::settings::{
+    ColorGamut, DynamicRange, Geolocation, MediaFeatures, WebGl,
+};
 
 /// High Dynamic Range (HDR) screen capability mode.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -1255,6 +1257,30 @@ pub struct ProfileFingerprint {
     /// Deterministic seed used for noise and identity generation.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub seed: Option<u64>,
+
+    /// Optional canvas noise amplitude override.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub canvas_noise_amplitude: Option<f64>,
+
+    /// Optional audio noise amplitude override.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub audio_noise_amplitude: Option<f64>,
+
+    /// Optional `DOMRect` jitter amplitude override.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dom_rect_jitter: Option<f64>,
+
+    /// Optional font metrics jitter amplitude override.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub font_metrics_jitter: Option<f64>,
+
+    /// Whether WebGPU spoofing is enabled.
+    #[serde(default = "default_true")]
+    pub webgpu_enabled: bool,
+}
+
+const fn default_true() -> bool {
+    true
 }
 
 impl Default for ProfileFingerprint {
@@ -1289,6 +1315,11 @@ impl Default for ProfileFingerprint {
             battery: Some(BatteryMetadata::default()),
             network: Some(NetworkMetadata::default()),
             seed: None,
+            canvas_noise_amplitude: None,
+            audio_noise_amplitude: None,
+            dom_rect_jitter: None,
+            font_metrics_jitter: None,
+            webgpu_enabled: true,
         }
     }
 }
@@ -1563,6 +1594,11 @@ impl ProfileFingerprint {
             battery,
             network,
             seed: Some(fp.seed()),
+            canvas_noise_amplitude: None,
+            audio_noise_amplitude: None,
+            dom_rect_jitter: None,
+            font_metrics_jitter: None,
+            webgpu_enabled: true,
         }
     }
 
@@ -1824,7 +1860,518 @@ pub struct FingerprintGenerator {
     webrtc_policy: WebRtcPolicy,
 }
 
+/// Screen dimension and display constraints for [`FingerprintOptions`].
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct ScreenConstraints {
+    /// Minimum screen width in CSS pixels.
+    pub min_width: Option<u32>,
+    /// Maximum screen width in CSS pixels.
+    pub max_width: Option<u32>,
+    /// Device pixel ratio override.
+    pub device_pixel_ratio: Option<f64>,
+    /// High dynamic range mode override.
+    pub hdr_mode: Option<HdrMode>,
+    /// Color depth in bits per pixel.
+    pub color_depth: Option<u32>,
+}
+
+impl ScreenConstraints {
+    /// Creates empty screen constraints.
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            min_width: None,
+            max_width: None,
+            device_pixel_ratio: None,
+            hdr_mode: None,
+            color_depth: None,
+        }
+    }
+
+    /// Sets the minimum screen width in CSS pixels.
+    #[must_use]
+    pub const fn min_width(mut self, width: u32) -> Self {
+        self.min_width = Some(width);
+        self
+    }
+
+    /// Sets the maximum screen width in CSS pixels.
+    #[must_use]
+    pub const fn max_width(mut self, width: u32) -> Self {
+        self.max_width = Some(width);
+        self
+    }
+
+    /// Sets the device pixel ratio override.
+    #[must_use]
+    pub const fn device_pixel_ratio(mut self, dpr: f64) -> Self {
+        self.device_pixel_ratio = Some(dpr);
+        self
+    }
+
+    /// Sets the HDR mode override.
+    #[must_use]
+    pub const fn hdr_mode(mut self, mode: HdrMode) -> Self {
+        self.hdr_mode = Some(mode);
+        self
+    }
+
+    /// Sets the color depth in bits per pixel.
+    #[must_use]
+    pub const fn color_depth(mut self, depth: u32) -> Self {
+        self.color_depth = Some(depth);
+        self
+    }
+}
+
+/// Network connection override for [`FingerprintOptions`].
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ConnectionOverride {
+    /// Effective connection type (`"4g"`, `"3g"`, `"2g"`, `"slow-2g"`).
+    pub effective_type: String,
+    /// Round-trip time in milliseconds.
+    pub rtt_ms: u32,
+    /// Downlink bandwidth in Mbps.
+    pub downlink_mbps: f64,
+    /// Whether `saveData` is enabled.
+    pub save_data: bool,
+}
+
+impl ConnectionOverride {
+    /// Creates a new connection override.
+    #[must_use]
+    pub fn new(effective_type: impl Into<String>, rtt_ms: u32, downlink_mbps: f64) -> Self {
+        Self {
+            effective_type: effective_type.into(),
+            rtt_ms,
+            downlink_mbps,
+            save_data: false,
+        }
+    }
+
+    /// Sets the `saveData` flag.
+    #[must_use]
+    pub const fn save_data(mut self, enabled: bool) -> Self {
+        self.save_data = enabled;
+        self
+    }
+}
+
+/// Rich configuration options for [`FingerprintGenerator::generate_with`].
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct FingerprintOptions {
+    /// Operating system persona.
+    pub os: Option<OsType>,
+    /// Browser family persona.
+    pub browser: Option<BrowserType>,
+    /// Minimum Chromium major version.
+    pub min_version: Option<u32>,
+    /// Maximum Chromium major version.
+    pub max_version: Option<u32>,
+    /// Ordered `navigator.languages` list.
+    pub locales: Option<Vec<String>>,
+    /// IANA timezone identifier.
+    pub timezone: Option<String>,
+    /// Geolocation coordinates.
+    pub geolocation: Option<Geolocation>,
+    /// Screen geometry and display constraints.
+    pub screen: Option<ScreenConstraints>,
+    /// Explicit `(vendor, renderer)` WebGL strings.
+    pub webgl_override: Option<(String, String)>,
+    /// Whether WebGPU spoofing is enabled.
+    pub webgpu_enabled: bool,
+    /// `navigator.hardwareConcurrency` override.
+    pub hardware_concurrency: Option<u32>,
+    /// `navigator.deviceMemory` override in GiB.
+    pub device_memory: Option<u32>,
+    /// Canvas noise amplitude override.
+    pub canvas_noise_amplitude: Option<f64>,
+    /// Audio noise amplitude override.
+    pub audio_noise_amplitude: Option<f64>,
+    /// Web Audio `AudioContext.sampleRate` override.
+    pub audio_sample_rate: Option<u32>,
+    /// `DOMRect` jitter amplitude override.
+    pub dom_rect_jitter: Option<f64>,
+    /// Font metrics jitter amplitude override.
+    pub font_metrics_jitter: Option<f64>,
+    /// WebRTC IP handling policy.
+    pub webrtc_policy: Option<WebRtcPolicy>,
+    /// `NetworkInformation` connection override.
+    pub connection: Option<ConnectionOverride>,
+    /// Synthetic media device counts `(cameras, microphones, speakers)`.
+    pub media_devices: Option<(u32, u32, u32)>,
+    /// Deterministic seed.
+    pub seed: Option<u64>,
+}
+
+impl Default for FingerprintOptions {
+    fn default() -> Self {
+        Self {
+            os: None,
+            browser: None,
+            min_version: None,
+            max_version: None,
+            locales: None,
+            timezone: None,
+            geolocation: None,
+            screen: None,
+            webgl_override: None,
+            webgpu_enabled: true,
+            hardware_concurrency: None,
+            device_memory: None,
+            canvas_noise_amplitude: None,
+            audio_noise_amplitude: None,
+            audio_sample_rate: None,
+            dom_rect_jitter: None,
+            font_metrics_jitter: None,
+            webrtc_policy: None,
+            connection: None,
+            media_devices: None,
+            seed: None,
+        }
+    }
+}
+
+impl FingerprintOptions {
+    /// Starts a [`FingerprintOptionsBuilder`].
+    pub fn builder() -> FingerprintOptionsBuilder {
+        FingerprintOptionsBuilder::new()
+    }
+}
+
+/// Builder for [`FingerprintOptions`].
+#[derive(Clone, Debug, Default)]
+#[must_use = "FingerprintOptionsBuilder does nothing until build() is called"]
+pub struct FingerprintOptionsBuilder {
+    inner: FingerprintOptions,
+}
+
+impl FingerprintOptionsBuilder {
+    /// Creates a new builder with default options.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Sets the operating system persona.
+    pub fn os(mut self, os: OsType) -> Self {
+        self.inner.os = Some(os);
+        self
+    }
+
+    /// Sets the browser family persona.
+    pub fn browser(mut self, browser: BrowserType) -> Self {
+        self.inner.browser = Some(browser);
+        self
+    }
+
+    /// Sets the minimum Chromium major version.
+    pub fn min_version(mut self, version: u32) -> Self {
+        self.inner.min_version = Some(version);
+        self
+    }
+
+    /// Sets the maximum Chromium major version.
+    pub fn max_version(mut self, version: u32) -> Self {
+        self.inner.max_version = Some(version);
+        self
+    }
+
+    /// Sets the ordered `navigator.languages` list.
+    pub fn locales(mut self, locales: Vec<String>) -> Self {
+        self.inner.locales = Some(locales);
+        self
+    }
+
+    /// Sets the IANA timezone identifier.
+    pub fn timezone(mut self, timezone: impl Into<String>) -> Self {
+        self.inner.timezone = Some(timezone.into());
+        self
+    }
+
+    /// Sets the geolocation coordinates.
+    pub fn geolocation(mut self, geolocation: Geolocation) -> Self {
+        self.inner.geolocation = Some(geolocation);
+        self
+    }
+
+    /// Sets the screen geometry and display constraints.
+    pub fn screen(mut self, screen: ScreenConstraints) -> Self {
+        self.inner.screen = Some(screen);
+        self
+    }
+
+    /// Sets explicit WebGL `(vendor, renderer)` strings.
+    pub fn webgl_override(
+        mut self,
+        vendor: impl Into<String>,
+        renderer: impl Into<String>,
+    ) -> Self {
+        self.inner.webgl_override = Some((vendor.into(), renderer.into()));
+        self
+    }
+
+    /// Enables or disables WebGPU spoofing.
+    pub fn webgpu_enabled(mut self, enabled: bool) -> Self {
+        self.inner.webgpu_enabled = enabled;
+        self
+    }
+
+    /// Sets `navigator.hardwareConcurrency`.
+    pub fn hardware_concurrency(mut self, cores: u32) -> Self {
+        self.inner.hardware_concurrency = Some(cores);
+        self
+    }
+
+    /// Sets `navigator.deviceMemory` in GiB.
+    pub fn device_memory(mut self, memory_gb: u32) -> Self {
+        self.inner.device_memory = Some(memory_gb);
+        self
+    }
+
+    /// Sets the canvas noise amplitude.
+    pub fn canvas_noise_amplitude(mut self, amplitude: f64) -> Self {
+        self.inner.canvas_noise_amplitude = Some(amplitude);
+        self
+    }
+
+    /// Sets the audio noise amplitude.
+    pub fn audio_noise_amplitude(mut self, amplitude: f64) -> Self {
+        self.inner.audio_noise_amplitude = Some(amplitude);
+        self
+    }
+
+    /// Sets the Web Audio sample rate in Hz.
+    pub fn audio_sample_rate(mut self, rate: u32) -> Self {
+        self.inner.audio_sample_rate = Some(rate);
+        self
+    }
+
+    /// Sets the `DOMRect` jitter amplitude.
+    pub fn dom_rect_jitter(mut self, jitter: f64) -> Self {
+        self.inner.dom_rect_jitter = Some(jitter);
+        self
+    }
+
+    /// Sets the font metrics jitter amplitude.
+    pub fn font_metrics_jitter(mut self, jitter: f64) -> Self {
+        self.inner.font_metrics_jitter = Some(jitter);
+        self
+    }
+
+    /// Sets the WebRTC IP handling policy.
+    pub fn webrtc_policy(mut self, policy: WebRtcPolicy) -> Self {
+        self.inner.webrtc_policy = Some(policy);
+        self
+    }
+
+    /// Sets the `NetworkInformation` connection override.
+    pub fn connection(mut self, connection: ConnectionOverride) -> Self {
+        self.inner.connection = Some(connection);
+        self
+    }
+
+    /// Sets synthetic media device counts `(cameras, microphones, speakers)`.
+    pub fn media_devices(mut self, cameras: u32, microphones: u32, speakers: u32) -> Self {
+        self.inner.media_devices = Some((cameras, microphones, speakers));
+        self
+    }
+
+    /// Sets the deterministic generation seed.
+    pub fn seed(mut self, seed: u64) -> Self {
+        self.inner.seed = Some(seed);
+        self
+    }
+
+    /// Validates constraints and builds [`FingerprintOptions`].
+    ///
+    /// # Errors
+    ///
+    /// Returns [`FingerprintError`] if `min_version > max_version` or `screen.min_width > screen.max_width`.
+    pub fn build(self) -> Result<FingerprintOptions, FingerprintError> {
+        if let (Some(min_v), Some(max_v)) = (self.inner.min_version, self.inner.max_version)
+            && min_v > max_v
+        {
+            return Err(FingerprintError::Incoherent {
+                setting: "min_version",
+                reason: "min_version cannot exceed max_version".to_owned(),
+            });
+        }
+        if let Some(screen) = self.inner.screen
+            && let (Some(min_w), Some(max_w)) = (screen.min_width, screen.max_width)
+            && min_w > max_w
+        {
+            return Err(FingerprintError::Incoherent {
+                setting: "screen",
+                reason: "screen min_width cannot exceed max_width".to_owned(),
+            });
+        }
+        Ok(self.inner)
+    }
+}
+
 impl FingerprintGenerator {
+    /// Generates a coherent [`GeneratedFingerprint`] from rich [`FingerprintOptions`].
+    #[must_use]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "applies all FingerprintOptions overrides coherently in one pass"
+    )]
+    pub fn generate_with(options: &FingerprintOptions) -> GeneratedFingerprint {
+        let seed = options.seed.unwrap_or(0x5EED_C0DE_0000_0001);
+        let os = options.os.unwrap_or(OsType::Windows);
+        let min_v = options.min_version.unwrap_or(PRESET_CHROMIUM_MAJOR);
+        let max_v = options
+            .max_version
+            .unwrap_or(min_v.max(PRESET_CHROMIUM_MAJOR));
+        let major = if min_v <= max_v {
+            let span = u64::from(max_v - min_v) + 1;
+            min_v + u32::try_from(seed % span).unwrap_or(0)
+        } else {
+            min_v
+        };
+
+        let mut generator = Self::new(seed).os(os).major(major);
+        if let Some(rate) = options.audio_sample_rate {
+            generator = generator.audio_sample_rate(rate);
+        }
+        if let Some(policy) = options.webrtc_policy {
+            generator = generator.webrtc_policy(policy);
+        }
+        if let Some(screen) = options.screen
+            && let Some(hdr) = screen.hdr_mode
+        {
+            generator = generator.hdr(hdr == HdrMode::High);
+        }
+
+        let mut base_fp = generator.build_core_fingerprint();
+        let mut builder = base_fp.to_builder();
+        if let Some(browser) = options.browser {
+            builder = builder.browser_type(browser);
+        }
+        if let Some(locales) = &options.locales
+            && !locales.is_empty()
+        {
+            builder = builder.languages(locales.join(",").as_str());
+        }
+        if let Some(tz) = &options.timezone {
+            builder = builder.timezone(tz.as_str());
+        }
+        if let Some(geo) = options.geolocation {
+            builder = builder.geolocation(geo);
+        }
+        if let Some(cores) = options.hardware_concurrency {
+            builder = builder.hardware_concurrency(cores);
+        }
+        if let Some(mem) = options.device_memory {
+            builder = builder.device_memory(f64::from(mem));
+        }
+        if let Some((vendor, renderer)) = &options.webgl_override {
+            builder = builder.webgl(WebGl::new(vendor.as_str(), renderer.as_str()));
+        }
+        if let Some(screen) = options.screen {
+            if let Some(dpr) = screen.device_pixel_ratio {
+                builder = builder.pixel_ratio(dpr);
+            }
+            if let Some(depth) = screen.color_depth {
+                builder = builder.color_depth(depth);
+            }
+            if screen.min_width.is_some() || screen.max_width.is_some() {
+                let current_w = base_fp.screen().value().map_or(1920, |s| s.width);
+                let current_h = base_fp.screen().value().map_or(1080, |s| s.height);
+                let min_w = screen.min_width.unwrap_or(0);
+                let max_w = screen.max_width.unwrap_or(u32::MAX);
+                let clamped_w = current_w.clamp(min_w, max_w);
+                if clamped_w != current_w {
+                    let scaled_h = (u64::from(current_h) * u64::from(clamped_w)
+                        / u64::from(current_w.max(1)))
+                    .max(200);
+                    let h = u32::try_from(scaled_h).unwrap_or(current_h);
+                    builder = builder.screen(clamped_w, h);
+                    let lost = if os.is_mobile() { 0 } else { 40 };
+                    builder = builder.avail_screen((clamped_w, h.saturating_sub(lost)));
+                }
+            }
+        }
+        if let Some(conn) = &options.connection {
+            builder = builder.connection(ConnectionProfile {
+                effective_type: conn.effective_type.clone(),
+                rtt: conn.rtt_ms,
+                downlink: conn.downlink_mbps,
+                save_data: conn.save_data,
+            });
+        }
+        base_fp = builder.build().unwrap_or(base_fp);
+
+        let (gpu_vendor, gpu_renderer, gpu_extensions, webgl_params) = Self::build_gpu(&base_fp);
+        let webgpu = WebGpuMetadata::for_gpu(os, &gpu_vendor, &gpu_renderer);
+        let display = Self::build_display(&base_fp);
+        let audio = generator.build_audio(&base_fp);
+        let media_devices = if let Some((cams, mics, spks)) = options.media_devices {
+            let mut devices = Vec::with_capacity((cams + mics + spks) as usize);
+            let mut push_kind = |kind: &str, count: u32, prefix: &str| {
+                for i in 0..count {
+                    devices.push(MediaDeviceInfo {
+                        device_id: format!("{seed:016x}-{prefix}-{i}"),
+                        kind: kind.to_owned(),
+                        label: format!("{prefix} {}", i + 1),
+                        group_id: format!("{seed:016x}-grp-{prefix}"),
+                    });
+                }
+            };
+            push_kind("videoinput", cams, "Camera");
+            push_kind("audioinput", mics, "Microphone");
+            push_kind("audiooutput", spks, "Speaker");
+            MediaDeviceMetadata { devices }
+        } else {
+            MediaDeviceMetadata::synthetic(seed, os)
+        };
+        let battery = Self::build_battery(&base_fp);
+        let network = Self::build_network(&base_fp);
+        let fonts = generator.build_fonts(&base_fp);
+
+        let mut profile = ProfileFingerprint::from_fingerprint(&base_fp);
+        profile.webgl_extensions.clone_from(&gpu_extensions);
+        if profile.fonts.is_empty() {
+            profile.fonts.clone_from(&fonts);
+        }
+        profile.canvas_noise_amplitude = options.canvas_noise_amplitude;
+        profile.audio_noise_amplitude = options.audio_noise_amplitude;
+        profile.dom_rect_jitter = options.dom_rect_jitter;
+        profile.font_metrics_jitter = options.font_metrics_jitter;
+        profile.webgpu_enabled = options.webgpu_enabled;
+
+        let user_agent = profile.user_agent.clone().unwrap_or_default();
+        let client_hints = profile
+            .client_hints
+            .clone()
+            .unwrap_or_else(|| ClientHintsHighEntropy::for_safari(os));
+        let headers = Self::generate_headers(
+            &base_fp,
+            &user_agent,
+            profile.client_hints.as_ref(),
+            &profile.languages,
+        );
+
+        GeneratedFingerprint {
+            profile,
+            fingerprint: base_fp,
+            headers,
+            client_hints,
+            audio,
+            gpu: GpuMetadata {
+                vendor: gpu_vendor,
+                renderer: gpu_renderer,
+                extensions: gpu_extensions,
+                parameters: webgl_params,
+            },
+            webgpu,
+            display,
+            media_devices,
+            battery,
+            network,
+            fonts,
+        }
+    }
     /// Creates a new generator seeded by `seed`.
     #[must_use]
     pub fn new(seed: u64) -> Self {
@@ -2598,5 +3145,62 @@ mod tests {
                 .map(|c| c.ua_full_version.as_str()),
             Some("155.0.8059.40")
         );
+    }
+
+    #[test]
+    fn fingerprint_options_builder_validates_constraints_and_is_deterministic() {
+        let invalid_ver = FingerprintOptions::builder()
+            .min_version(157)
+            .max_version(154)
+            .build();
+        assert!(invalid_ver.is_err());
+
+        let invalid_screen = FingerprintOptions::builder()
+            .screen(ScreenConstraints::new().min_width(1920).max_width(1280))
+            .build();
+        assert!(invalid_screen.is_err());
+
+        let opts = FingerprintOptions::builder()
+            .os(OsType::Macos)
+            .browser(BrowserType::Chromium)
+            .min_version(154)
+            .max_version(156)
+            .locales(vec!["en-GB".to_owned(), "en".to_owned()])
+            .timezone("Europe/London")
+            .screen(
+                ScreenConstraints::new()
+                    .min_width(1280)
+                    .max_width(1440)
+                    .device_pixel_ratio(2.0)
+                    .hdr_mode(HdrMode::High)
+                    .color_depth(30),
+            )
+            .webgl_override("CustomVendor", "CustomRenderer")
+            .webgpu_enabled(false)
+            .hardware_concurrency(12)
+            .device_memory(16)
+            .canvas_noise_amplitude(0.02)
+            .audio_noise_amplitude(0.001)
+            .audio_sample_rate(48000)
+            .dom_rect_jitter(0.0005)
+            .font_metrics_jitter(0.0002)
+            .webrtc_policy(WebRtcPolicy::DisableNonProxiedUdp)
+            .connection(ConnectionOverride::new("4g", 50, 10.0).save_data(true))
+            .media_devices(1, 2, 1)
+            .seed(4242)
+            .build()
+            .expect("valid options");
+
+        let a = FingerprintGenerator::generate_with(&opts);
+        let b = FingerprintGenerator::generate_with(&opts);
+        assert_eq!(a.profile, b.profile);
+        assert_eq!(a.profile.timezone.as_deref(), Some("Europe/London"));
+        assert_eq!(a.profile.webgl_vendor.as_deref(), Some("CustomVendor"));
+        assert_eq!(a.profile.webgl_renderer.as_deref(), Some("CustomRenderer"));
+        assert_eq!(a.profile.hardware_concurrency, Some(12));
+        assert_eq!(a.profile.device_memory, Some(16.0));
+        assert!(!a.profile.webgpu_enabled);
+        assert_eq!(a.profile.canvas_noise_amplitude, Some(0.02));
+        assert_eq!(a.media_devices.devices.len(), 4);
     }
 }

@@ -1993,7 +1993,7 @@ dependencies = [
 
 [[package]]
 name = "seleniumbase-rs"
-version = "0.9.3"
+version = "0.9.4"
 dependencies = [
  "allocator-api2",
  "anstream",
@@ -2035,7 +2035,7 @@ dependencies = [
 
 [[package]]
 name = "seleniumbase-rs-codec"
-version = "0.1.0"
+version = "0.9.4"
 dependencies = [
  "ring",
  "seleniumbase-rs",
@@ -2057,7 +2057,7 @@ dependencies = [
 
 [[package]]
 name = "seleniumbase-rs-scrape"
-version = "0.1.0"
+version = "0.9.4"
 dependencies = [
  "async-trait",
  "futures-util",
@@ -2079,7 +2079,7 @@ dependencies = [
 
 [[package]]
 name = "seleniumbase-rs-stealth"
-version = "0.1.0"
+version = "0.9.4"
 dependencies = [
  "seleniumbase-rs",
  "seleniumbase-rs-codec",
@@ -2091,7 +2091,7 @@ dependencies = [
 
 [[package]]
 name = "seleniumbase-rs-wire"
-version = "0.1.0"
+version = "0.9.4"
 dependencies = [
  "async-trait",
  "base64",

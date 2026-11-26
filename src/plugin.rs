@@ -12,7 +12,7 @@ use seleniumbase_rs::plugin_api::{
 };
 
 use crate::fingerprint::{FingerprintGenerator, GeneratedFingerprint, ProfileFingerprint};
-use crate::script::StealthScriptBundle;
+use crate::script::{StealthScriptBundle, StealthScriptOptions};
 
 /// Stealth plugin that configures launch settings and injects evasions on page creation.
 #[derive(Clone, Debug)]
@@ -72,6 +72,19 @@ impl StealthPlugin {
     pub fn randomized_for(os: OsType, seed: u64) -> Self {
         let generated = FingerprintGenerator::new(seed).os(os).generate();
         Self::from_generated(generated)
+    }
+
+    /// Rebuilds the plugin's [`StealthScriptBundle`] using selective [`StealthScriptOptions`].
+    #[must_use]
+    pub fn with_script_options(mut self, options: &StealthScriptOptions) -> Self {
+        if let Some(profile) = &self.profile {
+            self.bundle = StealthScriptBundle::from_profile_with(profile, options);
+        } else if let Some(fp) = &self.fingerprint {
+            let profile = ProfileFingerprint::from_fingerprint(fp);
+            self.bundle = StealthScriptBundle::from_profile_with(&profile, options);
+            self.profile = Some(profile);
+        }
+        self
     }
 
     /// Returns the plugin's unique name.
