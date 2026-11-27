@@ -8,10 +8,11 @@
 > A change users should read goes to those pages.
 
 > [!NOTE]
-> Use the unified `seleniumbase-rs-stealth` facade. It re-exports the core API,
-> including `sb_cdp`, `evasion` and `fingerprint`, plus default `codec` and
-> `scrape` modules. Enable `wire` for TLS/HTTP2 impersonation. The `cargo run -p`
-> commands in this guide run implementation-crate examples inside this repository.
+> Use the single layered `seleniumbase-rs-stealth` crate. It re-exports the core API
+> (`sb_cdp`, `BaseCase`, `BrowserConfig`) alongside four layers: `identity`, `client`,
+> `network`, and `session` (default, zero BoringSSL). Enable `features = ["network"]` for
+> BoringSSL TLS/HTTP2 impersonation (`HttpSession`, `MitmProxy`, `HybridSession`), or
+> `features = ["http3"]` for `sbrs-h3d` HTTP/3.
 
 A site can tell a client apart before any page script runs: by the TLS
 `ClientHello`, by the HTTP/2 connection start, and by the order and spelling of
@@ -27,21 +28,21 @@ of it.
 
 ## Status
 
-| Part | Crate | State |
+| Part | Layer / Feature | State |
 |---|---|---|
-| Wire parsers: `ClientHello`, JA3, JA4 and `JA4_r`, peetprint, Akamai HTTP/2 strings | `codec` | Available |
-| Measured browser tables (Chrome 155 on macOS) and the lookup that refuses everything else | `codec` | Available |
-| Capture tools `capture_tls` and `capture_hints` | `scrape` | Available |
-| Capture tool `capture_h2` | `wire` | Available |
-| `WireFormat`, `WireFormatBuilder`, `WireFormat::client_builder` (wreq with BoringSSL) | `wire` | Available |
-| RFC 6265 cookie jar | `scrape` | Available |
-| `Identity`, its identity file, `EscalationPolicy` | `scrape` | Available |
-| Challenge detection, mitigation policy, proxy pool, per-site state, events | `scrape` | Available |
-| `BrowserScraper` (a real Chrome, no TLS spoofing) | `scrape` | Available |
-| Ephemeral-CA TLS server | `wire` | Available |
-| `HttpSession` | `wire` | Available |
-| `MitmProxy` | `wire` | Available |
-| `StealthSession` | `wire` | Available |
+| Wire parsers: `ClientHello`, JA3, JA4 and `JA4_r`, peetprint, Akamai HTTP/2 strings | `network::spec` (`network-spec`, default) | Available |
+| Measured browser tables (Chrome 155 on macOS) and the lookup that refuses everything else | `network::spec` (`network-spec`, default) | Available |
+| Capture tools `capture_tls` and `capture_hints` | `session` (default) | Available |
+| Capture tool `capture_h2` | `network` / `session` (`features = ["network"]`) | Available |
+| `WireFormat`, `WireFormatBuilder`, `WireFormat::client_builder` (wreq with BoringSSL) | `network` / `session` (`features = ["network"]`) | Available |
+| RFC 6265 cookie jar | `session` (default) | Available |
+| `Identity`, its identity file, `EscalationPolicy` | `session` (default) | Available |
+| Challenge detection, mitigation policy, proxy pool, per-site state, events | `session` (default) | Available |
+| `CdpSession` (a real Chrome, no TLS spoofing) | `session` (default) | Available |
+| Ephemeral-CA TLS server | `network` / `session` (`features = ["network"]`) | Available |
+| `HttpSession` | `network` / `session` (`features = ["network"]`) | Available |
+| `MitmProxy` | `network` / `session` (`features = ["network"]`) | Available |
+| `HybridSession` | `network` / `session` (`features = ["network"]`) | Available |
 
 The last three are tested against loopback sites, a scripted browser and, in
 tests marked `#[ignore]`, a local Chrome 155 on macOS, run headless. None of
@@ -59,13 +60,13 @@ leaves open.
   JA3, JA4, peetprint and Akamai inputs, and what is refused up front.
 - How the cookie jar, the stealth identity and its file, and the session policy
   behave.
-- How `BrowserScraper` fetches, detects a challenge, mitigates, and rotates the
+- How `CdpSession` fetches, detects a challenge, mitigates, and rotates the
   egress and the profile.
 - How `HttpSession` continues a browser's session as plain requests that carry
   the same wire fingerprint.
 - What the ephemeral-CA TLS server is for, and how `MitmProxy` uses it to put a
   real Chrome behind the same fingerprint.
-- How `StealthSession` moves between the two as the policies decide.
+- How `HybridSession` moves between the two as the policies decide.
 
 ## Which crate to depend on
 
@@ -81,31 +82,31 @@ needs cmake and a C/C++ toolchain):
 
 ```toml
 [dependencies]
-seleniumbase-rs-stealth = { git = "https://github.com/MustCodeAl/seleniumbase-rs-stealth", features = ["wire"] }
+seleniumbase-rs-stealth = { git = "https://github.com/MustCodeAl/seleniumbase-rs-stealth", features = ["network"] }
 ```
 
-The default `scrape` feature also enables `codec`. `wire` keeps both enabled.
+The default `session` feature enables `client` and `network-spec` (zero BoringSSL). `network` adds BoringSSL/wreq wire transport, `HttpSession`, `MitmProxy`, and `HybridSession`.
 Import every browser and fingerprint type through the same facade; no separate
 core or implementation-crate Git dependency is needed. With `wire` enabled:
 
 ```rust
 use seleniumbase_rs_stealth::{
-    evasion::fingerprint::{CanvasNoise, Fingerprint, StealthPolicy},
-    scrape::BrowserScraper,
-    wire::{StealthSession, MitmProxy},
+    identity::{policy::CanvasNoise, Fingerprint, StealthPolicy},
+    network::MitmProxy,
+    session::{CdpSession, HybridSession},
 };
 ```
 
 Examples importing the `wire` module require that feature; the codec, scraping
-and in-page examples use the default configuration. The facade's feature
-switches are `codec`, `scrape` and `wire`; optional core APIs retain their own
+and in-page examples use the default configuration. The crate's feature
+switches are `client`, `network-spec`, `session` (default), `network`, and `http3`; optional core APIs retain their own
 feature gates. TLS and HTTP/2 spec errors remain `TlsSpecError` and `H2SpecError`
 in the codec re-exports.
 
 ## What is measured, and what is refused
 
 Every wire value this crate imitates was measured from a real browser by a
-capture tool and stored as JSON in `crates/codec/src/measured`. Nothing is typed by
+capture tool and stored as JSON in `src/network/spec/measured`. Nothing is typed by
 hand. The files are embedded with `include_str!`, parsed once, and looked up by
 browser and operating system.
 
@@ -115,9 +116,9 @@ uses for WebSocket), the HTTP/2 start, the header lists and their order, the
 client hints, and where it came from:
 
 ```rust
-use seleniumbase_rs_stealth::evasion::fingerprint::OsType;
+use seleniumbase_rs_stealth::identity::fingerprint::OsType;
 use seleniumbase_rs_stealth::browser::config::Browser;
-use seleniumbase_rs_stealth::codec::measurement::{self, WireMeasurementError};
+use seleniumbase_rs_stealth::network::spec::measurement::{self, WireMeasurementError};
 
 # fn demo() -> Result<(), WireMeasurementError> {
 let chrome = measurement::get(Browser::Chrome, OsType::Macos)?;
@@ -173,9 +174,9 @@ new version:
    Chrome of another version than the file it extends.
 
    ```text
-   cargo run -p seleniumbase-rs-scrape      --example capture_tls
-   cargo run -p seleniumbase-rs-scrape      --example capture_hints
-   cargo run -p seleniumbase-rs-wire --example capture_h2
+   cargo run -p seleniumbase-rs-stealth (`session`)      --example capture_tls
+   cargo run -p seleniumbase-rs-stealth (`session`)      --example capture_hints
+   cargo run --features network --example capture_h2
    ```
 
    - `capture_tls` points the browser at a loopback listener that records each
@@ -193,13 +194,13 @@ new version:
      navigation, a `fetch`, an image, a script, a stylesheet), once over HTTP/2
      and once over HTTP/1.1. `--h1` and `--h2` run one pass only.
 
-   They share these options: `--out DIR` (default `crates/codec/src/measured`),
+   They share these options: `--out DIR` (default `src/network/spec/measured`),
    `--fixtures DIR` (default `tests/fixtures/measured`, for the raw bytes),
    `--chrome PATH`, `--lang TAG` (sets `Accept-Language`, default `en-US`),
    `--probes N`, `--timeout SECS`, `--headless`, `--no-sandbox`, `--snippet` and
    `--help`.
-3. Add the new file to the `SOURCES` list in `crates/codec/src/emulation.rs`. The test
-   `crates/codec/tests/wire_measurement.rs` fails when a file in `crates/codec/src/measured` is missing
+3. Add the new file to the `SOURCES` list in `src/network/spec/measurement.rs`. The test
+   `tests/wire_measurement.rs` fails when a file in `src/network/spec/measured` is missing
    from that list.
 4. Run the wire tests, including `tests/impersonate_wire.rs`. They compare what
    our client sends with the measured file and fail, by name, when a known gap
@@ -227,9 +228,9 @@ Only JA4 itself is implemented. JA4H, JA4S, JA4X and the other JA4+ methods carr
 a different licence and are not part of this crate.
 
 ```rust
-use seleniumbase_rs_stealth::codec::akamai::Akamai;
-use seleniumbase_rs_stealth::codec::ja3::Ja3;
-use seleniumbase_rs_stealth::codec::ja4::Ja4;
+use seleniumbase_rs_stealth::network::spec::akamai::Akamai;
+use seleniumbase_rs_stealth::network::spec::ja3::Ja3;
+use seleniumbase_rs_stealth::network::spec::ja4::Ja4;
 
 # fn demo() -> Result<(), Box<dyn std::error::Error>> {
 // The Akamai string measured from Chrome 155 on macOS.
@@ -263,11 +264,11 @@ BoringSSL and wreq stack can send it, and names what it cannot.
 The `wire` crate turns a measured profile into a wreq client:
 
 ```rust
-use seleniumbase_rs_stealth::wire::client::{
+use seleniumbase_rs_stealth::network::client::{
     WireFormat, WireProtocol,
 };
 use seleniumbase_rs_stealth::browser::config::Browser;
-use seleniumbase_rs_stealth::codec::header_spec::RequestShape;
+use seleniumbase_rs_stealth::network::spec::header_spec::RequestShape;
 
 # async fn demo() -> Result<(), Box<dyn std::error::Error>> {
 let profile = WireFormat::measured(Browser::Chrome)?;
@@ -316,8 +317,8 @@ the base: a JA3 has no signature algorithms, an Akamai string has no HEADERS
 priority, a header list has no TLS.
 
 ```rust
-use seleniumbase_rs_stealth::evasion::fingerprint::{Fingerprint, OsType};
-use seleniumbase_rs_stealth::wire::client::WireFormat;
+use seleniumbase_rs_stealth::identity::fingerprint::{Fingerprint, OsType};
+use seleniumbase_rs_stealth::network::client::WireFormat;
 
 # fn demo() -> Result<(), Box<dyn std::error::Error>> {
 // The identity is a core fingerprint's: here one with its own User-Agent and languages.
@@ -378,8 +379,8 @@ For example, a JA3 that adds `trust_anchors` and a signature algorithm BoringSSL
 cannot write:
 
 ```rust
-use seleniumbase_rs_stealth::wire::client::{WireFormatError, WireFormat};
-use seleniumbase_rs_stealth::codec::tls_spec::TlsSpecError;
+use seleniumbase_rs_stealth::network::client::{WireFormatError, WireFormat};
+use seleniumbase_rs_stealth::network::spec::tls_spec::TlsSpecError;
 
 # fn demo(ja3_with_trust_anchors: &str) {
 let refused = WireFormat::builder().ja3(ja3_with_trust_anchors);
@@ -409,7 +410,7 @@ and converts to and from CDP cookies. Every function that needs the time takes
 `now` in seconds since the Unix epoch.
 
 ```rust
-use seleniumbase_rs_stealth::scrape::jar::store::{CookieJar, SiteContext};
+use seleniumbase_rs_stealth::session::jar::store::{CookieJar, SiteContext};
 use url::Url;
 
 # fn demo() -> Result<(), Box<dyn std::error::Error>> {
@@ -437,7 +438,7 @@ checked against the same rules, so an edited file cannot smuggle in a cookie the
 jar would never store.
 
 `CookieJar::from_cdp(&cookies, now)` and `to_cdp(now)` convert to and from the
-cookies a CDP browser reports, which is how `BrowserScraper` moves an identity
+cookies a CDP browser reports, which is how `CdpSession` moves an identity
 between runs.
 
 ## Identity, session policy and the identity file
@@ -449,9 +450,9 @@ hints each origin asked for, the clearances found in the jar, and the egress
 those cookies were earned through.
 
 ```rust
-use seleniumbase_rs_stealth::scrape::passport::identity::{WireMeasurementRef, Identity};
-use seleniumbase_rs_stealth::scrape::runtime::identity_file;
-use seleniumbase_rs_stealth::evasion::fingerprint::{Fingerprint, OsType};
+use seleniumbase_rs_stealth::session::passport::identity::{WireMeasurementRef, Identity};
+use seleniumbase_rs_stealth::session::runtime::identity_file;
+use seleniumbase_rs_stealth::identity::fingerprint::{Fingerprint, OsType};
 use seleniumbase_rs_stealth::browser::config::Browser;
 
 # async fn demo(now: u64) -> Result<(), Box<dyn std::error::Error>> {
@@ -496,9 +497,9 @@ between plain HTTP and the browser, as a pure function of the mode, the identity
 the site's state and the time:
 
 ```rust
-use seleniumbase_rs_stealth::scrape::challenge::mitigation::FetchKind;
-use seleniumbase_rs_stealth::scrape::passport::identity::Identity;
-use seleniumbase_rs_stealth::scrape::passport::policy::{EscalationPolicy, Escalation};
+use seleniumbase_rs_stealth::session::challenge::mitigation::FetchKind;
+use seleniumbase_rs_stealth::session::passport::identity::Identity;
+use seleniumbase_rs_stealth::session::passport::policy::{EscalationPolicy, Escalation};
 
 # fn demo(identity: &Identity, now: u64) {
 let policy = EscalationPolicy {
@@ -515,9 +516,9 @@ The defaults are a margin of 120 seconds before a clearance expires, demotion
 back to HTTP after a solve, and a preference for HTTP. `after_fetch` turns an
 `Mitigation::Escalate` seen in HTTP mode into an escalation and a solved challenge in
 the browser into a demotion when the identity now holds a clearance. The tables
-are in the module documentation. `BrowserScraper` stays in the browser and never
+are in the module documentation. `CdpSession` stays in the browser and never
 applies them. [`HttpSession`](#httpsession) offers `preflight` and `assess` for a
-caller that runs its own loop, and [`StealthSession`](#stealthsession) applies
+caller that runs its own loop, and [`HybridSession`](#hybridsession) applies
 them for you.
 
 ## Challenge detection and mitigation
@@ -559,19 +560,19 @@ error. It is an attempt, not a
 guarantee: sites change their pages, and no solver here promises to pass any
 service.
 
-## BrowserScraper
+## CdpSession
 
-`scrape::runtime::browser_scraper::BrowserScraper` drives one real Chrome through
+`session::cdp_session::CdpSession` drives one real Chrome through
 the pure CDP engine. It does no TLS spoofing: Chrome's own handshake leaves the
 machine, so the page sees a genuine browser. What it adds is the loop a
 bot-protected site needs around it.
 
 ```rust
-use seleniumbase_rs_stealth::scrape::egress::geo::CountryCode;
-use seleniumbase_rs_stealth::scrape::runtime::browser_scraper::BrowserScraper;
+use seleniumbase_rs_stealth::network::proxy::geo::CountryCode;
+use seleniumbase_rs_stealth::session::cdp_session::CdpSession;
 
-# async fn demo() -> Result<(), seleniumbase_rs_stealth::scrape::error::ScrapeError> {
-let mut scraper = BrowserScraper::builder()
+# async fn demo() -> Result<(), seleniumbase_rs_stealth::session::error::SessionError> {
+let mut scraper = CdpSession::builder()
     .geo_proxies([("http://user:pass@de.proxy.example:8080", CountryCode::try_new("DE")?)])?
     .max_challenge_attempts(4)
     .build()
@@ -588,7 +589,7 @@ scraper.close().await?;
 `fetch(url)` loads the URL, reads the answer and the rendered page, runs
 `detect`, and asks the `MitigationPolicy` what to do:
 
-- a real page ends the loop and comes back as a `BrowserFetch` (URL after
+- a real page ends the loop and comes back as a `CdpFetch` (URL after
   redirects, status, headers, the rendered body, the `Detection`, how many loads
   it took, the challenge solved on the way, and the egress);
 - a challenge is solved in the browser (`solve_challenge`), then the page is
@@ -598,9 +599,9 @@ scraper.close().await?;
   up before the profile ladder starts unless the site's stored streak was already
   high; raise `max_challenge_attempts` to let one fetch climb it;
 - a rate limit or a block with no egress to change to starts a cooldown for the
-  site, which the next fetch respects (`ScrapeError::CoolingDown`);
-- when the attempts run out the fetch fails: `ScrapeError::Unsolved` if a
-  challenge was still there, `ScrapeError::GaveUp` for another reason.
+  site, which the next fetch respects (`SessionError::CoolingDown`);
+- when the attempts run out the fetch fails: `SessionError::Unsolved` if a
+  challenge was still there, `SessionError::GaveUp` for another reason.
 
 What each site did is kept in a `Ledger` (successes, challenges, blocks, the
 streak, a cooldown, the egress it last answered through). The default is in
@@ -633,7 +634,7 @@ failures in a row is out of rotation for ten minutes by default.
   earned it. When the new egress is in another country, the browser is also
   started again with the same profile in that country's language and time zone,
   because the fingerprint is written into every document before its scripts run.
-  It returns `ScrapeError::NoProxyLeft` when the pool has nothing else.
+  It returns `SessionError::NoProxyLeft` when the pool has nothing else.
 - `rotate_fingerprint()` derives a new seed, draws a new fingerprint for the same
   operating system that claims the version of the Chrome that is running, and
   starts the browser again behind the same egress, with empty cookies. What is
@@ -654,8 +655,8 @@ city, a function of the fingerprint's seed) and leave the one they were given as
 was. `ProxyLocale::localize` takes the time zone its egress reported.
 
 ```rust
-use seleniumbase_rs_stealth::evasion::fingerprint::{Fingerprint, OsType};
-use seleniumbase_rs_stealth::scrape::egress::geo::{Locale, LocaleExt};
+use seleniumbase_rs_stealth::identity::fingerprint::{Fingerprint, OsType};
+use seleniumbase_rs_stealth::network::proxy::geo::{Locale, LocaleExt};
 
 # fn demo() -> Result<(), Box<dyn std::error::Error>> {
 let fingerprint = Fingerprint::randomized_with_major(OsType::Macos, 7, 155);
@@ -672,7 +673,7 @@ assert_eq!(moved.user_agent(), fingerprint.user_agent());
 
 Every other setting is kept, and a fingerprint that denies geolocation
 (`Spoof::Off`) keeps denying it instead of being handed a position. The move
-fails with `ScrapeError::Fingerprint` (`FingerprintError` for `LocaleExt`) when the
+fails with `SessionError::Fingerprint` (`FingerprintError` for `LocaleExt`) when the
 core refuses to build the result; a fingerprint that was built before does not
 cause that. To change anything else, start from `fingerprint.to_builder()`, change
 it and call `build()?`.
@@ -689,12 +690,12 @@ local storage in a `SessionStore`, the way a browser pool lease does.
 
 ### Events and errors
 
-The scraper reports what it does to an `EventSink`. A `ScrapeEvent` can hold a
+The scraper reports what it does to an `EventSink`. A `SessionEvent` can hold a
 URL only as a `RedactedUrl` (userinfo and sensitive query values removed) and a
 proxy only as a `ProxyKey`, so a password or token cannot reach a sink by
 construction. The default sink, `TracingEventSink`, writes each event to
 `tracing` on the target `seleniumbase_rs_scrape`; `CollectingEventSink` keeps
-the newest events for tests. Errors are `ScrapeError`, whose URLs are redacted
+the newest events for tests. Errors are `SessionError`, whose URLs are redacted
 too, and which map to `SeleniumBaseError::Stealth` at the crate boundary.
 
 ### Lifetime
@@ -705,7 +706,7 @@ be used again.
 
 ## HttpSession
 
-`wire::http_session::HttpSession` sends plain HTTP requests that look like
+`session::http::HttpSession` sends plain HTTP requests that look like
 the Chrome a browser page came from. A browser spends a second or more on a page;
 a request spends milliseconds. Once a page has earned its cookies (a login, a
 passed check), an `HttpSession` carries them on: the measured TLS `ClientHello`
@@ -715,7 +716,7 @@ identity. A browser or system that was not measured is refused, not
 approximated.
 
 ```rust
-use seleniumbase_rs_stealth::wire::{HttpSessionOptions, HttpSession};
+use seleniumbase_rs_stealth::network::{HttpSessionOptions, HttpSession};
 use seleniumbase_rs_stealth::sb_cdp::Page;
 
 # async fn demo(page: Page) -> Result<(), Box<dyn std::error::Error>> {
@@ -762,8 +763,8 @@ Both refuse, before any request, what would contradict the measured handshake:
 is reported there.
 
 ```rust
-use seleniumbase_rs_stealth::wire::{HttpSession, Method};
-use seleniumbase_rs_stealth::codec::header_spec::RequestShape;
+use seleniumbase_rs_stealth::network::{HttpSession, Method};
+use seleniumbase_rs_stealth::network::spec::header_spec::RequestShape;
 
 # async fn demo(session: HttpSession) -> Result<(), Box<dyn std::error::Error>> {
 let reply = session
@@ -830,12 +831,12 @@ println!("{}: {}", reply.status(), reply.text()?);
   in one call (`Fetched { reply, verdict }`); `session.preflight(url, &identity,
   state, &rules)` asks, before a request, whether the identity's clearance is
   about to end so that the browser should take the URL first. They are the
-  pieces of your own loop; [`StealthSession`](#stealthsession) is that loop.
+  pieces of your own loop; [`HybridSession`](#hybridsession) is that loop.
 
   ```rust
-  use seleniumbase_rs_stealth::wire::http_session::{HttpAttempt, HttpRules};
-  use seleniumbase_rs_stealth::wire::HttpSession;
-  use seleniumbase_rs_stealth::scrape::Identity;
+  use seleniumbase_rs_stealth::session::http::{HttpAttempt, HttpRules};
+  use seleniumbase_rs_stealth::session::HttpSession;
+  use seleniumbase_rs_stealth::session::Identity;
 
   # async fn demo(session: HttpSession, identity: Identity) -> Result<(), Box<dyn std::error::Error>> {
   let fetched = session
@@ -892,7 +893,7 @@ handshake and refuses the connection when the client's SNI names another host.
 
 ```rust
 use std::time::SystemTime;
-use seleniumbase_rs_stealth::wire::tls_server::{
+use seleniumbase_rs_stealth::network::tls_server::{
     accept, acceptor, EphemeralCa, ALPN_HTTP1, DEFAULT_HANDSHAKE_TIMEOUT,
 };
 
@@ -949,9 +950,9 @@ the browser is valid over `HttpSession`.
 use std::sync::Arc;
 use std::time::Duration;
 
-use seleniumbase_rs_stealth::wire::{WireFormat, MitmOptions, MitmProxy};
+use seleniumbase_rs_stealth::network::{WireFormat, MitmOptions, MitmProxy};
 use seleniumbase_rs_stealth::sb_cdp::{Browser, LaunchOptions};
-use seleniumbase_rs_stealth::scrape::NoopEventSink;
+use seleniumbase_rs_stealth::session::NoopEventSink;
 use seleniumbase_rs_stealth::browser::config::Browser as BrowserName;
 
 # async fn demo() -> Result<(), Box<dyn std::error::Error>> {
@@ -1131,7 +1132,7 @@ does not share the default context's (measured). Before a WebSocket in a context
 behind the proxy, load the priming page in its first tab:
 
 ```rust
-use seleniumbase_rs_stealth::wire::MitmProxy;
+use seleniumbase_rs_stealth::network::MitmProxy;
 use seleniumbase_rs_stealth::sb_cdp::{Browser, ContextOptions};
 
 # async fn demo(browser: Browser, mitm: MitmProxy) -> Result<(), Box<dyn std::error::Error>> {
@@ -1210,9 +1211,9 @@ with Debian's Chromium 154 (`docker/Dockerfile.verify`, headless, no sandbox),
 the seven ran and passed and the persona test skipped; before the split every
 test of the file skipped there.
 
-## StealthSession
+## HybridSession
 
-`wire::stealth_session::StealthSession` joins the pieces. It presents one
+`session::hybrid::HybridSession` joins the pieces. It presents one
 `Identity` (the fingerprint, the measured browser it belongs to, the
 cookies it earned and the egress they were earned through) in one of two modes
 and moves between them by the policies:
@@ -1224,11 +1225,11 @@ and moves between them by the policies:
   handshake. A clearance earned here is valid in the other mode.
 
 ```rust
-use seleniumbase_rs_stealth::wire::StealthSession;
-use seleniumbase_rs_stealth::scrape::CountryCode;
+use seleniumbase_rs_stealth::session::HybridSession;
+use seleniumbase_rs_stealth::network::CountryCode;
 
 # async fn demo() -> Result<(), Box<dyn std::error::Error>> {
-let mut session = StealthSession::builder()
+let mut session = HybridSession::builder()
     .geo_proxies([("http://user:pass@de.proxy.example:8080", CountryCode::try_new("DE")?)])?
     .build()
     .await?;
@@ -1256,7 +1257,7 @@ A session starts in the mode its `EscalationPolicy` prefers (HTTP by default).
 3. **After a solve**, `EscalationPolicy::after_fetch`: a browser that earned a
    clearance hands the identity back to HTTP (a demotion), which carries it on.
 
-Every change of mode emits `ScrapeEvent::FetchKindChanged` with its reason. The
+Every change of mode emits `SessionEvent::FetchKindChanged` with its reason. The
 browser is closed when the session goes back to HTTP and started again, with the
 same identity and egress, when it is needed. **The MITM proxy is started the first
 time a browser is needed** (at `build()` when the policy prefers the browser) and
@@ -1270,7 +1271,7 @@ whether the fetch worked or not. The attempts per fetch default to 4
 challenge over HTTP, one in the browser solves it, and one over HTTP uses the
 clearance.
 
-`fetch` returns a `StealthFetch`: `url` after redirects, `status`, `headers`, the
+`fetch` returns a `HybridFetch`: `url` after redirects, `status`, `headers`, the
 `body` (the response body over HTTP, the rendered page in the browser), the
 `detection`, the `mode` it was got in, how many loads it took (`attempts`), the
 challenge `solved` on the way, and the `egress`. A page that took a challenge to
@@ -1279,26 +1280,26 @@ went back to HTTP to use it. A body that is not UTF-8 is read lossily.
 
 ### Building one
 
-`StealthSession::builder()` has a default for everything: Chrome with the
+`HybridSession::builder()` has a default for everything: Chrome with the
 platform's launch options, no proxy, state in memory, events written to `tracing`,
 HTTP preferred, and a profile drawn from a random seed.
 
 | Setting | What it does |
 |---|---|
 | `launch_options(options)`, `launcher(..)` | How the browser starts. `options` is a built `LaunchOptions`; the session makes a copy of it with its fingerprint (`LaunchOptions::with_fingerprint`). A setting made in the options (a user agent, say) wins over the fingerprint's, and the proxy is always the MITM proxy's. |
-| `geo_proxies([(spec, country)])`, `proxy_rotation(..)` | The egress pool and how it picks, as for `BrowserScraper`. Both legs leave through the same egress. |
+| `geo_proxies([(spec, country)])`, `proxy_rotation(..)` | The egress pool and how it picks, as for `CdpSession`. Both legs leave through the same egress. |
 | `max_challenge_attempts(n)`, `mitigation(policy)` | Loads per fetch (zero reads as one) and the whole mitigation policy. |
 | `policy(EscalationPolicy)` | The mode it prefers, whether HTTP needs a clearance, the clearance margin, whether a solve sends it back to HTTP. |
-| `ledger(..)`, `event_sink(..)`, `geo_resolver(..)`, `rate_limit(calls, window)` | As for `BrowserScraper`. The HTTP leg and the proxy report to the same sink. |
+| `ledger(..)`, `event_sink(..)`, `geo_resolver(..)`, `rate_limit(calls, window)` | As for `CdpSession`. The HTTP leg and the proxy report to the same sink. |
 | `seed(..)`, `fingerprint(..)` | The first profile. A fingerprint must claim the measured Chrome. |
 | `restore(identity)` | Starts from a saved identity: its fingerprint, cookies and clearances. It must belong to one of the proxies added, or to the direct connection when there is none. |
 | `http_session_options(HttpSessionOptions)`, `mitm_options(MitmOptions)` | The limits of each leg. The session's clock and event sink replace the ones in the HTTP options. |
 | `clock(..)` | The clock. How long a solve is waited for is the `verify_timeout` of the mitigation policy's `SolveOptions` (thirty seconds by default). |
 
-`build()` fails with `StealthError::WireFormat` when this machine's system has no
-measured Chrome or the profile claims another version, `StealthError::Scrape` for
+`build()` fails with `HybridError::WireFormat` when this machine's system has no
+measured Chrome or the profile claims another version, `HybridError::Scrape` for
 an egress whose country has no locale, an identity that belongs to another egress
-or no browser to start, `StealthError::Http` and `StealthError::Mitm` for the
+or no browser to start, `HybridError::Http` and `HybridError::Mitm` for the
 legs.
 
 ### Moving by hand
@@ -1318,7 +1319,7 @@ was.
 
 ### Errors
 
-`StealthError` has one variant per layer: `Scrape` (the browser leg, the site
+`HybridError` has one variant per layer: `Scrape` (the browser leg, the site
 state, an identity or the mitigation policy; `Unsolved`, `GaveUp` and
 `CoolingDown` come as this variant), `Http`, `Mitm` and `Impersonate`. Each
 already keeps URLs redacted and credentials out of its text. At the crate
@@ -1328,23 +1329,23 @@ boundary it maps to `SeleniumBaseError`.
 
 - The measured Chrome and the installed Chrome must have the same major version.
   A browser that is another version is refused before it loads a page
-  (`StealthError::WireFormat`).
+  (`HybridError::WireFormat`).
 - A launched browser lives until the session leaves the browser mode or is
   closed. There is no idle timeout and no deadline in the session.
-- It runs the same fetch loop as `BrowserScraper`, with plain HTTP as the first
+- It runs the same fetch loop as `CdpSession`, with plain HTTP as the first
   move. A matching handshake is one signal among many, and a session does not
   make automation permitted by a site's terms. See [Limits](#limits).
 
 ### What was run
 
-`tests/stealth_session.rs` runs the real HTTP leg against a loopback TLS shop
+`tests/hybrid_session.rs` runs the real HTTP leg against a loopback TLS shop
 that trusts only its own ephemeral authority, with a scripted browser
 (`Browser::new_mocked`, feature `test-util`): every transition of the state
 machine and its events, export and restore, rotating the profile and the egress,
 and that secrets stay out of output. The MITM proxy is started and the browser
 is launched behind it, but the traffic of a browser is not made.
 
-`tests/stealth_session_chrome.rs` runs the story with the real Chrome 155 on
+`tests/hybrid_session_chrome.rs` runs the story with the real Chrome 155 on
 macOS, headless (`#[ignore]`d): the session asks over HTTP and meets a script
 challenge on a loopback TLS shop; it starts the proxy and a Chrome behind it with
 the same fingerprint and egress; Chrome runs the challenge page's script, which
@@ -1369,15 +1370,15 @@ not any vendor's challenge, and getting past it says nothing about a real servic
 | `examples/cookie_jar.rs` | `scrape` | Nothing | Made-up `Set-Cookie` headers into the [cookie jar](#the-cookie-jar): which are stored, which are refused and why, and the `Cookie` header for five requests. |
 | `examples/custom_profile.rs` | `wire` | `cmake`; Chrome 155 on macOS | The measured profile, with an Akamai string and a JA3 laid over it with `WireFormatBuilder`, and four inputs the stack [refuses](#what-is-refused). |
 | `examples/http_session.rs` | `wire` | `cmake`; Chrome 155 on macOS | An [`HttpSession`](#httpsession) fetching from a loopback TLS shop, its jar carrying the cookie the shop sets, and the JA4 the shop saw next to the measured one. |
-| `examples/stealth_session.rs` | `wire` | `cmake`; Chrome 155 on macOS, installed | A [`StealthSession`](#stealthsession) that meets a challenge over HTTP, goes to a headless Chrome behind the proxy, comes back, and prints its changes of mode. |
-| `examples/browser_scraper.rs` | `scrape` | A Chrome | A [`BrowserScraper`](#browserscraper) detecting and solving the same kind of challenge in a headless Chrome. |
+| `examples/hybrid_session.rs` | `wire` | `cmake`; Chrome 155 on macOS, installed | A [`HybridSession`](#hybridsession) that meets a challenge over HTTP, goes to a headless Chrome behind the proxy, comes back, and prints its changes of mode. |
+| `examples/cdp_session.rs` | `scrape` | A Chrome | A [`CdpSession`](#cdpsession) detecting and solving the same kind of challenge in a headless Chrome. |
 
 ```text
-cargo run -p seleniumbase-rs-scrape      --example cookie_jar
-cargo run -p seleniumbase-rs-wire --example custom_profile
-cargo run -p seleniumbase-rs-wire --example http_session
-cargo run -p seleniumbase-rs-wire --example stealth_session
-cargo run -p seleniumbase-rs-scrape      --example browser_scraper
+cargo run -p seleniumbase-rs-stealth (`session`)      --example cookie_jar
+cargo run --features network --example custom_profile
+cargo run --features network --example http_session
+cargo run --features network --example hybrid_session
+cargo run -p seleniumbase-rs-stealth (`session`)      --example browser_scraper
 ```
 
 The three that use the measured emulation stop at once with the `NotMeasured`
@@ -1424,8 +1425,8 @@ State these plainly to yourself before you build on any of this.
 
   `HttpSession` and `MitmProxy` send the handshake of this client, so the gaps
   apply to them. Behind the `MitmProxy` the origin sees our handshake, gaps
-  included, and not Chrome's own, which `BrowserScraper` leaves with unchanged.
-  That is the price of one wire identity in both modes of a `StealthSession`.
+  included, and not Chrome's own, which `CdpSession` leaves with unchanged.
+  That is the price of one wire identity in both modes of a `HybridSession`.
 - **No HTTP/3.** wreq has none, and Chrome behind the proxy has QUIC switched off.
 - **WebSocket passes the `MitmProxy` as `wss://` and `ws://`** (the latter in
   plain text, so with no hello to impersonate); every other upgrade is refused.
@@ -1437,16 +1438,16 @@ State these plainly to yourself before you build on any of this.
   header**, in `HttpSession` and in `MitmProxy`, because the protocol is known
   only after the connection opens. Later requests to that origin do not carry it.
 - **Headless, one system.** The tests that drive Chrome through `MitmProxy`,
-  `HttpSession::from_page` and `StealthSession` launch it headless on macOS with
+  `HttpSession::from_page` and `HybridSession` launch it headless on macOS with
   Chrome 155; none drives them headed. The measured tables were captured from a
   headed Chrome, and headless and headed Chrome differ.
 - **`HttpSession` follows redirects where they point,** a private address
   included. Filter the URLs before the session sees them if they are not yours.
 - **Tested against local captures and servers, not against live services.** The
   wire layer is tested against committed captures and, in tests marked
-  `#[ignore]`, against a local Chrome. The `BrowserScraper` flows are tested with
+  `#[ignore]`, against a local Chrome. The `CdpSession` flows are tested with
   a scripted browser and with ignored tests that drive a local Chrome.
-  `HttpSession`, `MitmProxy` and `StealthSession` are tested against loopback TLS
+  `HttpSession`, `MitmProxy` and `HybridSession` are tested against loopback TLS
   sites and a challenge page written for the tests, with a scripted browser, and
   in ignored tests with the local Chrome. Nothing here was checked against a live
   bot-protection service. The identity file's permissions check is Unix only.
@@ -1468,11 +1469,11 @@ State these plainly to yourself before you build on any of this.
 | `UnsupportedExtension`, `UnsupportedSigalg`, `UnsupportedSetting` | The input asks for something BoringSSL or wreq cannot send. | Remove it. The error names the id. |
 | The build fails while compiling BoringSSL | `cmake` or a C/C++ toolchain is missing. | Install them, or do not depend on the `wire` crate. |
 | `IdentityFileError::Permissions` | Group or others can read the identity file. | `chmod 600` it, or delete it and make a new one. |
-| `ScrapeError::CoolingDown` | The site answered with a block or rate limit and is being left alone. | Wait until the time in the error (seconds since the Unix epoch), or give the scraper another egress. |
-| `ScrapeError::Unsolved` | A challenge was still there after the attempts allowed. | Raise `max_challenge_attempts`, add egresses, or accept that this page needs a person. |
-| `ScrapeError::NoProxyLeft` | A rotation was asked for and the pool has nothing else in rotation. | Add proxies with `geo_proxies`. |
-| `ScrapeError::Fingerprint` | The core refused to build the fingerprint a locale move or a rotation needed (`Off` where an API cannot be off, a proxy without a host, nothing coherent to draw). | Read the message: it names the setting. Build your own fingerprint with `to_builder()` and fix it. |
-| `HttpError::VersionMismatch`, `StealthError::WireFormat` | The page, the identity or the installed Chrome is another major than the measured one. | Update or downgrade Chrome to the measured major, or run the capture tools again. |
+| `SessionError::CoolingDown` | The site answered with a block or rate limit and is being left alone. | Wait until the time in the error (seconds since the Unix epoch), or give the scraper another egress. |
+| `SessionError::Unsolved` | A challenge was still there after the attempts allowed. | Raise `max_challenge_attempts`, add egresses, or accept that this page needs a person. |
+| `SessionError::NoProxyLeft` | A rotation was asked for and the pool has nothing else in rotation. | Add proxies with `geo_proxies`. |
+| `SessionError::Fingerprint` | The core refused to build the fingerprint a locale move or a rotation needed (`Off` where an API cannot be off, a proxy without a host, nothing coherent to draw). | Read the message: it names the setting. Build your own fingerprint with `to_builder()` and fix it. |
+| `HttpError::VersionMismatch`, `HybridError::WireFormat` | The page, the identity or the installed Chrome is another major than the measured one. | Update or downgrade Chrome to the measured major, or run the capture tools again. |
 | `HttpError::WireFormat` for a page | The page announces itself as `HeadlessChrome`, is not Chrome, or runs on a system that was not measured. | Give the browser a fingerprint or run it headed; use the measured system. |
 | `HttpError::ReservedHeader` | A request set a header the profile owns (`User-Agent`, `Sec-CH-UA*`, `Accept-Language`, `Accept-Encoding`, `Cookie`, `priority`). | Remove it. Change the identity instead. |
 | `HttpError::RedirectRefused`, `TooManyRedirects` | A hop led somewhere the session refuses, or past the limit. | Request the final URL, or raise `max_redirects`. |
@@ -1482,8 +1483,8 @@ State these plainly to yourself before you build on any of this.
 ---
 
 Verified against commit `4184e74` and the re-exports added after it, by reading
-`crates/codec/src/**`, `crates/scrape/src/**`, `crates/wire/src/**`, `examples/capture_*.rs`,
-`crates/codec/src/measured/chrome-155-macos.json` and the tests that pin the behaviour
+`src/network/spec/**`, `src/session/**`, `src/network/**`, `examples/capture_*.rs`,
+`src/network/spec/measured/chrome-155-macos.json` and the tests that pin the behaviour
 described here. The code samples were checked against the signatures in those
 files; they were not compiled or run for this check. The real-Chrome tests named
 here are `#[ignore]`d and were not run for this check.

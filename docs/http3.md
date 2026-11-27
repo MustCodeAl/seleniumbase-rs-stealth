@@ -6,17 +6,17 @@
 > (`docs/stealth/advanced/http3.md` in the seleniumbase-rs repository). When the measurements
 > below change (a phantom upgrade), update both.
 
-The wire crate sends HTTP/1.1 and HTTP/2 with Chrome's TLS and HTTP/2 settings through wreq and
-`BoringSSL`. HTTP/3 needs a QUIC stack. The one used here is
+The `network` layer sends HTTP/1.1 and HTTP/2 with Chrome's TLS and HTTP/2 settings through wreq
+and `BoringSSL`. HTTP/3 needs a QUIC stack. The one used here is
 [phantom-http](https://crates.io/crates/phantom-http) `=0.6.0`, which brings its own `BoringSSL`.
 The two `BoringSSL` builds cannot be linked into one binary: on macOS arm64 the linker crashes, and
 they export 6,047 of the same symbol names (`docs/design/http3.md`). So HTTP/3 runs in a separate
-program, `sbrs-h3d`, and the wire crate talks to it over stdin and stdout.
+program, `sbrs-h3d`, and `network::http3` talks to it over stdin and stdout.
 
 ## Using it
 
 ```bash
-cargo install --path crates/h3d            # builds sbrs-h3d (phantom and its BoringSSL)
+cargo install --path h3d                   # builds sbrs-h3d (phantom and its BoringSSL)
 ```
 
 ```toml
@@ -24,7 +24,7 @@ seleniumbase-rs-stealth = { git = "https://github.com/MustCodeAl/seleniumbase-rs
 ```
 
 ```rust,ignore
-use seleniumbase_rs_stealth::wire::http3::{Http3Client, Http3Options, Http3Request};
+use seleniumbase_rs_stealth::network::http3::{Http3Client, Http3Options, Http3Request};
 
 let mut client = Http3Client::start(&Http3Options::new())?; // sbrs-h3d on the PATH, or SBRS_H3D
 let response = client.send(Http3Request::get("https://example.com/")).await?;
@@ -32,12 +32,13 @@ assert_eq!(response.protocol(), "h3");
 ```
 
 - Every request goes over HTTP/3 only; nothing falls back to HTTP/2. To fall back, send the
-  request again through `HttpSession`.
+  request again through `session::HttpSession`.
 - A missing helper is the error `Http3Error::HelperMissing`, which says how to install it; a
   helper that ended is `Http3Error::HelperEnded`. Nothing panics.
-- The helper uses phantom's `chrome-156-macos` profile unless `Http3Options::profile` names
-  another. Its headers come from that profile's navigation template; a header you add keeps the
-  template's place when the template has it.
+- The helper uses phantom's `chrome-156-macos` profile unless `Http3Options::profile` (or
+  `for_browser` / `for_version` / `for_fingerprint`) names another. Its headers come from that
+  profile's navigation template; a header you add keeps the template's place when the template has
+  it.
 - `Alt-Svc` is off by default; enable `HttpSessionOptions::http3_alt_svc(true)` to learn `h3`
   advertisements and opportunistically upgrade subsequent hops (falling back to HTTP/2 on failure).
   Explicit `HttpRequest::protocol(WireProtocol::Http3)` always stays strict HTTP/3.
@@ -47,16 +48,18 @@ assert_eq!(response.protocol(), "h3");
   proxies are rejected because QUIC requires UDP.
 - `Http3Pool` reuses live `sbrs-h3d` helper processes (`Http3Options::pool(max_idle)`) and exposes
   `get(url)` and `post_json(url, &payload)` shorthands alongside `send(Http3Request)`.
-- `Http3Request` provides ergonomic builders (`headers`, `bearer_auth`, `basic_auth`, `referer`,
+- `Http3Request` provides builders (`headers`, `bearer_auth`, `basic_auth`, `referer`,
   `origin`, `accept_language`, `cookie`, `query`, `form`, `text_body`, `json`) and `Http3Response`
   provides inspection helpers (`headers_all`, `cookies`, `content_type`, `is_success`,
   `is_redirect`, `is_client_error`, `is_server_error`, `text`, `text_lossy`, `json`).
+- RFC 9001 / RFC 9369 Initial packet decryption and HTTP/3 frame / QPACK decoding live beside the
+  client under `seleniumbase_rs_stealth::network::http3::capture`.
 
 ## What matches Chrome, and what does not
 
-These are the results of the HTTP/3 spike (`spike/http3`, `docs/design/http3.md`). It compared
-phantom's `chrome-156-macos` profile with headless Chrome 156.0.8078.76 on macOS, both against a
-local server that logged what it received. Nothing else was compared.
+These are the results of the HTTP/3 spike (`docs/design/http3.md`). It compared phantom's
+`chrome-156-macos` profile with headless Chrome 156.0.8078.76 on macOS, both against a local
+server that logged what it received. Nothing else was compared.
 
 **Measured the same as Chrome 156:**
 
@@ -84,19 +87,18 @@ migration, QUIC v2, the spin bit, later requests on a warm connection, long-live
 any real network or site, and Chrome on Windows or Linux.
 
 In short, this is "Chrome 156 TLS, transport parameters, SETTINGS and headers over QUIC", not
-"Chrome's QUIC". The wire crate's own HTTP/2 entry is Chrome 155. HTTP/3 uses phantom's 156 profile.
-So a session that uses both presents two majors until the two entries are measured at one version
-(step 4 of the integration plan in `docs/design/http3.md`).
+"Chrome's QUIC". The `network` layer's HTTP/2 entry is Chrome 155. HTTP/3 uses phantom's 156
+profile. So a session that uses both presents two majors until the two entries are measured at one
+version (step 4 of the integration plan in `docs/design/http3.md`).
 
 ## Version pin
 
-`crates/h3d` pins `phantom-http = "=0.6.0"` and commits its own `Cargo.lock`. phantom is pre-1.0 and
-changes fast. An upgrade is a pull request that runs the spike's capture again and updates the lists
-above.
+`h3d/` pins `phantom-http = "=0.6.0"` and commits its own `Cargo.lock`. phantom is pre-1.0 and
+changes fast. An upgrade is a pull request that runs the capture again and updates the lists above.
 
 ## Tests
 
-`crates/h3d/tests/local_h3.rs` starts a local HTTP/3 server (quinn and h3 on 127.0.0.1, a fresh
+`h3d/tests/local_h3.rs` starts a local HTTP/3 server (quinn and h3 on 127.0.0.1, a fresh
 self-signed certificate) and drives `sbrs-h3d` against it:
 
 - a GET over `h3`, with the profile's Chrome `User-Agent`;
@@ -104,11 +106,11 @@ self-signed certificate) and drives `sbrs-h3d` against it:
 - a server that never answers, which gives an error within the time limit;
 - a line that is not a request, which gets an answer while the next request still works.
 
-The wire crate's tests check the line format against a stand-in script. Run them with:
+The library's unit tests check the line format against a stand-in script. Run them with:
 
 ```bash
-cd crates/h3d && cargo test
-cargo test -p seleniumbase-rs-wire --features http3 --lib http3
+cd h3d && cargo test
+cargo test --features http3 --lib network::http3
 ```
 
-The root workspace never builds `crates/h3d`, so the usual gate does not build phantom.
+The root crate never builds `h3d/`, so the usual gate does not build phantom.

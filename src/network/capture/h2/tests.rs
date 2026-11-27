@@ -2,7 +2,7 @@
 //! needs a browser; the real-Chrome run is `tests/impersonate_capture_h2_chrome.rs`.
 //!
 //! The values below are made up for the tests (a stand-in browser's settings and headers). The
-//! measured values live in `src/network/spec/measured` and are checked by `crates/codec/tests/wire_measurement.rs`.
+//! measured values live in `src/network/spec/measured` and are checked by `tests/wire_measurement.rs`.
 
 mod run;
 mod site;
