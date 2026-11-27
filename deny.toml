@@ -33,7 +33,9 @@ wildcards = "warn"
 [sources]
 unknown-registry = "deny"
 unknown-git = "deny"
-# The core library (`seleniumbase-rs`) comes from its own repository, as a plain git
-# dependency so that Cargo resolves a user's copy and ours to one commit, until it is on
-# crates.io.
-allow-git = ["https://github.com/MustCodeAl/seleniumbase-rs"]
+# The core library (`seleniumbase-rs`) and its transitive plugin API (`seleniumbase-rs-plugins`)
+# come from their own repositories until published on crates.io.
+allow-git = [
+    "https://github.com/MustCodeAl/seleniumbase-rs",
+    "https://github.com/MustCodeAl/seleniumbase-rs-plugins",
+]
