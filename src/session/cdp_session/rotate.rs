@@ -10,8 +10,8 @@ use crate::session::error::SessionError;
 use crate::session::ledger::events::SessionEvent;
 use crate::session::passport::identity::{Identity, WireMeasurementRef};
 use seleniumbase_rs::browser::config::Browser as BrowserName;
-use seleniumbase_rs::sb_cdp::human::humanize::Rng;
 use seleniumbase_rs::sb_cdp::Browser;
+use seleniumbase_rs::sb_cdp::human::humanize::Rng;
 
 impl CdpSession {
     /// Leaves through another proxy of the pool.

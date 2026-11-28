@@ -3,7 +3,7 @@
 
 use super::super::set_cookie::MAX_LIFETIME_SECS;
 use super::rules::{canonical_domain, validate};
-use super::{IgnoreReason, StoredCookie, ROOT_PATH};
+use super::{IgnoreReason, ROOT_PATH, StoredCookie};
 use seleniumbase_rs::sb_cdp::Cookie;
 
 /// The marker CDP puts before the domain of a domain cookie.

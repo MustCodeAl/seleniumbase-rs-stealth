@@ -1,8 +1,8 @@
 //! The scripted world the session tests run in: the shop, a launcher of scripted browsers, a clock
 //! the test moves, and the sinks that record what the session did.
 
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use seleniumbase_rs::browser::config::Browser;
@@ -11,7 +11,7 @@ use seleniumbase_rs_stealth::network::proxy::geo::CountryCode;
 use seleniumbase_rs_stealth::network::spec::measurement;
 use seleniumbase_rs_stealth::session::challenge::mitigation::{FetchKind, MitigationPolicy};
 use seleniumbase_rs_stealth::session::hybrid::{
-    HybridSession, HybridSessionBuilder, DEFAULT_ATTEMPTS,
+    DEFAULT_ATTEMPTS, HybridSession, HybridSessionBuilder,
 };
 use seleniumbase_rs_stealth::session::ledger::events::{CollectingEventSink, SessionEvent};
 use seleniumbase_rs_stealth::session::ledger::state::InMemoryLedger;

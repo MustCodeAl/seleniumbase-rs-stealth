@@ -18,7 +18,7 @@ use wreq::Method;
 
 use super::error::HttpError;
 use super::reply::ResponseHeaders;
-use super::request::{check_target, Prepared, CROSS_ORIGIN_HEADERS};
+use super::request::{CROSS_ORIGIN_HEADERS, Prepared, check_target};
 use crate::network::proxy::redact::RedactedUrl;
 use crate::session::jar::store::site_of;
 
@@ -288,9 +288,11 @@ mod tests {
         assert!(target_of(302, &with, &from, false).expect("ok").is_none());
         assert!(target_of(200, &with, &from, true).expect("ok").is_none());
         assert!(target_of(304, &with, &from, true).expect("ok").is_none());
-        assert!(target_of(302, &headers(&[]), &from, true)
-            .expect("ok")
-            .is_none());
+        assert!(
+            target_of(302, &headers(&[]), &from, true)
+                .expect("ok")
+                .is_none()
+        );
     }
 
     #[test]

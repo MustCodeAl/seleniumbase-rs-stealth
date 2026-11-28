@@ -21,7 +21,9 @@ pub enum HttpError {
     ///
     /// A request that claims Chrome `browser` over the hello of Chrome `measured` is a
     /// contradiction a detector can see, so none is sent until the capture tools run again.
-    #[error("the browser is Chrome {browser}, but the measured TLS and HTTP/2 are Chrome {measured}; run the capture tools again")]
+    #[error(
+        "the browser is Chrome {browser}, but the measured TLS and HTTP/2 are Chrome {measured}; run the capture tools again"
+    )]
     VersionMismatch {
         /// The major version the browser or identity claims.
         browser: u32,
@@ -38,7 +40,9 @@ pub enum HttpError {
     /// through the proxy from this machine's own address, which discloses it and presents a
     /// clearance from an address that did not earn it. Pass the egress the proxy leaves
     /// through, or say that it leaves directly. The proxy is named without credentials.
-    #[error("the page's browser leaves through the proxy {proxy}, which a page does not show; pass the egress it really leaves through, or say with HttpSessionOptions::browser_proxy_exits_directly that it leaves directly")]
+    #[error(
+        "the page's browser leaves through the proxy {proxy}, which a page does not show; pass the egress it really leaves through, or say with HttpSessionOptions::browser_proxy_exits_directly that it leaves directly"
+    )]
     BrowserProxy {
         /// The proxy of the browser, as its command line names it (no credentials).
         proxy: String,

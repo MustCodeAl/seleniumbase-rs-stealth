@@ -109,10 +109,12 @@ async fn the_browser_runs_behind_the_proxy_and_is_closed_when_the_session_goes_b
     let browser = world.launcher.nth(0);
     let server = browser.proxy_server().expect("the browser has a proxy");
     assert!(server.starts_with("http://127.0.0.1:"), "{server}");
-    assert!(browser
-        .options
-        .proxy()
-        .is_some_and(seleniumbase_rs::sb_cdp::Proxy::has_credentials));
+    assert!(
+        browser
+            .options
+            .proxy()
+            .is_some_and(seleniumbase_rs::sb_cdp::Proxy::has_credentials)
+    );
     assert!(!browser.browser.is_connected(), "the browser was closed");
     assert!(browser.is_cleared());
     session.close().await.expect("closes");
@@ -292,11 +294,13 @@ async fn a_clearance_near_its_end_sends_the_next_fetch_to_the_browser() {
         (FetchKind::Browser, 1, None)
     );
     assert_eq!(world.launcher.count(), 2);
-    assert!(world
-        .launcher
-        .last()
-        .imported_names()
-        .contains(&CLEARANCE.to_owned()));
+    assert!(
+        world
+            .launcher
+            .last()
+            .imported_names()
+            .contains(&CLEARANCE.to_owned())
+    );
     let last = world.changes().last().copied().expect("a change");
     assert_eq!(
         last,

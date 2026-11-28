@@ -17,7 +17,7 @@ mod client;
 mod request;
 
 #[cfg(feature = "http3")]
-pub use client::{Http3Client, Http3Error, Http3Options, Http3Pool, HELPER_VAR};
+pub use client::{HELPER_VAR, Http3Client, Http3Error, Http3Options, Http3Pool};
 #[cfg(feature = "http3")]
 pub use request::{Http3Request, Http3RequestKind, Http3Response};
 

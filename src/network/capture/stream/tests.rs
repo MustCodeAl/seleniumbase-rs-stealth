@@ -1,11 +1,11 @@
 //! Tests of the first-message readers, fed from memory.
 
-use tokio::io::{duplex, DuplexStream};
+use tokio::io::{DuplexStream, duplex};
 
 use super::*;
 use crate::network::spec::akamai::PseudoHeader;
-use crate::network::spec::client_hello::fixtures::HelloBuilder;
 use crate::network::spec::client_hello::ClientHelloError;
+use crate::network::spec::client_hello::fixtures::HelloBuilder;
 use crate::network::spec::h2_frames::CLIENT_PREFACE;
 
 const WITHIN: Duration = Duration::from_secs(2);

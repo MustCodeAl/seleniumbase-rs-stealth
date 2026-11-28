@@ -32,7 +32,7 @@ pub const DEFAULT_MAX_REDIRECTS: usize = 10;
 /// The most redirects [`HttpSessionOptions::validate`] accepts as a limit.
 pub const MAX_REDIRECT_LIMIT: usize = 30;
 /// The most paced sites kept at once; past it the table starts over.
-pub const MAX_PACED_SITES: usize = 4096;
+pub use crate::session::pace::MAX_PACED_SITES;
 
 /// The time source of the scrape layer, seconds since the Unix epoch; the session reads the time
 /// through it, so a test can move it.

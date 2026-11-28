@@ -11,7 +11,7 @@ use seleniumbase_rs_stealth::session::ledger::events::{
 };
 
 use crate::browser::ScriptedLauncher;
-use crate::world::{country, World};
+use crate::world::{World, country};
 
 /// Proxies that are never connected to, with passwords that must never be shown.
 const US_PROXY: &str = "http://alice:s3cret@us.proxy.test:8080";

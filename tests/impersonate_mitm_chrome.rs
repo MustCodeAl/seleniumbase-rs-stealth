@@ -40,8 +40,8 @@ mod support;
 
 use std::net::Ipv4Addr;
 use std::pin::Pin;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use btls::asn1::Asn1Time;
@@ -52,7 +52,7 @@ use btls::nid::Nid;
 use btls::pkey::{PKey, Private};
 use btls::ssl::{Ssl, SslAcceptor, SslMethod};
 use btls::x509::extension::SubjectAlternativeName;
-use btls::x509::{X509Name, X509};
+use btls::x509::{X509, X509Name};
 use seleniumbase_rs::browser::config::Browser as BrowserName;
 use seleniumbase_rs::sb_cdp::{Browser, ContextOptions, LaunchOptions, Page};
 use seleniumbase_rs_stealth::identity::fingerprint::OsType;
@@ -68,7 +68,7 @@ use tokio_btls::SslStream;
 
 use echo::{EchoOrigin, PlainEchoOrigin};
 use support::{
-    der, new_ca, profile, read_head, start_mitm, tunnel, RecordingOrigin, Seen, ALPN_H2, WITHIN,
+    ALPN_H2, RecordingOrigin, Seen, WITHIN, der, new_ca, profile, read_head, start_mitm, tunnel,
 };
 
 /// The host of the origin.

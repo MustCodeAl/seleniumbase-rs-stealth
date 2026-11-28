@@ -17,13 +17,13 @@ use std::collections::BTreeSet;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use super::client_hello::{ext_id, is_grease, without_grease, ClientHello};
+use super::client_hello::{ClientHello, ext_id, is_grease, without_grease};
 use super::ids::{
     BORINGSSL_CIPHERS, BORINGSSL_CLIENT_EXTENSIONS, BORINGSSL_GROUPS, BORINGSSL_SIGALGS,
     EC_POINT_UNCOMPRESSED, ML_DSA_SIGALGS, REFUSED_EXTENSIONS, SIGNATURE_ALGORITHMS,
     TLS12_LEGACY_VERSION, TLS13_CIPHERS,
 };
-use super::ja3::peetprint::{slots, PeetprintField, PeetprintSlot};
+use super::ja3::peetprint::{PeetprintField, PeetprintSlot, slots};
 use super::ja3::{Ja3, Peetprint};
 use super::ja4::{Ja4, Ja4Facts, Ja4Order, Ja4Raw, Ja4Section};
 

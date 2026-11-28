@@ -33,5 +33,5 @@
 pub mod h3wire;
 pub mod initial;
 
-pub use h3wire::{decode_field_section, parse_frames, parse_settings, Frame};
-pub use initial::{client_initial_keys, parse_long_header, InitialKeys, LongHeader};
+pub use h3wire::{Frame, decode_field_section, parse_frames, parse_settings};
+pub use initial::{InitialKeys, LongHeader, client_initial_keys, parse_long_header};

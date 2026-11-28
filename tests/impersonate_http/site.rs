@@ -26,7 +26,7 @@ use seleniumbase_rs_stealth::network::spec::client_hello::{ClientHello, MAX_CLIE
 use seleniumbase_rs_stealth::network::spec::h2_frames::H2Preface;
 use seleniumbase_rs_stealth::network::spec::measurement;
 use seleniumbase_rs_stealth::network::tls_server::{
-    accept, acceptor, EphemeralCa, ALPN_HTTP1, DEFAULT_HANDSHAKE_TIMEOUT,
+    ALPN_HTTP1, DEFAULT_HANDSHAKE_TIMEOUT, EphemeralCa, accept, acceptor,
 };
 use seleniumbase_rs_stealth::session::http::{HttpSession, HttpSessionOptions};
 use seleniumbase_rs_stealth::session::passport::identity::{Identity, WireMeasurementRef};

@@ -2643,10 +2643,12 @@ mod tests {
         assert!(known_full_version(161).is_none());
         let hints = chromium_hints(161);
         assert_eq!(hints.ua_full_version, "161.0.0.0");
-        assert!(hints
-            .full_version_list
-            .iter()
-            .any(|b| b.brand == "Google Chrome" && b.version == "161.0.0.0"));
+        assert!(
+            hints
+                .full_version_list
+                .iter()
+                .any(|b| b.brand == "Google Chrome" && b.version == "161.0.0.0")
+        );
     }
 
     #[test]
@@ -2700,8 +2702,10 @@ mod tests {
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 \
              (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36"
         );
-        assert!(chromium_user_agent("Linux; Android 10; K", 155, true)
-            .ends_with("Chrome/155.0.0.0 Mobile Safari/537.36"));
+        assert!(
+            chromium_user_agent("Linux; Android 10; K", 155, true)
+                .ends_with("Chrome/155.0.0.0 Mobile Safari/537.36")
+        );
     }
 
     /// Rows of a table must be distinct: a repeated row is a copy-paste slip
@@ -3070,10 +3074,12 @@ mod tests {
             },
         );
         assert!(pinned.profile.user_agent.contains("Version/26.0"));
-        assert!(pinned
-            .profile
-            .user_agent
-            .contains("CPU iPhone OS 18_6 like Mac OS X"));
+        assert!(
+            pinned
+                .profile
+                .user_agent
+                .contains("CPU iPhone OS 18_6 like Mac OS X")
+        );
     }
 
     #[test]
@@ -3098,14 +3104,18 @@ mod tests {
         for seed in 0..30 {
             let windows = draw(OsType::Windows, seed, &Pins::default());
             assert!(windows.fonts().iter().any(|f| f == "Segoe UI"));
-            assert!(windows
-                .battery()
-                .is_some_and(|b| (0.0..=1.0).contains(&b.level)));
+            assert!(
+                windows
+                    .battery()
+                    .is_some_and(|b| (0.0..=1.0).contains(&b.level))
+            );
             let webrtc = windows.webrtc();
-            assert!(webrtc
-                .local_ip
-                .as_deref()
-                .is_some_and(|ip| ip.starts_with("192.168.")));
+            assert!(
+                webrtc
+                    .local_ip
+                    .as_deref()
+                    .is_some_and(|ip| ip.starts_with("192.168."))
+            );
             let phone = draw(OsType::Android, seed, &Pins::default());
             assert_eq!(phone.media_devices(), MediaDevices::counts(1, 1, 2));
             let safari = draw(OsType::Ios, seed, &Pins::default());

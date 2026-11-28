@@ -11,7 +11,7 @@ use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::Write;
 
-use seleniumbase_rs_stealth::network::spec::client_hello::{ext_id, without_grease, ClientHello};
+use seleniumbase_rs_stealth::network::spec::client_hello::{ClientHello, ext_id, without_grease};
 use seleniumbase_rs_stealth::network::spec::h2_spec::{ALWAYS_SENT_SETTINGS, EMITTABLE_SETTINGS};
 use seleniumbase_rs_stealth::network::spec::ids::{
     BORINGSSL_ALWAYS_SENT_EXTENSIONS, BORINGSSL_CIPHERS, BORINGSSL_CLIENT_EXTENSIONS,

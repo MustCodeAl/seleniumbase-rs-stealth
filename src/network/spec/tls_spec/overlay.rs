@@ -5,13 +5,13 @@
 
 use std::collections::BTreeSet;
 
-use super::{duplicate, first_duplicate, TlsSpec, TlsSpecError};
+use super::{TlsSpec, TlsSpecError, duplicate, first_duplicate};
 use crate::network::spec::client_hello::ext_id;
 use crate::network::spec::ids::{ALPN_H2, ALPN_HTTP_1_1, EC_POINT_UNCOMPRESSED};
-use crate::network::spec::ja3::peetprint::{ids as slot_ids, PeetprintField, PeetprintSlot};
+use crate::network::spec::ja3::peetprint::{PeetprintField, PeetprintSlot, ids as slot_ids};
 use crate::network::spec::ja3::{Ja3, Peetprint};
 use crate::network::spec::ja4::{
-    alpn_code, version_from_code, Ja4Order, Ja4Raw, Ja4Section, NO_ALPN,
+    Ja4Order, Ja4Raw, Ja4Section, NO_ALPN, alpn_code, version_from_code,
 };
 
 /// ALPN name the `JA4` ALPN field may stand for besides the spec's own list.

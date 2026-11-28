@@ -3,8 +3,8 @@
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use super::chrome::{ChromeOptions, DEFAULT_PAGE_PROBES};
 use super::CaptureError;
+use super::chrome::{ChromeOptions, DEFAULT_PAGE_PROBES};
 
 /// Where the measured files go, relative to the crate root.
 pub const DEFAULT_OUT_DIR: &str = "src/network/spec/measured";

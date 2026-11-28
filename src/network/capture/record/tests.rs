@@ -7,7 +7,7 @@ use serde_json::json;
 use super::*;
 use crate::identity::fingerprint::{BrandVersion, ClientHints};
 use crate::network::spec::client_hello::fixtures::{
-    length16, strings8, u16s, HelloBuilder, CHROME_CIPHERS, CHROME_SIGALGS, JA4_EXAMPLE_EXTENSIONS,
+    CHROME_CIPHERS, CHROME_SIGALGS, HelloBuilder, JA4_EXAMPLE_EXTENSIONS, length16, strings8, u16s,
 };
 
 /// A user agent in the format Chrome uses on macOS, as parser input.

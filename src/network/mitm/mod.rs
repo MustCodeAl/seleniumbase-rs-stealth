@@ -189,15 +189,15 @@ use tokio::task::JoinHandle;
 
 use self::connect::ProxyCredentials;
 use self::upstream::{Upstream, UpstreamSlot};
-use super::tls_server::{self, EphemeralCa, TlsServerError, ALPN_HTTP1, DEFAULT_HANDSHAKE_TIMEOUT};
+use super::tls_server::{self, ALPN_HTTP1, DEFAULT_HANDSHAKE_TIMEOUT, EphemeralCa, TlsServerError};
 use super::wire::{WireFormat, WireFormatError};
 use crate::network::proxy::redact::{RedactedUrl, Secret};
 use crate::network::proxy::route::{ProxyKey, ProxyRoute};
 use crate::session::ledger::events::{EventSink, SessionEvent};
 use crate::sync::locked;
+use seleniumbase_rs::SeleniumBaseError;
 use seleniumbase_rs::common::shutdown::{cleanup_within, spawn_cleanup, timeout_from_env};
 use seleniumbase_rs::sb_cdp::{LaunchOptions, Proxy};
-use seleniumbase_rs::SeleniumBaseError;
 
 /// The user name the browser gives the proxy; the proxy's token is the password.
 pub const PROXY_USER: &str = "sb";
@@ -538,7 +538,9 @@ pub enum MitmError {
         limit: usize,
     },
     /// The request's `User-Agent` claims another Chrome major than the profile was measured as.
-    #[error("the request claims Chrome {browser}, but the profile is Chrome {measured}; run the capture tools again")]
+    #[error(
+        "the request claims Chrome {browser}, but the profile is Chrome {measured}; run the capture tools again"
+    )]
     VersionMismatch {
         /// The major version the user agent claims.
         browser: u32,

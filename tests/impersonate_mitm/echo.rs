@@ -10,20 +10,20 @@
 )]
 
 use std::net::{Ipv4Addr, SocketAddr};
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, SystemTime};
 
-use base64::engine::general_purpose::STANDARD;
 use base64::Engine as _;
+use base64::engine::general_purpose::STANDARD;
 use btls::ssl::SslAcceptor;
-use ring::digest::{digest, SHA1_FOR_LEGACY_USE_ONLY};
+use ring::digest::{SHA1_FOR_LEGACY_USE_ONLY, digest};
 use seleniumbase_rs_stealth::network::capture::stream::{
-    http1_response, read_http1_request, Http1Request,
+    Http1Request, http1_response, read_http1_request,
 };
 use seleniumbase_rs_stealth::network::spec::client_hello::ClientHello;
 use seleniumbase_rs_stealth::network::tls_server::{
-    accept, acceptor, EphemeralCa, ALPN_HTTP1, DEFAULT_HANDSHAKE_TIMEOUT,
+    ALPN_HTTP1, DEFAULT_HANDSHAKE_TIMEOUT, EphemeralCa, accept, acceptor,
 };
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
@@ -31,7 +31,7 @@ use tokio::sync::mpsc;
 use tokio::task::JoinSet;
 use url::Host;
 
-use crate::support::{der, new_ca, peek_hello, WITHIN};
+use crate::support::{WITHIN, der, new_ca, peek_hello};
 
 /// The GUID RFC 6455 appends to the key before hashing it.
 const ACCEPT_GUID: &str = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";

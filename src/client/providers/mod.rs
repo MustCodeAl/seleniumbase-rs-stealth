@@ -57,7 +57,7 @@ mod registry;
 pub use config::EvasionConfig;
 pub use context::EvasionContext;
 pub use registry::{
-    default_registry, session_registry, EvasionRegistry, SESSION_OMITTED_PROVIDERS,
+    EvasionRegistry, SESSION_OMITTED_PROVIDERS, default_registry, session_registry,
 };
 
 use crate::identity::fingerprint::Fingerprint;

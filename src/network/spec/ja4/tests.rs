@@ -1,13 +1,13 @@
 //! Tests of JA4: the published example vectors, every `a` field rule and the parsers.
 
 use super::{
-    alpn_code, version_code, version_from_code, Ja4, Ja4AField, Ja4Error, Ja4Facts, Ja4Order,
-    Ja4Raw, Ja4Section, MAX_JA4_LEN,
+    Ja4, Ja4AField, Ja4Error, Ja4Facts, Ja4Order, Ja4Raw, Ja4Section, MAX_JA4_LEN, alpn_code,
+    version_code, version_from_code,
 };
 use crate::network::spec::client_hello::fixtures::{
-    HelloBuilder, CHROME_CIPHERS, GREASE_CIPHER, JA4_EXAMPLE_EXTENSIONS,
+    CHROME_CIPHERS, GREASE_CIPHER, HelloBuilder, JA4_EXAMPLE_EXTENSIONS,
 };
-use crate::network::spec::client_hello::{ext_id, ClientHello};
+use crate::network::spec::client_hello::{ClientHello, ext_id};
 
 /// The JA4 of the public example hello, from the reference documentation.
 const JA4: &str = "t13d1516h2_8daaf6152771_e5627efa2ab1";

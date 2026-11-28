@@ -18,8 +18,8 @@ use tokio_btls::SslStream;
 use url::Host;
 
 use super::{
-    accept, acceptor, alpn_ids, select_alpn, spki_pin_of, CaOptions, EphemeralCa, LeafCert,
-    TlsServerError, ALPN_HTTP1, DEFAULT_HANDSHAKE_TIMEOUT, DEFAULT_LEAF_CAPACITY, MAX_CA_VALIDITY,
+    ALPN_HTTP1, CaOptions, DEFAULT_HANDSHAKE_TIMEOUT, DEFAULT_LEAF_CAPACITY, EphemeralCa, LeafCert,
+    MAX_CA_VALIDITY, TlsServerError, accept, acceptor, alpn_ids, select_alpn, spki_pin_of,
 };
 
 /// What the client writes once the handshake is done.
@@ -54,11 +54,7 @@ fn pinned_connector(pins: Vec<String>, alpn: &[u8]) -> SslConnector {
         let pinned = chain
             .iter()
             .any(|cert| spki_pin_of(cert).is_ok_and(|pin| pins.contains(&pin)));
-        if pinned {
-            Ok(())
-        } else {
-            Err(refuse)
-        }
+        if pinned { Ok(()) } else { Err(refuse) }
     });
     builder.build()
 }

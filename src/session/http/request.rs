@@ -9,15 +9,15 @@
 use bytes::Bytes;
 use serde::Serialize;
 use url::Url;
-use wreq::header::{HeaderName, HeaderValue};
 use wreq::Method;
+use wreq::header::{HeaderName, HeaderValue};
 
+use super::HttpSession;
 use super::error::HttpError;
 use super::reply::HttpResponse;
-use super::HttpSession;
 use crate::network::proxy::redact::RedactedUrl;
 use crate::network::spec::header_spec::{
-    RequestShape, MAX_HEADERS, MAX_NAME_LEN, MAX_VALUE_LEN, TRANSPORT_HEADERS,
+    MAX_HEADERS, MAX_NAME_LEN, MAX_VALUE_LEN, RequestShape, TRANSPORT_HEADERS,
 };
 
 /// Headers the browser profile owns, besides [`TRANSPORT_HEADERS`] and the `sec-ch-ua` family.

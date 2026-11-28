@@ -35,12 +35,12 @@ pub use apply::{
     PageFingerprintExt, PageScriptTarget, StealthLayer, StealthPlan,
 };
 pub use patcher::{
-    engine_spoofing_args, find_system_chrome, find_system_chrome_with, BinaryFormat,
-    BinaryMarkerReport, BinaryPatchRule, ChromeBinaryPatcher, ChromedriverPatcher, EnginePatch,
-    MarkerCounts, PatchPreset, PatchedBrowserBundle,
+    BinaryFormat, BinaryMarkerReport, BinaryPatchRule, ChromeBinaryPatcher, ChromedriverPatcher,
+    EnginePatch, MarkerCounts, PatchPreset, PatchedBrowserBundle, engine_spoofing_args,
+    find_system_chrome, find_system_chrome_with,
 };
 pub use providers::{
-    default_registry, session_registry, EvasionConfig, EvasionContext, EvasionProvider,
-    EvasionRegistry, SESSION_OMITTED_PROVIDERS,
+    EvasionConfig, EvasionContext, EvasionProvider, EvasionRegistry, SESSION_OMITTED_PROVIDERS,
+    default_registry, session_registry,
 };
 pub use script::{StealthScriptBundle, StealthScriptOptions};

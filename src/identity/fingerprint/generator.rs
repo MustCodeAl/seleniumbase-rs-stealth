@@ -11,9 +11,9 @@ use super::profile::{
     ProfileFingerprint, ReducedMotion, ScreenOrientation, ScreenOrientationType, WebGlParameters,
     WebGpuMetadata,
 };
+use super::randomize::{Locale, PRESET_CHROMIUM_MAJOR};
 #[cfg(test)]
 use super::randomize::{edge_hints, known_full_version};
-use super::randomize::{Locale, PRESET_CHROMIUM_MAJOR};
 use super::settings::DynamicRange;
 use super::{
     AudioNoise, BrandVersion, BrowserType, CanvasNoise, ColorGamut, ColorScheme, ConnectionProfile,
@@ -379,11 +379,7 @@ impl BatteryOverride {
             charging,
             level: clamped,
             charging_time: if charging {
-                if clamped >= 0.999 {
-                    0.0
-                } else {
-                    1800.0
-                }
+                if clamped >= 0.999 { 0.0 } else { 1800.0 }
             } else {
                 f64::INFINITY
             },
@@ -1760,11 +1756,13 @@ mod tests {
             assert_eq!(win_bundle.display.height, screen.height);
             assert_eq!(win_bundle.display.avail_width, avail.width);
             assert_eq!(win_bundle.display.avail_height, avail.height);
-            assert!(win_bundle
-                .profile
-                .languages
-                .iter()
-                .all(|l| !l.contains(";q=")));
+            assert!(
+                win_bundle
+                    .profile
+                    .languages
+                    .iter()
+                    .all(|l| !l.contains(";q="))
+            );
             assert!(win_bundle.fingerprint.validate().is_coherent());
             windows_renderers.insert(win_bundle.gpu.renderer);
 
@@ -1812,11 +1810,13 @@ mod tests {
                 "expected GREASE brand {expected_grease} in {:?}",
                 bundle.client_hints.brands
             );
-            assert!(bundle
-                .client_hints
-                .full_version_list
-                .iter()
-                .any(|b| b.brand == "Google Chrome" && b.version == expected_full));
+            assert!(
+                bundle
+                    .client_hints
+                    .full_version_list
+                    .iter()
+                    .any(|b| b.brand == "Google Chrome" && b.version == expected_full)
+            );
             let sec_ch_ua = bundle.headers.get("Sec-CH-UA").expect("Sec-CH-UA");
             assert!(sec_ch_ua.contains(expected_grease), "{sec_ch_ua}");
             let full_list = bundle
@@ -1903,11 +1903,13 @@ mod tests {
             .os(OsType::Android)
             .major(157)
             .generate();
-        assert!(!android
-            .gpu
-            .extensions
-            .iter()
-            .any(|e| e.contains("s3tc") || e.contains("bptc") || e.contains("rgtc")));
+        assert!(
+            !android
+                .gpu
+                .extensions
+                .iter()
+                .any(|e| e.contains("s3tc") || e.contains("bptc") || e.contains("rgtc"))
+        );
         assert!(android.client_hints.mobile);
         assert_eq!(android.display.avail_height, android.display.height);
 

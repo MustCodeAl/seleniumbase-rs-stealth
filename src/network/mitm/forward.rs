@@ -27,7 +27,7 @@ use super::connect::refuse;
 use super::destination;
 use super::upstream::Outbound;
 use super::websocket::{self, Ask, RelaySlot};
-use super::{Counters, MitmError, MitmOptions, Shared, PRIME_HOST};
+use super::{Counters, MitmError, MitmOptions, PRIME_HOST, Shared};
 use crate::network::proxy::redact::RedactedUrl;
 use crate::session::challenge::mitigation::FetchKind;
 use crate::session::ledger::events::SessionEvent;

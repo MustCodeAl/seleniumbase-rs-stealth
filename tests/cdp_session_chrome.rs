@@ -164,7 +164,9 @@ fn respond(request: &str, name: &str, served: &Served) -> (&'static str, String)
     served.pages.fetch_add(1, Ordering::SeqCst);
     (
         "200 OK",
-        format!("<html><head><title>Shop</title></head><body><h1>Normal page</h1><p>served by {name}</p></body></html>"),
+        format!(
+            "<html><head><title>Shop</title></head><body><h1>Normal page</h1><p>served by {name}</p></body></html>"
+        ),
     )
 }
 
@@ -357,9 +359,10 @@ async fn rotating_the_profile_starts_a_new_chrome_that_reports_the_new_profile()
         "the page reports the new profile"
     );
     assert_eq!(agent, json!(after.user_agent().as_str()));
-    assert!(sink
-        .events()
-        .iter()
-        .any(|event| matches!(event, SessionEvent::FingerprintRotated { .. })));
+    assert!(
+        sink.events()
+            .iter()
+            .any(|event| matches!(event, SessionEvent::FingerprintRotated { .. }))
+    );
     scraper.close().await.expect("Chrome closes");
 }

@@ -12,10 +12,10 @@ use std::time::Duration;
 
 use serde_json::json;
 
-use super::hints::{measurement_from, HintsMeasurement, HintsReport, HintsServer};
+use super::CaptureError;
+use super::hints::{HintsMeasurement, HintsReport, HintsServer, measurement_from};
 use super::record::{BrowserVersion, TlsMeasurement};
 use super::stream::{Capture, CapturedHello};
-use super::CaptureError;
 use seleniumbase_rs::sb_cdp::{Browser, LaunchOptions, Page};
 
 /// The domain every probe host lives under: `*.capture.test` is mapped to the loopback listener.

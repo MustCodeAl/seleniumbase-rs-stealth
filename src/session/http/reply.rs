@@ -14,7 +14,7 @@ use url::Url;
 use super::error::HttpError;
 use crate::network::proxy::redact::RedactedUrl;
 use crate::network::wire::WireProtocol;
-use crate::session::challenge::detect::{detect, Detection, ResponseView, MAX_SCAN_BYTES};
+use crate::session::challenge::detect::{Detection, MAX_SCAN_BYTES, ResponseView, detect};
 
 /// The headers whose values `Debug` hides.
 const HIDDEN_HEADERS: [&str; 5] = [

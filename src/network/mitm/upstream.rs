@@ -11,8 +11,8 @@ use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::sync::{Arc, Mutex, PoisonError, RwLock};
 
-use base64::engine::general_purpose::STANDARD;
 use base64::Engine as _;
+use base64::engine::general_purpose::STANDARD;
 use http::{HeaderMap, HeaderName, HeaderValue, Method, Response, StatusCode, Version};
 use http_body_util::BodyExt as _;
 use hyper::body::Incoming;

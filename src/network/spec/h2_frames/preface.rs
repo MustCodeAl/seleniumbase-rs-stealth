@@ -4,8 +4,8 @@ use std::fmt;
 
 use super::hpack::HpackDecoder;
 use super::{
-    frame_type, read_frame, Frame, H2CaptureError, H2Preface, HeadersPriority, CLIENT_PREFACE,
-    DEFAULT_MAX_FRAME_PAYLOAD, MAX_HEADER_BLOCK_BYTES, MAX_PREFACE_BYTES, MAX_PREFACE_FRAMES,
+    CLIENT_PREFACE, DEFAULT_MAX_FRAME_PAYLOAD, Frame, H2CaptureError, H2Preface, HeadersPriority,
+    MAX_HEADER_BLOCK_BYTES, MAX_PREFACE_BYTES, MAX_PREFACE_FRAMES, frame_type, read_frame,
 };
 use crate::network::spec::akamai::PriorityFrame;
 

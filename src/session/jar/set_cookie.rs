@@ -336,7 +336,9 @@ mod tests {
 
     #[test]
     fn reads_the_pair_and_every_attribute() {
-        let c = parse(" sid = abc ; Path=/app; Domain=.Example.COM; Secure; HttpOnly; SameSite=Strict; Max-Age=60");
+        let c = parse(
+            " sid = abc ; Path=/app; Domain=.Example.COM; Secure; HttpOnly; SameSite=Strict; Max-Age=60",
+        );
         assert_eq!((c.name.as_str(), c.value.as_str()), ("sid", "abc"));
         assert_eq!(c.path.as_deref(), Some("/app"));
         assert_eq!(c.domain.as_deref(), Some("example.com"));

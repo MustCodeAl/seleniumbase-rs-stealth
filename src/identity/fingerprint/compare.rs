@@ -4,7 +4,7 @@
 use std::fmt;
 
 use serde::Serialize;
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value, json};
 
 use super::{Contradiction, Fingerprint};
 use crate::identity::capture::CapturedFingerprint;
@@ -523,11 +523,13 @@ mod tests {
 
     #[test]
     fn the_claimed_settings_are_the_ones_that_are_not_natural_in_the_order_of_the_file() {
-        assert!(Fingerprint::builder()
-            .build()
-            .unwrap()
-            .claimed_settings()
-            .is_empty());
+        assert!(
+            Fingerprint::builder()
+                .build()
+                .unwrap()
+                .claimed_settings()
+                .is_empty()
+        );
         let fp = Fingerprint::builder()
             .geolocation(Spoof::Off)
             .screen(800, 600)

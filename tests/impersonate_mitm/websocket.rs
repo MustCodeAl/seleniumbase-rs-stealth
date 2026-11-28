@@ -6,8 +6,8 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use base64::engine::general_purpose::STANDARD;
 use base64::Engine as _;
+use base64::engine::general_purpose::STANDARD;
 use futures_util::{SinkExt as _, StreamExt as _};
 use seleniumbase_rs::browser::config::Browser;
 use seleniumbase_rs_stealth::identity::fingerprint::OsType;
@@ -22,12 +22,12 @@ use tokio_btls::SslStream;
 use tokio_tungstenite::tungstenite::Message;
 
 use crate::echo::{
-    accept_for, client_frame, read_frame, websocket_handshake, EchoOrigin, PlainEchoOrigin, BINARY,
-    CLOSE, KEY, REFUSED_BODY, REFUSED_PATH, TEXT,
+    BINARY, CLOSE, EchoOrigin, KEY, PlainEchoOrigin, REFUSED_BODY, REFUSED_PATH, TEXT, accept_for,
+    client_frame, read_frame, websocket_handshake,
 };
 use crate::support::{
-    closes, der, eventually, exchange, measured_user_agent, new_ca, proxy_auth, raw_connect,
-    read_head, start_mitm, tunnel, EgressProxy, Head, QUIET, WITHIN,
+    EgressProxy, Head, QUIET, WITHIN, closes, der, eventually, exchange, measured_user_agent,
+    new_ca, proxy_auth, raw_connect, read_head, start_mitm, tunnel,
 };
 
 /// The host the echo site is reached by.
@@ -107,12 +107,14 @@ async fn a_websocket_echoes_through_the_proxy_with_the_accept_key_untouched() {
         head.header("sec-websocket-accept"),
         Some(accept_for(KEY).as_str())
     );
-    assert!(head
-        .header("upgrade")
-        .is_some_and(|value| value.eq_ignore_ascii_case("websocket")));
-    assert!(head
-        .header("connection")
-        .is_some_and(|value| value.eq_ignore_ascii_case("upgrade")));
+    assert!(
+        head.header("upgrade")
+            .is_some_and(|value| value.eq_ignore_ascii_case("websocket"))
+    );
+    assert!(
+        head.header("connection")
+            .is_some_and(|value| value.eq_ignore_ascii_case("upgrade"))
+    );
     origin
         .next(WITHIN)
         .await

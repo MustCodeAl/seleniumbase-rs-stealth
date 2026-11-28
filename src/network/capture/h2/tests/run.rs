@@ -2,11 +2,11 @@
 
 use std::path::Path;
 
-use super::{all_h2, entry, evidence, version, write_base, BASE_JSON};
+use super::{BASE_JSON, all_h2, entry, evidence, version, write_base};
 use crate::network::capture::args::ToolArgs;
 use crate::network::capture::chrome::ChromeOptions;
 use crate::network::capture::h2::browser::{all_probes_seen, launch_options};
-use crate::network::capture::h2::{same_browser, write_result, CaptureH2Error};
+use crate::network::capture::h2::{CaptureH2Error, same_browser, write_result};
 
 const FULL: &str = "155.0.1.2";
 

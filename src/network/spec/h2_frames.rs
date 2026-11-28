@@ -34,7 +34,7 @@ use hpack::{HeaderField, HpackError};
 
 pub use preface::PrefaceReader;
 
-use super::akamai::{Akamai, PriorityFrame, PseudoHeader, MAX_STREAM_ID};
+use super::akamai::{Akamai, MAX_STREAM_ID, PriorityFrame, PseudoHeader};
 
 /// The 24 bytes every HTTP/2 client connection starts with (RFC 9113, section 3.4).
 pub const CLIENT_PREFACE: &[u8; 24] = b"PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
@@ -244,7 +244,9 @@ pub enum H2CaptureError {
     #[error("the first request arrived before any SETTINGS frame")]
     MissingSettings,
     /// The pseudo-headers are not each of `:method`, `:authority`, `:scheme` and `:path` once, first.
-    #[error("the pseudo-headers are not exactly :method, :authority, :scheme and :path before the other headers")]
+    #[error(
+        "the pseudo-headers are not exactly :method, :authority, :scheme and :path before the other headers"
+    )]
     PseudoOrder,
     /// A frame cannot be built: the stream id is above 2^31 - 1.
     #[error("stream id {0} is above 2147483647")]

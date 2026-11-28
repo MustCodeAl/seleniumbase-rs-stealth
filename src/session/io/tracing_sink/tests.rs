@@ -7,7 +7,7 @@ use tracing::Level;
 use tracing_subscriber::fmt::MakeWriter;
 
 use super::*;
-use crate::session::ledger::events::fixtures::{every_event, SECRETS};
+use crate::session::ledger::events::fixtures::{SECRETS, every_event};
 use crate::session::passport::identity::fixtures::proxy;
 
 /// A writer that keeps what the subscriber prints.

@@ -1,8 +1,8 @@
 //! The bounds on how a `ClientHello` may arrive: the records it spans and the work a slow reader
 //! costs.
 
-use super::fixtures::{HelloBuilder, CHROME_CIPHERS, RECORD_VERSION};
-use super::{ext_id, ClientHello, ClientHelloError, MAX_HELLO_RECORDS};
+use super::fixtures::{CHROME_CIPHERS, HelloBuilder, RECORD_VERSION};
+use super::{ClientHello, ClientHelloError, MAX_HELLO_RECORDS, ext_id};
 
 /// A padded hello, long enough to span more than [`MAX_HELLO_RECORDS`] one-byte records.
 fn long_hello() -> HelloBuilder {

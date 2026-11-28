@@ -35,9 +35,9 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use super::akamai::{
-    Akamai, PriorityFrame, PseudoHeader, MAX_PRIORITY_FRAMES, MAX_STREAM_ID, MAX_WEIGHT, MIN_WEIGHT,
+    Akamai, MAX_PRIORITY_FRAMES, MAX_STREAM_ID, MAX_WEIGHT, MIN_WEIGHT, PriorityFrame, PseudoHeader,
 };
-use super::h2_frames::{read_preface, H2CaptureError, H2Preface, HeadersPriority};
+use super::h2_frames::{H2CaptureError, H2Preface, HeadersPriority, read_preface};
 
 /// SETTINGS identifiers (RFC 9113 section 6.5.2, RFC 8441 and RFC 9218).
 pub mod setting_id {
@@ -96,7 +96,9 @@ const DEFAULT_INITIAL_STREAM: u32 = 1;
 #[non_exhaustive]
 pub enum H2SpecError {
     /// A SETTINGS id the HTTP/2 stack cannot send, such as a GREASE or experimental id.
-    #[error("SETTINGS id {0} cannot be sent by the HTTP/2 stack (experimental and GREASE ids are unsupported)")]
+    #[error(
+        "SETTINGS id {0} cannot be sent by the HTTP/2 stack (experimental and GREASE ids are unsupported)"
+    )]
     UnsupportedSetting(u16),
     /// A SETTINGS id appears twice.
     #[error("SETTINGS id {0} appears more than once")]

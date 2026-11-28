@@ -10,10 +10,10 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
-use super::compare::SETTINGS;
 use super::Fingerprint;
+use super::compare::SETTINGS;
 
 /// The settings that have an off state; `Fingerprint::build` refuses `off` for the rest.
 const OFF_SETTINGS: [&str; 8] = [

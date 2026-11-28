@@ -9,7 +9,7 @@ use seleniumbase_rs_stealth::session::ledger::state::Ledger;
 use seleniumbase_rs_stealth::session::passport::identity::{Identity, IdentityError};
 
 use crate::site::{CLEARANCE, HOST};
-use crate::world::{country, World};
+use crate::world::{World, country};
 
 /// A proxy that is never connected to, with a password that must never be shown.
 const US_PROXY: &str = "http://alice:s3cret@us.proxy.test:8080";
@@ -41,8 +41,8 @@ fn rotations(world: &World) -> Vec<(Option<String>, Option<String>)> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn an_identity_taken_after_a_solve_holds_the_clearance_and_starts_a_session_without_a_challenge(
-) {
+async fn an_identity_taken_after_a_solve_holds_the_clearance_and_starts_a_session_without_a_challenge()
+ {
     let world = World::new().await;
     let mut first = world.session().build().await.expect("a session");
     first.fetch(&world.site.url("/")).await.expect("a page");

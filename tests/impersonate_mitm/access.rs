@@ -5,15 +5,15 @@ use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime};
 
 use seleniumbase_rs_stealth::network::mitm::{
-    MitmOptions, MitmProxy, MIN_HEADER_BYTES, PRIME_HOST,
+    MIN_HEADER_BYTES, MitmOptions, MitmProxy, PRIME_HOST,
 };
 use seleniumbase_rs_stealth::network::tls_server::{CaOptions, EphemeralCa};
 use tokio::io::AsyncWriteExt;
 use tokio::net::{TcpListener, TcpStream};
 
 use crate::support::{
-    closes, der, eventually, exchange, new_ca, proxy_auth, raw_connect, read_head, start_mitm,
-    tls_client, tunnel, QUIET,
+    QUIET, closes, der, eventually, exchange, new_ca, proxy_auth, raw_connect, read_head,
+    start_mitm, tls_client, tunnel,
 };
 
 /// How long an upstream connection may take in the tests that send one to a name that does not

@@ -16,14 +16,14 @@
 
 use std::net::IpAddr;
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
+use super::HttpSession;
 use super::cookies::Pending;
 use super::error::HttpError;
 use super::options::HttpSessionOptions;
-use super::HttpSession;
-use crate::identity::fingerprint::randomize::Locale;
 use crate::identity::fingerprint::OsType;
+use crate::identity::fingerprint::randomize::Locale;
 use crate::network::proxy::route::{ProxyKey, ProxyRoute};
 use crate::network::spec::measurement;
 use crate::network::wire::{WireFormat, WireFormatError};
@@ -745,14 +745,18 @@ mod tests {
                 matches!(&error, HttpError::BrowserProxy { proxy } if *proxy == wide.server),
                 "{error}"
             );
-            assert!(reconcile_browser_wide(None, Some(wide), true)
-                .expect("said to be direct")
-                .is_none());
+            assert!(
+                reconcile_browser_wide(None, Some(wide), true)
+                    .expect("said to be direct")
+                    .is_none()
+            );
         }
         let own = egress("http://alice:s3cret@PROXY.example:8080");
-        assert!(reconcile_browser_wide(Some(own), Some(&remote), false)
-            .expect("its own proxy")
-            .is_some());
+        assert!(
+            reconcile_browser_wide(Some(own), Some(&remote), false)
+                .expect("its own proxy")
+                .is_some()
+        );
         let other = egress("http://alice:s3cret@elsewhere.example:8080");
         let error = reconcile_browser_wide(Some(other.clone()), Some(&remote), false)
             .expect_err("not its proxy");
@@ -765,11 +769,15 @@ mod tests {
             !shown.contains("s3cret") && !shown.contains("alice"),
             "{shown}"
         );
-        assert!(reconcile_browser_wide(Some(other), Some(&local), false)
-            .expect("the exit behind a local proxy is taken as given")
-            .is_some());
-        assert!(reconcile_browser_wide(None, None, false)
-            .expect("no proxy")
-            .is_none());
+        assert!(
+            reconcile_browser_wide(Some(other), Some(&local), false)
+                .expect("the exit behind a local proxy is taken as given")
+                .is_some()
+        );
+        assert!(
+            reconcile_browser_wide(None, None, false)
+                .expect("no proxy")
+                .is_none()
+        );
     }
 }

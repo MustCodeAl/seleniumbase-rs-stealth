@@ -47,7 +47,7 @@
 
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Deserializer, Serialize};
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value, json};
 
 use super::fingerprint::settings::{DynamicRange, HoverType, PointerType};
 use super::fingerprint::spoof::Spoof;
@@ -81,7 +81,6 @@ pub fn capture_async_script() -> String {
          (async function () {{\n{CAPTURE_JS}\n}})().then(sbrsDone, function (error) {{\n\
          sbrsDone({{ version: {PROBE_VERSION}, failure: String((error && error.message) || error) }});\n\
          }});",
-
     )
 }
 
@@ -1162,10 +1161,11 @@ mod tests {
     fn a_chrome_probe_maps_every_answered_setting_to_a_value() {
         let fp = capture(CHROME_MACOS).fingerprint;
 
-        assert!(fp
-            .user_agent()
-            .as_str()
-            .is_some_and(|ua| ua.contains("Chrome/155")));
+        assert!(
+            fp.user_agent()
+                .as_str()
+                .is_some_and(|ua| ua.contains("Chrome/155"))
+        );
         assert_eq!(fp.platform().as_str(), Some("MacIntel"));
         assert_eq!(fp.hardware_concurrency().value(), Some(&8));
         assert_eq!(fp.device_memory().value(), Some(&8.0));
@@ -1181,10 +1181,11 @@ mod tests {
         assert_eq!(fp.color_depth().value(), Some(&30));
         let gl = fp.webgl().value().expect("webgl is a value");
         assert_eq!(gl.vendor.as_deref(), Some("Google Inc. (Apple)"));
-        assert!(gl
-            .renderer
-            .as_deref()
-            .is_some_and(|r| r.contains("Apple M3 Pro")));
+        assert!(
+            gl.renderer
+                .as_deref()
+                .is_some_and(|r| r.contains("Apple M3 Pro"))
+        );
         assert_eq!(
             fp.media_devices().value(),
             Some(&MediaDevices::counts(1, 1, 1))
@@ -1334,9 +1335,11 @@ mod tests {
                 "{setting} should be unanswered: {unanswered:?}"
             );
         }
-        assert!(unanswered
-            .iter()
-            .all(|(_, reason)| reason.contains("secure context")));
+        assert!(
+            unanswered
+                .iter()
+                .all(|(_, reason)| reason.contains("secure context"))
+        );
         assert_eq!(captured.unmapped["secure_context"], json!(false));
     }
 
@@ -1580,10 +1583,11 @@ mod tests {
         assert!(fp.validate().is_coherent(), "{:?}", fp.validate().errors);
         assert_eq!(fp.core_version(), Some(155));
         assert_eq!(fp.os_type(), OsType::Macos);
-        assert!(fp
-            .user_agent()
-            .as_str()
-            .is_some_and(|ua| ua.contains("HeadlessChrome/155")));
+        assert!(
+            fp.user_agent()
+                .as_str()
+                .is_some_and(|ua| ua.contains("HeadlessChrome/155"))
+        );
         assert_eq!(
             captured.probe.browser_version.as_deref(),
             Some("155.0.8059.85")
@@ -1666,10 +1670,12 @@ mod tests {
         assert!(fp.device_memory().is_natural());
         assert!(fp.timezone().is_natural());
         assert!(fp.battery().is_natural());
-        assert!(captured
-            .unanswered()
-            .iter()
-            .any(|(name, _)| *name == "battery"));
+        assert!(
+            captured
+                .unanswered()
+                .iter()
+                .any(|(name, _)| *name == "battery")
+        );
     }
 
     #[test]

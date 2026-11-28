@@ -198,9 +198,10 @@ fn a_cookie_is_added_per_request_in_its_place_and_never_kept() {
     let with = profile
         .headers_for(RequestShape::Document, Some("sid=1"), WireProtocol::Http1)
         .expect("renders");
-    assert!(with
-        .iter()
-        .any(|(name, value)| name == "Cookie" && value == "sid=1"));
+    assert!(
+        with.iter()
+            .any(|(name, value)| name == "Cookie" && value == "sid=1")
+    );
     let without = profile
         .headers_for(RequestShape::Document, None, WireProtocol::Http1)
         .expect("renders");
@@ -212,11 +213,13 @@ fn a_cookie_is_added_per_request_in_its_place_and_never_kept() {
 #[test]
 fn a_cookie_without_a_slot_goes_after_accept_language() {
     let profile = chrome();
-    assert!(profile
-        .header_spec()
-        .document
-        .iter()
-        .all(|(name, _)| !name.eq_ignore_ascii_case("cookie")));
+    assert!(
+        profile
+            .header_spec()
+            .document
+            .iter()
+            .all(|(name, _)| !name.eq_ignore_ascii_case("cookie"))
+    );
     let list = profile
         .headers_for(RequestShape::Document, Some("sid=1"), WireProtocol::Http2)
         .expect("renders");

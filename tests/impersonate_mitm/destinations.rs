@@ -10,8 +10,8 @@ use tokio::io::AsyncWriteExt;
 use tokio::net::{TcpListener, TcpStream};
 
 use crate::support::{
-    closes, der, exchange, measured_user_agent, navigation, new_ca, proxy_auth, raw_connect,
-    read_head, start_mitm, tunnel, RecordingOrigin, ALPN_H2, QUIET, WITHIN,
+    ALPN_H2, QUIET, RecordingOrigin, WITHIN, closes, der, exchange, measured_user_agent,
+    navigation, new_ca, proxy_auth, raw_connect, read_head, start_mitm, tunnel,
 };
 
 /// A name that the options send to a loopback server.

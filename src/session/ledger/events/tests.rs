@@ -2,7 +2,7 @@
 
 use std::collections::BTreeSet;
 
-use super::fixtures::{every_event, SECRETS};
+use super::fixtures::{SECRETS, every_event};
 use super::*;
 use crate::session::passport::identity::fixtures::proxy;
 use crate::session::passport::policy::DemoteReason;

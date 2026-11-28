@@ -18,10 +18,10 @@ use std::collections::HashMap;
 
 use base64::Engine;
 
-use crate::client::providers::{default_registry, session_registry, EvasionContext};
-use crate::identity::fingerprint::randomize::{chromium_hints, edge_hints, PRESET_CHROMIUM_MAJOR};
+use crate::client::providers::{EvasionContext, default_registry, session_registry};
+use crate::identity::fingerprint::randomize::{PRESET_CHROMIUM_MAJOR, chromium_hints, edge_hints};
 use crate::identity::fingerprint::{
-    BrandVersion, Dimension, Fingerprint, OsType, QuicMode, WebRtcPolicy, TASKBAR_HEIGHT,
+    BrandVersion, Dimension, Fingerprint, OsType, QuicMode, TASKBAR_HEIGHT, WebRtcPolicy,
 };
 
 /// Generates a single combined bootstrap script for the given fingerprint.
@@ -73,9 +73,9 @@ pub fn cdc_scrub() -> String {
         .to_owned()
 }
 
-pub use crate::identity::profile_payloads::switches::{permitted_switch, switches_to_args};
 #[cfg(test)]
 use crate::identity::profile_payloads::switches::{FORBIDDEN_SWITCHES, PERMITTED_SWITCHES};
+pub use crate::identity::profile_payloads::switches::{permitted_switch, switches_to_args};
 
 /// The height Chrome's tab strip and toolbar take from a maximized window on
 /// `os`, in CSS pixels, without a bookmarks bar. A phone's browser has none.
@@ -909,10 +909,11 @@ mod tests {
             .expect("UA override");
         // Safari has no User-Agent Client Hints, so none are claimed.
         assert!(ua.get("userAgentMetadata").is_none(), "{ua}");
-        assert!(ua
-            .get("userAgent")
-            .and_then(|v| v.as_str())
-            .is_some_and(|agent| agent.contains("iPhone")));
+        assert!(
+            ua.get("userAgent")
+                .and_then(|v| v.as_str())
+                .is_some_and(|agent| agent.contains("iPhone"))
+        );
     }
 
     #[test]

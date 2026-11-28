@@ -8,7 +8,7 @@
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use crate::sync::locked;
 use seleniumbase_rs::sb_cdp::{Browser, MockCtrl, Page};

@@ -23,6 +23,7 @@ pub mod hybrid;
 pub mod io;
 pub mod jar;
 pub mod ledger;
+mod pace;
 pub mod passport;
 
 pub use cdp_session::{CdpFetch, CdpSession, CdpSessionBuilder, Launcher};

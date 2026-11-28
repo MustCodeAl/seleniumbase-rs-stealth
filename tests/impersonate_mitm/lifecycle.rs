@@ -5,8 +5,8 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 
-use base64::engine::general_purpose::STANDARD;
 use base64::Engine as _;
+use base64::engine::general_purpose::STANDARD;
 use seleniumbase_rs_stealth::network::mitm::MitmOptions;
 use seleniumbase_rs_stealth::network::proxy::route::ProxyRoute;
 use seleniumbase_rs_stealth::network::tls_server::ALPN_HTTP1;
@@ -14,8 +14,8 @@ use seleniumbase_rs_stealth::session::ledger::events::SessionEvent;
 use tokio::net::TcpStream;
 
 use crate::support::{
-    browser_client, der, eventually, new_ca, start_mitm, EgressProxy, RecordingOrigin, ALPN_H2,
-    WITHIN,
+    ALPN_H2, EgressProxy, RecordingOrigin, WITHIN, browser_client, der, eventually, new_ca,
+    start_mitm,
 };
 
 /// The host the sites are reached by.

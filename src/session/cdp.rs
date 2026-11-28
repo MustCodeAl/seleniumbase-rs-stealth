@@ -16,22 +16,22 @@
 
 use std::time::Duration;
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use crate::identity::fingerprint::Fingerprint;
-use crate::network::proxy::geo::{placed_in, GeoError, GeoResolver, Locale, LocaleExt};
+use crate::network::proxy::geo::{GeoError, GeoResolver, Locale, LocaleExt, placed_in};
 use crate::network::proxy::redact::RedactedUrl;
 use crate::network::proxy::route::ProxyRoute;
 use crate::session::challenge::detect::{
-    clearance_cookie, detect, ChallengeKind, Detection, ProtectionVendor, ResponseView,
+    ChallengeKind, Detection, ProtectionVendor, ResponseView, clearance_cookie, detect,
 };
 use crate::session::error::SessionError;
 use crate::session::jar::store::CookieJar;
+use seleniumbase_rs::SeleniumBaseError;
 use seleniumbase_rs::sb_cdp::human::behavior::Behavior;
 use seleniumbase_rs::sb_cdp::{CdpEvent, Page, Session, SolveOptions};
-use seleniumbase_rs::utilities::retry::{poll_until, RetryPolicy};
+use seleniumbase_rs::utilities::retry::{RetryPolicy, poll_until};
 use seleniumbase_rs::utils::urls::normalize_page_url;
-use seleniumbase_rs::SeleniumBaseError;
 
 #[cfg(test)]
 pub(crate) mod testkit;

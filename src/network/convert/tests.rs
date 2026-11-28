@@ -9,8 +9,8 @@ use wreq::tls::compress::Codec;
 use wreq::tls::{AlpnProtocol, AlpsProtocol, ExtensionType, KeyShare, TlsVersion};
 
 use super::{
-    check_emittable, compressor, http2_options, tls_options, wreq_headers, ConvertError,
-    CERT_COMPRESSION_BROTLI, CERT_COMPRESSION_ZLIB, MAX_DECOMPRESSED_CERTIFICATE,
+    CERT_COMPRESSION_BROTLI, CERT_COMPRESSION_ZLIB, ConvertError, MAX_DECOMPRESSED_CERTIFICATE,
+    check_emittable, compressor, http2_options, tls_options, wreq_headers,
 };
 use crate::identity::fingerprint::OsType;
 use crate::network::spec::akamai::Akamai;

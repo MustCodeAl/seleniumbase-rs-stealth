@@ -9,16 +9,16 @@
 
 use bytes::{Bytes, BytesMut};
 use futures_util::StreamExt;
-use tokio::time::{timeout_at, Instant};
+use tokio::time::{Instant, timeout_at};
 use url::Url;
-use wreq::header::SET_COOKIE;
 use wreq::Method;
+use wreq::header::SET_COOKIE;
 
 use super::error::HttpError;
 use super::options::MAX_TIMEOUT;
-use super::redirect::{site_name, target_of, Hop};
+use super::redirect::{Hop, site_name, target_of};
 use super::reply::{HttpResponse, ResponseHeaders};
-use super::request::{merge_headers, Prepared};
+use super::request::{Prepared, merge_headers};
 use super::{HttpSession, MAX_REMEMBERED_ORIGINS};
 use crate::network::convert;
 use crate::network::proxy::redact::RedactedUrl;

@@ -10,7 +10,7 @@
 use seleniumbase_rs::browser::config::Browser;
 use seleniumbase_rs_stealth::identity::fingerprint::{ClientHints, OsType};
 use seleniumbase_rs_stealth::network::capture::{
-    measure_hints, measure_tls, BrowserVersion, ChromeOptions, EntryId, MeasuredFile,
+    BrowserVersion, ChromeOptions, EntryId, MeasuredFile, measure_hints, measure_tls,
 };
 use seleniumbase_rs_stealth::network::spec::client_hello::ClientHello;
 use seleniumbase_rs_stealth::network::spec::tls_spec::TlsSpec;
@@ -47,10 +47,12 @@ async fn chrome_hellos_parse_and_the_saved_json_round_trips() {
         let hello: ClientHello = sample.hello().expect("the raw bytes parse");
         assert!(hello.has_grease(), "Chrome sends GREASE");
         assert!(sample.ja4.starts_with("t13d"), "{}", sample.ja4);
-        assert!(sample
-            .sni
-            .as_deref()
-            .is_some_and(|name| name.ends_with(".capture.test")));
+        assert!(
+            sample
+                .sni
+                .as_deref()
+                .is_some_and(|name| name.ends_with(".capture.test"))
+        );
     }
     assert!(tls.spec.grease);
     assert!(
@@ -95,21 +97,27 @@ async fn chrome_reports_hints_that_agree_with_its_request_headers() {
     assert!(hints.languages.iter().any(|language| language == "en-US"));
     let client_hints: &ClientHints = &hints.client_hints;
     assert!(client_hints.brands.iter().any(|b| b.brand == "Chromium"));
-    assert!(client_hints
-        .full_version_list
-        .iter()
-        .any(|b| b.version == version.full_version));
+    assert!(
+        client_hints
+            .full_version_list
+            .iter()
+            .any(|b| b.version == version.full_version)
+    );
     assert_eq!(client_hints.ua_full_version, version.full_version);
     assert!(!client_hints.mobile);
     if version.os().expect("a known operating system") == OsType::Macos {
         assert_eq!(client_hints.platform, "macOS");
     }
-    assert!(hints
-        .request_headers
-        .iter()
-        .any(|(name, _)| name == "sec-ch-ua-platform-version"));
-    assert!(hints
-        .first_visit_headers
-        .iter()
-        .all(|(name, _)| name != "sec-ch-ua-platform-version"));
+    assert!(
+        hints
+            .request_headers
+            .iter()
+            .any(|(name, _)| name == "sec-ch-ua-platform-version")
+    );
+    assert!(
+        hints
+            .first_visit_headers
+            .iter()
+            .all(|(name, _)| name != "sec-ch-ua-platform-version")
+    );
 }

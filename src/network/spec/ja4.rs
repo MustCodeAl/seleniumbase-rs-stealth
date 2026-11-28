@@ -12,11 +12,11 @@
 use std::fmt;
 use std::str::FromStr;
 
-use ring::digest::{digest, SHA256};
+use ring::digest::{SHA256, digest};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use super::client_hello::{ext_id, is_grease, without_grease, ClientHello};
+use super::client_hello::{ClientHello, ext_id, is_grease, without_grease};
 use super::ja3::hex_lower;
 
 /// Longest raw fingerprint string the parsers read.

@@ -1,14 +1,14 @@
 //! Cookies: what the jar refuses, what it sends back, expiry on the injected clock, and the
 //! identity's cookies going in and coming out.
 
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use seleniumbase_rs_stealth::session::http::{HttpError, HttpSession, Method};
 use seleniumbase_rs_stealth::session::ledger::events::{CollectingEventSink, SessionEvent};
 use url::Url;
 
-use crate::site::{identity, now, Answer, Site};
+use crate::site::{Answer, Site, identity, now};
 
 const HOST: &str = "shop.test";
 

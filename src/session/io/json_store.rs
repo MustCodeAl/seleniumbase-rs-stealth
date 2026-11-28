@@ -23,7 +23,7 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 
 use crate::session::ledger::state::{
-    insert_bounded, Ledger, LedgerError, SiteRecord, MAX_STATE_SITES, STATE_SCHEMA,
+    Ledger, LedgerError, MAX_STATE_SITES, STATE_SCHEMA, SiteRecord, insert_bounded,
 };
 
 /// The largest state file that is read. A state file this big holds far more sites than

@@ -22,8 +22,8 @@ use serde_json::error::Category;
 
 use crate::identity::fingerprint::{Fingerprint, FingerprintError, OsType, Spoof};
 use crate::network::proxy::route::ProxyKey;
-use crate::session::challenge::detect::{clearance_cookie, ProtectionVendor};
-use crate::session::jar::store::{site_of, CookieJar};
+use crate::session::challenge::detect::{ProtectionVendor, clearance_cookie};
+use crate::session::jar::store::{CookieJar, site_of};
 use seleniumbase_rs::browser::config::Browser;
 use seleniumbase_rs::sb_cdp::{Cookie, Session};
 
@@ -238,7 +238,7 @@ fn same_egress(left: Option<&ProxyKey>, right: Option<&ProxyKey>) -> bool {
 mod session_json {
     use std::collections::BTreeMap;
 
-    use serde::{de::Error as _, Deserialize, Deserializer, Serialize, Serializer};
+    use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Error as _};
 
     use super::{Cookie, CookieJar, Session};
 

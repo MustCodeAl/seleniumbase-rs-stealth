@@ -11,14 +11,14 @@ use std::path::{Path, PathBuf};
 
 use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value, json};
 
-use super::hints::HintsMeasurement;
 use super::CaptureError;
+use super::hints::HintsMeasurement;
 use crate::identity::fingerprint::OsType;
-use crate::network::spec::client_hello::{ext_id, is_grease, ClientHello};
+use crate::network::spec::client_hello::{ClientHello, ext_id, is_grease};
 use crate::network::spec::ids::ML_DSA_SIGALGS;
-use crate::network::spec::ja3::{hex_lower, Ja3, Peetprint};
+use crate::network::spec::ja3::{Ja3, Peetprint, hex_lower};
 use crate::network::spec::ja4::Ja4;
 use crate::network::spec::tls_spec::{KnownGap, TlsSpec};
 use crate::session::io::json_store::atomic_write;
@@ -349,7 +349,7 @@ impl MeasuredFile {
                 _ => {
                     return Err(CaptureError::NotAnObject {
                         path: path.display().to_string(),
-                    })
+                    });
                 }
             },
             Err(error) if error.kind() == io::ErrorKind::NotFound => Map::new(),

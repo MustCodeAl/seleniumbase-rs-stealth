@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
 use super::route::{ProxyKey, ProxyRoute};
-pub use crate::identity::fingerprint::randomize::{Locale, LOCALES};
+pub use crate::identity::fingerprint::randomize::{LOCALES, Locale};
 use crate::identity::fingerprint::{Fingerprint, FingerprintError, Geolocation};
 use seleniumbase_rs::sb_cdp::human::humanize::Rng;
 

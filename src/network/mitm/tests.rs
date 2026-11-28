@@ -5,19 +5,19 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 
-use base64::engine::general_purpose::STANDARD;
 use base64::Engine as _;
+use base64::engine::general_purpose::STANDARD;
 use http::{HeaderMap, HeaderName, HeaderValue, Uri};
 
 use super::connect::ProxyCredentials;
 use super::forward::{
-    claimed_chrome_major, forwarded_request_headers, forwarded_response_headers, Origin,
+    Origin, claimed_chrome_major, forwarded_request_headers, forwarded_response_headers,
 };
 use super::upstream::{egress_proxy, websocket_spec};
 use super::{
-    chrome_args_for, hex, random_token, MitmError, MitmOptions, MitmProxy,
     DEFAULT_MAX_WEBSOCKET_BYTES, DEFAULT_WEBSOCKET_IDLE_TIMEOUT, DISABLE_QUIC_ARG, MAX_CONNECTIONS,
-    MAX_HEADERS, MAX_HEADER_BYTES, MIN_HEADER_BYTES, PRIME_HOST, PROXY_EVERYTHING_ARG, PROXY_USER,
+    MAX_HEADER_BYTES, MAX_HEADERS, MIN_HEADER_BYTES, MitmError, MitmOptions, MitmProxy, PRIME_HOST,
+    PROXY_EVERYTHING_ARG, PROXY_USER, chrome_args_for, hex, random_token,
 };
 use crate::network::proxy::redact::Secret;
 use crate::network::proxy::route::ProxyRoute;

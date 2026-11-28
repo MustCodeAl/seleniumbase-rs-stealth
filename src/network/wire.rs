@@ -48,7 +48,7 @@ mod identity;
 use thiserror::Error;
 use wreq::{Emulation, Group, RequestBuilder};
 
-use self::identity::{identity_for, DEFAULT_LOCALE_TAG};
+use self::identity::{DEFAULT_LOCALE_TAG, identity_for};
 use super::convert::{self, ConvertError};
 use crate::identity::fingerprint::{BrowserType, Fingerprint, OsType};
 use crate::network::proxy::geo::{Locale, LocaleExt};
@@ -56,7 +56,7 @@ use crate::network::spec::akamai::AkamaiError;
 use crate::network::spec::client_hello::ext_id;
 use crate::network::spec::h2_spec::{H2Spec, H2SpecError};
 use crate::network::spec::header_spec::{
-    chrome_major, ClientHeaders, HeaderSpec, HeaderSpecError, RequestShape,
+    ClientHeaders, HeaderSpec, HeaderSpecError, RequestShape, chrome_major,
 };
 use crate::network::spec::ja3::{Ja3Error, PeetprintError};
 use crate::network::spec::ja4::Ja4Error;
@@ -112,7 +112,9 @@ pub enum WireFormatError {
     #[error("cannot be emitted by this client stack: {0}")]
     Convert(#[from] ConvertError),
     /// The identity claims another browser version than the one the TLS and HTTP/2 come from.
-    #[error("the identity claims Chrome {browser}, but the measured TLS and HTTP/2 are Chrome {measured}")]
+    #[error(
+        "the identity claims Chrome {browser}, but the measured TLS and HTTP/2 are Chrome {measured}"
+    )]
     VersionMismatch {
         /// The major version the user agent claims.
         browser: u32,

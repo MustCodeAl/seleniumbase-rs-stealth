@@ -7,6 +7,8 @@ and not published to crates.io, so their types and paths may change between comm
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-11-27
+
 ### Changed
 
 - **Layered single-crate architecture (`identity` → `client` → `network` → `session` + standalone `h3d/`)**:
@@ -15,8 +17,8 @@ and not published to crates.io, so their types and paths may change between comm
     - **Removed flat crate-root stealth re-exports (`lib.rs`)**: `Fingerprint` and `OsType` are imported cleanly from `seleniumbase_rs_stealth::identity` (and `Spoof`, `mimic`, `policy`, `settings`, `randomize` under `identity::fingerprint::*`), while `StealthLayer`, `StealthPlan`, and `*FingerprintExt` traits live under `seleniumbase_rs_stealth::client`.
     - **`client`** *(feature `client`, pure Rust, zero BoringSSL)*: replaced public `StealthPlugin` and `FingerprintPlugin` with module-native `StealthLayer` (`Default`, `balanced`, `strict`, `minimal`), keeping the core `Plugin` adapter `pub(crate)` internal; houses the 42-surface `StealthScriptBundle` / `StealthScriptOptions`, 32 JS `EvasionProvider`s, `StealthPlan`, unified engine extension traits (`LaunchOptionsFingerprintExt`, `BrowserConfigFingerprintExt`, `PageFingerprintExt`, `BaseCaseFingerprintExt`), and core Layer-0 re-exports.
     - **`network`** *(feature `network-spec` pure Rust / zero BoringSSL; features `network` and `http3` opt into BoringSSL)*: absorbs pure wire specs (`network::spec`), proxy pools & geo routing (`network::proxy`), wire capture (`network::capture`), `WireFormat`, `MitmProxy`, `EphemeralCa`, and combines all wire-side HTTP/3 code (`http3.rs` + `capture_h3/`) into one unified `network::http3` module (`client`, `request`, `capture`, `tests`).
-    - **`session`** *(feature `session`, default, zero BoringSSL; `HttpSession` and `HybridSession` unlock with `network`)*: unifies the three transport-named session runners (`CdpSession` [formerly `BrowserScraper`], `HttpSession`, and `HybridSession` [formerly `StealthSession`]) alongside `challenge`, `jar`, `ledger`, `passport`, `SessionError` (formerly `ScrapeError`), and `SessionEvent` (formerly `ScrapeEvent`).
-  - Moved `crates/h3d/` to `h3d/` (synced to `v0.10.0` / MSRV `1.100`), removed the leftover `spike/http3/` scratch folder and `.DS_Store` files, and updated `.gitlab-ci.yml` (`RUST_VERSION: "1.100"`), `deny.toml`, `CLAUDE.md`, and `README.md`.
+    - **`session`** *(feature `session`, default, zero BoringSSL; `HttpSession` and `HybridSession` unlock with `network`)*: unifies the three transport-named session runners (`CdpSession` [formerly `BrowserScraper`], `HttpSession`, and `HybridSession` [formerly `StealthSession`]) alongside `challenge`, `jar`, `ledger`, `passport`, `SessionError` (formerly `ScrapeError`), and `SessionEvent` (formerly `ScrapeEvent`), and consolidates duplicate per-site rate limiting into shared `session::pace::SiteLimits`.
+  - Moved `crates/h3d/` to `h3d/` (synced to `v0.11.0` / MSRV `1.100`), removed the leftover `spike/http3/` scratch folder and `.DS_Store` files, adopted `style_edition = "2024"` in `rustfmt.toml`, and updated `.gitlab-ci.yml` (`RUST_VERSION: "1.100"`), `deny.toml`, `CLAUDE.md`, and `README.md`.
 
 ### Fixed
 

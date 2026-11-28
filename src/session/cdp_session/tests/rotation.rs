@@ -2,7 +2,7 @@
 
 use serde_json::json;
 
-use super::rig::{country, real_page, widget_challenge, Rig, NOW, SEED};
+use super::rig::{NOW, Rig, SEED, country, real_page, widget_challenge};
 use crate::network::proxy::geo::GeoError;
 use crate::session::cdp_session::launcher::{claimed_major, host_os};
 use crate::session::challenge::detect::ProtectionVendor;

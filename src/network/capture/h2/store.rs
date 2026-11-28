@@ -14,12 +14,12 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use jiff::Timestamp;
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value, json};
 
-use super::assemble::{Derived, H1Evidence, H2Evidence};
 use super::CaptureH2Error;
-use crate::network::capture::record::{from_hex, merge_tool, BrowserVersion, EntryId};
+use super::assemble::{Derived, H1Evidence, H2Evidence};
 use crate::network::capture::CaptureError;
+use crate::network::capture::record::{BrowserVersion, EntryId, from_hex, merge_tool};
 use crate::session::io::json_store::atomic_write;
 
 /// The largest measured file that is read back, in bytes.

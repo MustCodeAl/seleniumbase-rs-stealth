@@ -6,18 +6,18 @@
 use seleniumbase_rs::browser::config::Browser;
 use seleniumbase_rs_stealth::identity::fingerprint::OsType;
 use seleniumbase_rs_stealth::network::spec::client_hello::{
-    ext_id, is_grease, without_grease, ClientHello,
+    ClientHello, ext_id, is_grease, without_grease,
 };
 use seleniumbase_rs_stealth::network::spec::h2_spec::H2Spec;
 use seleniumbase_rs_stealth::network::spec::header_spec::RequestShape;
-use seleniumbase_rs_stealth::network::spec::ja3::peetprint::PeetprintSlot;
 use seleniumbase_rs_stealth::network::spec::ja3::Peetprint;
+use seleniumbase_rs_stealth::network::spec::ja3::peetprint::PeetprintSlot;
 use seleniumbase_rs_stealth::network::spec::ja4::{Ja4, Ja4AField};
 use seleniumbase_rs_stealth::network::spec::measurement::{self, KnownGap, WireMeasurement};
 use seleniumbase_rs_stealth::network::spec::tls_spec::TlsSpec;
 use seleniumbase_rs_stealth::network::wire::{WireFormat, WireProtocol};
 
-use crate::exchange::{exchange, exchange_with, Via};
+use crate::exchange::{Via, exchange, exchange_with};
 
 /// The measured file, including the evidence its specs were derived from.
 const CHROME_FILE: &str = include_str!("../../src/network/spec/measured/chrome-155-macos.json");

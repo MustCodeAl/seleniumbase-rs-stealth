@@ -16,7 +16,7 @@ use std::process::ExitCode;
 
 use seleniumbase_rs_stealth::network::capture::args::USAGE;
 use seleniumbase_rs_stealth::network::capture::h2::{
-    measure_and_write, parse_args, CaptureH2Error, Report, USAGE_PASSES,
+    CaptureH2Error, Report, USAGE_PASSES, measure_and_write, parse_args,
 };
 use seleniumbase_rs_stealth::network::spec::h2_spec::H2Spec;
 

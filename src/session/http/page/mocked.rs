@@ -4,8 +4,8 @@
 //! is asserted is what the session sends the browser. The end-to-end version, with a real TLS
 //! site answering, is `tests/impersonate_http/page.rs`.
 
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use url::Url;
 

@@ -32,7 +32,7 @@ use std::sync::OnceLock;
 use serde::Deserialize;
 
 use crate::session::io::json_store::atomic_write;
-use crate::session::passport::identity::{json_failure, Identity, IdentityError, IDENTITY_SCHEMA};
+use crate::session::passport::identity::{IDENTITY_SCHEMA, Identity, IdentityError, json_failure};
 
 #[cfg(test)]
 mod tests;

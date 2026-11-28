@@ -13,7 +13,7 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use seleniumbase_rs::error::SeleniumBaseError;
 use seleniumbase_rs::sb_cdp::{Browser, LaunchOptions, MockCtrl};
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use crate::site::{CHALLENGE_HTML, CLEARANCE, DEFAULT_TTL_SECS, HOST, REAL_HTML};
 

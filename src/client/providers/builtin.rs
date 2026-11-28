@@ -18,11 +18,11 @@
 //!   before.
 
 use super::{EvasionContext, EvasionProvider, SB_PREAMBLE};
-use crate::identity::fingerprint::{api_expected, BrowserType, TASKBAR_HEIGHT};
+use crate::identity::fingerprint::{BrowserType, TASKBAR_HEIGHT, api_expected};
 
 use crate::identity::fingerprint::{
-    gpu_architecture, gpu_maker, is_mobile_gpu, languages_for_locale, AudioNoise, CanvasNoise,
-    Dimension, Fingerprint, Geolocation, OsType, AUDIO_SEED_MASK,
+    AUDIO_SEED_MASK, AudioNoise, CanvasNoise, Dimension, Fingerprint, Geolocation, OsType,
+    gpu_architecture, gpu_maker, is_mobile_gpu, languages_for_locale,
 };
 
 /// Fills `@NAME@` markers in a JavaScript template, in one pass.
@@ -3286,9 +3286,11 @@ mod tests {
         assert!(natural.keyboard_layout().is_natural());
         assert!(!KeyboardLayoutProvider.applies(&natural));
         // Safari has no `navigator.keyboard`.
-        assert!(Fingerprint::ios_mobile_safari()
-            .keyboard_layout()
-            .is_value());
+        assert!(
+            Fingerprint::ios_mobile_safari()
+                .keyboard_layout()
+                .is_value()
+        );
         assert!(!KeyboardLayoutProvider.applies(&Fingerprint::ios_mobile_safari()));
         // No protocol command delivers it, so native spoofing does not take it over.
         let native = windows_with(|b| b.native_spoofing(true));

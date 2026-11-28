@@ -3,7 +3,7 @@
 use super::*;
 use crate::session::challenge::detect::{ChallengeEvidence, ProtectionVendor};
 use crate::session::challenge::mitigation::GiveUpReason;
-use crate::session::passport::identity::fixtures::{identity, identity_with_clearance, NOW};
+use crate::session::passport::identity::fixtures::{NOW, identity, identity_with_clearance};
 use crate::session::passport::identity::{Clearance, NO_EXPIRY};
 
 const SITE: &str = "example.com";

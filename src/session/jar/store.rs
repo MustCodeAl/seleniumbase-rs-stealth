@@ -26,9 +26,9 @@ use serde::{Deserialize, Serialize};
 use url::Url;
 
 use super::set_cookie::{
-    CookiePrefix, SetCookie, SetCookieError, MAX_ATTRIBUTE_VALUE_BYTES, MAX_LIFETIME_SECS,
+    CookiePrefix, MAX_ATTRIBUTE_VALUE_BYTES, MAX_LIFETIME_SECS, SetCookie, SetCookieError,
 };
-use rules::{default_path, domain_match, path_match, site_key, validate, RequestOrigin};
+use rules::{RequestOrigin, default_path, domain_match, path_match, site_key, validate};
 use seleniumbase_rs::sb_cdp::{Cookie, SameSite};
 
 pub use rules::site_of;

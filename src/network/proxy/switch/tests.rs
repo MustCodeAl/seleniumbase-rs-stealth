@@ -1,7 +1,7 @@
 //! Tests of the context-per-proxy egress switch against a scripted browser, with no Chrome.
 
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use serde_json::json;
 

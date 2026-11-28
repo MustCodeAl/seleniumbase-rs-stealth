@@ -10,12 +10,12 @@ use std::time::{Duration, SystemTime};
 
 use seleniumbase_rs_stealth::network::capture::h2::site::h2_reply;
 use seleniumbase_rs_stealth::network::capture::stream::{
-    http1_response, read_h2c_preface, read_http1_request, Http1Request,
+    Http1Request, http1_response, read_h2c_preface, read_http1_request,
 };
 use seleniumbase_rs_stealth::network::spec::client_hello::{ClientHello, MAX_CLIENT_HELLO};
 use seleniumbase_rs_stealth::network::spec::h2_frames::H2Preface;
 use seleniumbase_rs_stealth::network::tls_server::{
-    accept, acceptor, EphemeralCa, ALPN_HTTP1, DEFAULT_HANDSHAKE_TIMEOUT,
+    ALPN_HTTP1, DEFAULT_HANDSHAKE_TIMEOUT, EphemeralCa, accept, acceptor,
 };
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};

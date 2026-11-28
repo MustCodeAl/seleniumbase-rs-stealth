@@ -9,20 +9,20 @@ mod site;
 
 use std::path::Path;
 
+use jiff::Timestamp;
 use jiff::civil::date;
 use jiff::tz::TimeZone;
-use jiff::Timestamp;
 
-use super::assemble::{derive, h1_evidence, h2_evidence, H1Evidence, H2Evidence};
-use super::probes::{Probe, DOCUMENT, FETCH, IMAGE, PROBES, SCRIPT, STYLE};
+use super::assemble::{H1Evidence, H2Evidence, derive, h1_evidence, h2_evidence};
+use super::probes::{DOCUMENT, FETCH, IMAGE, PROBES, Probe, SCRIPT, STYLE};
 use super::site::{Observed, Seen};
-use super::store::{write_h2_fixtures, MeasuredDoc};
-use super::{parse_args, CaptureH2Error, Passes};
+use super::store::{MeasuredDoc, write_h2_fixtures};
+use super::{CaptureH2Error, Passes, parse_args};
 use crate::identity::fingerprint::OsType;
 use crate::network::capture::record::{BrowserVersion, EntryId};
 use crate::network::capture::stream::Http1Request;
 use crate::network::spec::akamai::PseudoHeader;
-use crate::network::spec::h2_frames::{encode_frame, frame_type, read_preface, CLIENT_PREFACE};
+use crate::network::spec::h2_frames::{CLIENT_PREFACE, encode_frame, frame_type, read_preface};
 use seleniumbase_rs::browser::config::Browser;
 
 /// Frame flags used to build a stand-in browser's connection start.
@@ -111,11 +111,7 @@ pub(super) fn h2_headers(probe: Probe, port: u16) -> Vec<(String, String)> {
 
 /// The `priority` header the stand-in browser sends for `probe`.
 pub(super) fn priority_for(probe: Probe) -> &'static str {
-    if probe == DOCUMENT {
-        "u=0, i"
-    } else {
-        "u=1"
-    }
+    if probe == DOCUMENT { "u=0, i" } else { "u=1" }
 }
 
 /// The observation of a stand-in browser's HTTP/2 connection to `probe`.
@@ -392,9 +388,11 @@ fn request_specific_headers_stay_out_of_the_lists() {
     let headers = derive(&h2, &h1).expect("derives").headers;
 
     for list in [&headers.document, &headers.fetch] {
-        assert!(list
-            .iter()
-            .all(|(n, _)| !n.eq_ignore_ascii_case("origin") && !n.eq_ignore_ascii_case("referer")));
+        assert!(
+            list.iter()
+                .all(|(n, _)| !n.eq_ignore_ascii_case("origin")
+                    && !n.eq_ignore_ascii_case("referer"))
+        );
     }
 }
 

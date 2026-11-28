@@ -41,14 +41,14 @@ use std::path::{Path, PathBuf};
 use jiff::Timestamp;
 use thiserror::Error;
 
-pub use assemble::{derive, h1_evidence, h2_evidence, Derived, H1Evidence, H2Evidence};
-pub use probes::{Probe, PROBES};
+pub use assemble::{Derived, H1Evidence, H2Evidence, derive, h1_evidence, h2_evidence};
+pub use probes::{PROBES, Probe};
 pub use site::{Observed, Protocol, Seen, Site};
-pub use store::{write_h2_fixtures, MeasuredDoc};
+pub use store::{MeasuredDoc, write_h2_fixtures};
 
+use crate::network::capture::CaptureError;
 use crate::network::capture::args::ToolArgs;
 use crate::network::capture::record::{BrowserVersion, EntryId};
-use crate::network::capture::CaptureError;
 use crate::network::spec::h2_frames::H2CaptureError;
 use crate::network::spec::h2_spec::H2SpecError;
 use crate::network::spec::header_spec::HeaderSpecError;
@@ -141,7 +141,9 @@ pub enum CaptureH2Error {
         path: String,
     },
     /// The measured file was captured from another browser version.
-    #[error("the measured file holds Chrome {file}, but this browser is Chrome {browser}; run capture_tls and capture_hints again first")]
+    #[error(
+        "the measured file holds Chrome {file}, but this browser is Chrome {browser}; run capture_tls and capture_hints again first"
+    )]
     VersionMismatch {
         /// The version in the file.
         file: String,
@@ -206,7 +208,7 @@ where
             return Err(CaptureError::Usage(format!(
                 "`{FLAG_H1}` and `{FLAG_H2}` exclude each other"
             ))
-            .into())
+            .into());
         }
         (true, false) => Passes::H1Only,
         (false, true) => Passes::H2Only,

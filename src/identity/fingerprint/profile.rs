@@ -10,7 +10,7 @@ use std::fmt;
 use serde::{Deserialize, Deserializer, Serialize};
 
 use super::randomize::{
-    chromium_hints, edge_hints, known_full_version, Locale, PRESET_CHROMIUM_MAJOR,
+    Locale, PRESET_CHROMIUM_MAJOR, chromium_hints, edge_hints, known_full_version,
 };
 use super::settings::DynamicRange;
 use super::{

@@ -30,7 +30,7 @@ use crate::network::spec::h2_frames::H2CaptureError;
 use crate::network::spec::tls_spec::TlsSpecError;
 use seleniumbase_rs::SeleniumBaseError;
 
-pub use chrome::{measure_hints, measure_tls, ChromeOptions};
+pub use chrome::{ChromeOptions, measure_hints, measure_tls};
 pub use hints::{HintsMeasurement, HintsServer};
 pub use record::{BrowserVersion, EntryId, HelloRecord, MeasuredFile, TlsMeasurement};
 pub use stream::{Capture, CapturedH2c, CapturedHello, CapturedHttp1, Http1Request};

@@ -1,21 +1,32 @@
 //! Per-site pacing: at most so many fetches of one site in a window.
 
 use std::collections::HashMap;
+use std::fmt;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use crate::sync::locked;
 use seleniumbase_rs::utilities::retry::RateLimiter;
 
-/// How many sites are paced at once. A scrape can touch an unbounded number of sites, so past this
-/// the table starts over: the sites it forgets are allowed a fresh burst.
-pub(super) const MAX_PACED_SITES: usize = 4096;
+/// The most paced sites kept at once; past it the table starts over so the sites it forgets are
+/// allowed a fresh burst.
+pub const MAX_PACED_SITES: usize = 4096;
 
 /// A rate limit per site, so that one busy site does not slow the others.
 pub(super) struct SiteLimits {
     calls: usize,
     window: Duration,
     limiters: Mutex<HashMap<String, Arc<RateLimiter>>>,
+}
+
+impl fmt::Debug for SiteLimits {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SiteLimits")
+            .field("calls", &self.calls)
+            .field("window", &self.window)
+            .field("sites", &locked(&self.limiters).len())
+            .finish()
+    }
 }
 
 impl SiteLimits {
@@ -99,5 +110,15 @@ mod tests {
 
         assert!(limits.sites() <= MAX_PACED_SITES);
         assert!(limits.sites() >= 1);
+    }
+
+    #[test]
+    fn the_debug_view_counts_sites_only() {
+        let pacer = SiteLimits::new(3, WINDOW);
+        let shown = format!("{pacer:?}");
+        assert!(
+            shown.contains("sites: 0") && shown.contains("calls: 3"),
+            "{shown}"
+        );
     }
 }

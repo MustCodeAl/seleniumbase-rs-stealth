@@ -32,9 +32,9 @@ use wreq::tls::{
     AlpnProtocol, AlpsProtocol, ExtensionType, KeyShare, TlsOptions, TlsOptionsBuilder, TlsVersion,
 };
 
-use crate::network::spec::akamai::{PriorityFrame, PseudoHeader, MAX_STREAM_ID};
+use crate::network::spec::akamai::{MAX_STREAM_ID, PriorityFrame, PseudoHeader};
 use crate::network::spec::client_hello::ext_id;
-use crate::network::spec::h2_spec::{setting_id, H2Spec, INITIAL_CONNECTION_WINDOW};
+use crate::network::spec::h2_spec::{H2Spec, INITIAL_CONNECTION_WINDOW, setting_id};
 use crate::network::spec::ids::{
     ALPN_H2, ALPN_HTTP_1_1, BORINGSSL_ALWAYS_SENT_EXTENSIONS, BORINGSSL_KEY_SHARE_GROUPS,
     BORINGSSL_LEGACY_ONLY_EXTENSIONS, BORINGSSL_TLS13_ONLY_EXTENSIONS, CIPHER_SUITES,

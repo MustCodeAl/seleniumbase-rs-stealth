@@ -5,7 +5,7 @@
 # on nothing else from this repository, and the root workspace never builds it.
 [package]
 name = "seleniumbase-rs-h3d"
-version = "0.10.0"
+version = "0.11.0"
 edition = "2024"
 rust-version = "1.100"
 license = "MIT"

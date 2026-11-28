@@ -4,9 +4,9 @@ use std::net::{Ipv4Addr, SocketAddr};
 
 use super::*;
 use crate::network::spec::client_hello::fixtures::{
-    server_name_body, HelloBuilder, CHROME_CIPHERS, JA4_EXAMPLE_EXTENSIONS,
+    CHROME_CIPHERS, HelloBuilder, JA4_EXAMPLE_EXTENSIONS, server_name_body,
 };
-use crate::network::spec::client_hello::{ext_id, ClientHello};
+use crate::network::spec::client_hello::{ClientHello, ext_id};
 
 fn captured(host: &str) -> CapturedHello {
     let raw = HelloBuilder::new(&CHROME_CIPHERS, &JA4_EXAMPLE_EXTENSIONS)

@@ -3,8 +3,8 @@
 //! The browser is the mock of `sb_cdp` (`Browser::new_mocked`), so these tests need no Chrome and
 //! see exactly which protocol commands the session sends. The HTTP side is the loopback site.
 
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use seleniumbase_rs::browser::config::Browser as BrowserName;
 use seleniumbase_rs::sb_cdp::ContextOptions;
@@ -12,9 +12,9 @@ use seleniumbase_rs::sb_cdp::{Browser, MockCtrl, Page};
 use seleniumbase_rs_stealth::network::wire::WireFormat;
 use seleniumbase_rs_stealth::session::http::{HttpError, HttpSession, HttpSessionOptions};
 use seleniumbase_rs_stealth::session::passport::identity::IdentityError;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
-use crate::site::{egress, measured_major, Answer, Site};
+use crate::site::{Answer, Site, egress, measured_major};
 
 const HOST: &str = "shop.test";
 

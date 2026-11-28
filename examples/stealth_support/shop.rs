@@ -32,12 +32,12 @@ use hyper::server::conn::http1;
 use hyper::service::service_fn;
 use hyper::{Request, Response};
 use hyper_util::rt::TokioIo;
+use seleniumbase_rs_stealth::network::MitmOptions;
 use seleniumbase_rs_stealth::network::spec::client_hello::{ClientHello, MAX_CLIENT_HELLO};
 use seleniumbase_rs_stealth::network::spec::ja4::Ja4;
 use seleniumbase_rs_stealth::network::tls_server::{
-    accept, acceptor, EphemeralCa, ALPN_HTTP1, DEFAULT_HANDSHAKE_TIMEOUT,
+    ALPN_HTTP1, DEFAULT_HANDSHAKE_TIMEOUT, EphemeralCa, accept, acceptor,
 };
-use seleniumbase_rs_stealth::network::MitmOptions;
 use seleniumbase_rs_stealth::session::HttpSessionOptions;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::task::JoinHandle;

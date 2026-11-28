@@ -12,7 +12,7 @@ use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use super::client_hello::{without_grease, ClientHello};
+use super::client_hello::{ClientHello, without_grease};
 
 pub use peetprint::{Peetprint, PeetprintError};
 
@@ -368,8 +368,8 @@ pub mod peetprint {
     use serde::{Deserialize, Serialize};
     use thiserror::Error;
 
-    use super::{md5_hex, VALUE_SEPARATOR};
-    use crate::network::spec::client_hello::{without_grease, ClientHello};
+    use super::{VALUE_SEPARATOR, md5_hex};
+    use crate::network::spec::client_hello::{ClientHello, without_grease};
     use crate::network::spec::ids::is_grease;
 
     /// Fields in a peetprint.
@@ -541,8 +541,16 @@ pub mod peetprint {
                 return Err(PeetprintError::TooLong);
             }
             let fields: Vec<&str> = text.trim().split(PEET_FIELD_SEPARATOR).collect();
-            let &[versions, alpn, groups, sigalgs, psk, compression, ciphers, extensions] =
-                fields.as_slice()
+            let &[
+                versions,
+                alpn,
+                groups,
+                sigalgs,
+                psk,
+                compression,
+                ciphers,
+                extensions,
+            ] = fields.as_slice()
             else {
                 return Err(PeetprintError::FieldCount(fields.len()));
             };

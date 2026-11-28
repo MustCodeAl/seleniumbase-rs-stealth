@@ -539,9 +539,11 @@ mod tests {
             None,
             "the oldest went first"
         );
-        assert!(now(store.get(&format!("s{}.test", MAX_STATE_SITES + 19)))
-            .expect("reads")
-            .is_some());
+        assert!(
+            now(store.get(&format!("s{}.test", MAX_STATE_SITES + 19)))
+                .expect("reads")
+                .is_some()
+        );
     }
 
     #[test]

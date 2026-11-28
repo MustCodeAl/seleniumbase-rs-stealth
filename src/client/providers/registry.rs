@@ -1,8 +1,8 @@
 //! An ordered collection of [`EvasionProvider`]s.
 
+use super::EvasionProvider;
 use super::builtin;
 use super::context::EvasionContext;
-use super::EvasionProvider;
 use crate::identity::fingerprint::Fingerprint;
 
 /// An ordered collection of [`EvasionProvider`]s.

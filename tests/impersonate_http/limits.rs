@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 
 use seleniumbase_rs_stealth::session::http::{HttpError, HttpSession, HttpSessionOptions, Method};
 
-use crate::site::{egress, fingerprint, identity, identity_of, measured_major, Answer, Site};
+use crate::site::{Answer, Site, egress, fingerprint, identity, identity_of, measured_major};
 
 const HOST: &str = "shop.test";
 const MIB: usize = 1024 * 1024;

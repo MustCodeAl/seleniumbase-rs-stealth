@@ -15,8 +15,8 @@ mod stealth_support;
 
 use std::error::Error;
 
-use seleniumbase_rs_stealth::session::jar::store::SiteContext;
 use seleniumbase_rs_stealth::session::CookieJar;
+use seleniumbase_rs_stealth::session::jar::store::SiteContext;
 use url::Url;
 
 /// A made-up `Set-Cookie` header and what it is meant to show.

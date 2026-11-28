@@ -1,7 +1,7 @@
 //! Tests of the identity: construction, serde, clearances, and the proxy and wire measurement checks.
 
 use super::fixtures::{
-    fingerprint, identity, identity_with_clearance, proxy, set_cookie, wire_measurement, MAJOR, NOW,
+    MAJOR, NOW, fingerprint, identity, identity_with_clearance, proxy, set_cookie, wire_measurement,
 };
 use super::*;
 use crate::identity::fingerprint::{BatteryProfile, ProxyConfig};

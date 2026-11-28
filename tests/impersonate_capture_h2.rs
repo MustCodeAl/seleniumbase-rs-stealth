@@ -10,7 +10,7 @@ use std::path::PathBuf;
 
 use seleniumbase_rs::browser::config::Browser;
 use seleniumbase_rs_stealth::identity::fingerprint::OsType;
-use seleniumbase_rs_stealth::network::capture::h2::{derive, H1Evidence, H2Evidence, PROBES};
+use seleniumbase_rs_stealth::network::capture::h2::{H1Evidence, H2Evidence, PROBES, derive};
 use seleniumbase_rs_stealth::network::capture::record::to_hex;
 use seleniumbase_rs_stealth::network::spec::measurement::{self, WireMeasurement};
 
@@ -113,14 +113,18 @@ fn http1_shows_the_case_the_browser_writes_and_http2_the_lowercase_names() {
     let document_h1 = h1.iter().find(|e| e.probe == "document").expect("document");
     let document_h2 = h2.iter().find(|e| e.probe == "document").expect("document");
 
-    assert!(document_h1
-        .headers
-        .iter()
-        .any(|(name, _)| name == "User-Agent"));
-    assert!(document_h2
-        .headers
-        .iter()
-        .all(|(name, _)| name == &name.to_ascii_lowercase()));
+    assert!(
+        document_h1
+            .headers
+            .iter()
+            .any(|(name, _)| name == "User-Agent")
+    );
+    assert!(
+        document_h2
+            .headers
+            .iter()
+            .all(|(name, _)| name == &name.to_ascii_lowercase())
+    );
     assert!(document_h1.headers.iter().any(|(name, _)| name == "Host"));
     assert!(!document_h2.headers.iter().any(|(name, _)| name == "host"));
 }

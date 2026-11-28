@@ -20,7 +20,7 @@ use seleniumbase_rs::browser::config::Browser;
 use seleniumbase_rs_stealth::network::capture::args::{ToolArgs, USAGE};
 use seleniumbase_rs_stealth::network::capture::hints::console_snippet;
 use seleniumbase_rs_stealth::network::capture::{
-    measure_hints, CaptureError, EntryId, MeasuredFile,
+    CaptureError, EntryId, MeasuredFile, measure_hints,
 };
 
 /// The name and version this tool writes into the provenance of the file.

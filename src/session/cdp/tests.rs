@@ -1,12 +1,12 @@
 //! Tests of the CDP helpers against a scripted browser, with no Chrome.
 
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use async_trait::async_trait;
 use serde_json::json;
 
-use super::testkit::{cdp_cookie, mocked_page, response_params, Served, Site, MOCK_SESSION};
+use super::testkit::{MOCK_SESSION, Served, Site, cdp_cookie, mocked_page, response_params};
 use super::*;
 use crate::identity::fingerprint::OsType;
 use crate::network::proxy::geo::{CountryCode, GeoInfo, StaticGeoResolver};
@@ -94,14 +94,18 @@ async fn the_main_frame_document_answers_and_frames_and_subresources_do_not() {
 
     assert_eq!(answer.status, 403);
     assert_eq!(answer.url, "https://shop.example/");
-    assert!(answer
-        .headers
-        .iter()
-        .any(|(name, value)| name == "CF-RAY" && value == "abc-AMS"));
-    assert!(!answer
-        .headers
-        .iter()
-        .any(|(name, _)| name.starts_with("X-")));
+    assert!(
+        answer
+            .headers
+            .iter()
+            .any(|(name, value)| name == "CF-RAY" && value == "abc-AMS")
+    );
+    assert!(
+        !answer
+            .headers
+            .iter()
+            .any(|(name, _)| name.starts_with("X-"))
+    );
     let methods: Vec<String> = mock.calls().into_iter().map(|call| call.method).collect();
     assert!(position(&methods, "Network.enable") < position(&methods, "Page.navigate"));
 }
@@ -255,9 +259,11 @@ async fn a_challenge_page_is_detected_from_its_status_headers_and_body() {
     let (page, mock) = mocked_page().await;
     Site::serve(
         &mock,
-        vec![Served::new(503, CLOUDFLARE_JS)
-            .header("Server", "cloudflare")
-            .header("cf-ray", "8a1b2c3d4e5f6071-AMS")],
+        vec![
+            Served::new(503, CLOUDFLARE_JS)
+                .header("Server", "cloudflare")
+                .header("cf-ray", "8a1b2c3d4e5f6071-AMS"),
+        ],
     );
 
     let answer = goto_with_response(&page, "https://shop.example/")
@@ -341,10 +347,12 @@ async fn the_time_zone_a_resolver_reports_wins_over_the_locale_default() {
     assert_eq!(placed.timezone, "Europe/Vienna");
     assert_eq!(fingerprint.timezone().as_str(), Some("Europe/Vienna"));
     assert_eq!(fingerprint.locale().as_str(), Some("de-DE"));
-    assert!(fingerprint
-        .accept_languages()
-        .as_str()
-        .is_some_and(|languages| languages.starts_with("de-DE")));
+    assert!(
+        fingerprint
+            .accept_languages()
+            .as_str()
+            .is_some_and(|languages| languages.starts_with("de-DE"))
+    );
     assert_ne!(
         before.timezone().as_str(),
         Some("Europe/Vienna"),

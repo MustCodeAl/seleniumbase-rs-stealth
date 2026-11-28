@@ -1,11 +1,11 @@
 //! Tests of the `ClientHello` parser: typed fields, fragmentation, rejection of malformed input.
 
 use super::fixtures::{
-    key_share_body, length16, record_of_body, server_name_body, strings8, u16s, wrap_records,
-    HelloBuilder, CHROME_CIPHERS, CHROME_SIGALGS, GREASE_CIPHER, GREASE_EXT_FIRST, GREASE_EXT_LAST,
-    GREASE_GROUP, GREASE_VERSION, JA4_EXAMPLE_EXTENSIONS, RECORD_VERSION,
+    CHROME_CIPHERS, CHROME_SIGALGS, GREASE_CIPHER, GREASE_EXT_FIRST, GREASE_EXT_LAST, GREASE_GROUP,
+    GREASE_VERSION, HelloBuilder, JA4_EXAMPLE_EXTENSIONS, RECORD_VERSION, key_share_body, length16,
+    record_of_body, server_name_body, strings8, u16s, wrap_records,
 };
-use super::{ext_id, is_grease, without_grease, ClientHello, ClientHelloError, MAX_CLIENT_HELLO};
+use super::{ClientHello, ClientHelloError, MAX_CLIENT_HELLO, ext_id, is_grease, without_grease};
 
 /// Bytes before the handshake length is known: five record bytes and four handshake bytes.
 const HEADERS_LEN: usize = 9;

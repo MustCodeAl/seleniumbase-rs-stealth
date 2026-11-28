@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::identity::fingerprint::Spoof;
-use crate::network::spec::h2_frames::{encode_frame, frame_type, read_preface, CLIENT_PREFACE};
+use crate::network::spec::h2_frames::{CLIENT_PREFACE, encode_frame, frame_type, read_preface};
 
 /// Synthetic captures in the shape of a browser's: the names are real, the values are made up.
 const DOCUMENT: [(&str, &str); 14] = [
@@ -225,13 +225,15 @@ fn a_resolved_value_that_is_not_a_header_value_is_refused_without_echoing_it() {
         assert!(!format!("{err}{err:?}").contains("Injected"));
     }
     let huge = "x".repeat(MAX_VALUE_LEN + 1);
-    assert!(s
-        .render(RequestShape::Fetch, &ClientHeaders::new(huge))
-        .is_err());
+    assert!(
+        s.render(RequestShape::Fetch, &ClientHeaders::new(huge))
+            .is_err()
+    );
     let ok = "x".repeat(MAX_VALUE_LEN);
-    assert!(s
-        .render(RequestShape::Fetch, &ClientHeaders::new(ok))
-        .is_ok());
+    assert!(
+        s.render(RequestShape::Fetch, &ClientHeaders::new(ok))
+            .is_ok()
+    );
 }
 
 #[test]
@@ -404,11 +406,13 @@ fn credentials_never_enter_a_spec() {
     ];
     let spec = HeaderSpec::from_captured(&seen, &seen).expect("valid");
     assert_eq!(names(&spec.document), ["User-Agent", "Accept"]);
-    assert!(!format!(
-        "{spec:?}{}",
-        serde_json::to_string(&spec).expect("serialises")
-    )
-    .contains("SECRET"));
+    assert!(
+        !format!(
+            "{spec:?}{}",
+            serde_json::to_string(&spec).expect("serialises")
+        )
+        .contains("SECRET")
+    );
     let by_hand = with_document(vec![("Authorization", lit("Bearer x"))]);
     assert_eq!(
         by_hand.validate(),

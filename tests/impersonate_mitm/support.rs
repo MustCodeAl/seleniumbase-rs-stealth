@@ -14,8 +14,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, SystemTime};
 
-use base64::engine::general_purpose::STANDARD;
 use base64::Engine as _;
+use base64::engine::general_purpose::STANDARD;
 use btls::ssl::{SslConnector, SslMethod, SslVerifyMode};
 use btls::x509::X509;
 use bytes::Bytes;
@@ -28,20 +28,20 @@ use hyper_util::rt::TokioIo;
 use seleniumbase_rs::browser::config::Browser;
 use seleniumbase_rs_stealth::network::capture::h2::site::h2_reply;
 use seleniumbase_rs_stealth::network::capture::stream::{
-    http1_response, read_h2c_preface, read_http1_request, Http1Request,
+    Http1Request, http1_response, read_h2c_preface, read_http1_request,
 };
 use seleniumbase_rs_stealth::network::mitm::{MitmOptions, MitmProxy};
 use seleniumbase_rs_stealth::network::proxy::route::ProxyRoute;
 use seleniumbase_rs_stealth::network::spec::client_hello::{ClientHello, MAX_CLIENT_HELLO};
 use seleniumbase_rs_stealth::network::spec::h2_frames::H2Preface;
 use seleniumbase_rs_stealth::network::tls_server::{
-    accept, acceptor, EphemeralCa, ALPN_HTTP1, DEFAULT_HANDSHAKE_TIMEOUT,
+    ALPN_HTTP1, DEFAULT_HANDSHAKE_TIMEOUT, EphemeralCa, accept, acceptor,
 };
 use seleniumbase_rs_stealth::network::wire::WireFormat;
 use seleniumbase_rs_stealth::session::ledger::events::CollectingEventSink;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::{mpsc, Notify};
+use tokio::sync::{Notify, mpsc};
 use tokio::task::JoinSet;
 use tokio_btls::SslStream;
 use url::Host;

@@ -20,16 +20,16 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::task::JoinSet;
 use url::Host;
 
-use super::probes::{Probe, DOCUMENT, DOCUMENT_BODY};
 use super::CaptureH2Error;
-use crate::network::capture::stream::{
-    http1_response, read_h2c_preface, read_http1_request, Http1Request,
-};
+use super::probes::{DOCUMENT, DOCUMENT_BODY, Probe};
 use crate::network::capture::CaptureError;
+use crate::network::capture::stream::{
+    Http1Request, http1_response, read_h2c_preface, read_http1_request,
+};
 use crate::network::spec::client_hello::{ClientHello, MAX_CLIENT_HELLO};
-use crate::network::spec::h2_frames::{encode_frame, frame_type, H2Preface};
+use crate::network::spec::h2_frames::{H2Preface, encode_frame, frame_type};
 use crate::network::tls_server::{
-    accept, acceptor, EphemeralCa, ALPN_HTTP1, DEFAULT_HANDSHAKE_TIMEOUT,
+    ALPN_HTTP1, DEFAULT_HANDSHAKE_TIMEOUT, EphemeralCa, accept, acceptor,
 };
 
 /// The ALPN id of HTTP/2.

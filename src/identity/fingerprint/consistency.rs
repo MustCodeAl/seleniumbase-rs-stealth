@@ -18,7 +18,7 @@
 use std::fmt;
 
 use serde::Serialize;
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value, json};
 
 use super::{BrowserType, KeyboardLayout, OsType};
 use crate::identity::capture::CapturedFingerprint;
@@ -1435,11 +1435,13 @@ fn identity(persona: &Persona, fp: &super::Fingerprint, findings: &mut Findings)
             ["navigator.userAgent", "navigator.userAgentData.brands"],
             [
                 json!(ua),
-                json!(hints
-                    .brands
-                    .iter()
-                    .map(|b| b.brand.as_str())
-                    .collect::<Vec<_>>()),
+                json!(
+                    hints
+                        .brands
+                        .iter()
+                        .map(|b| b.brand.as_str())
+                        .collect::<Vec<_>>()
+                ),
             ],
             "the brands of a browser a person uses name Chrome, not HeadlessChrome",
             "the user agent was changed and the brands still say HeadlessChrome",
@@ -1959,8 +1961,14 @@ mod tests {
                 "language_vs_languages",
                 vec![("navigator.languages", json!(["fr-FR", "en-US"]))],
             ),
-            ("offset_vs_zone", vec![("intl.januaryOffsetMinutes", json!(0))]),
-            ("media_query_lie", vec![("cssMedia.pointer", json!("coarse"))]),
+            (
+                "offset_vs_zone",
+                vec![("intl.januaryOffsetMinutes", json!(0))],
+            ),
+            (
+                "media_query_lie",
+                vec![("cssMedia.pointer", json!("coarse"))],
+            ),
             (
                 "codecs_disagree",
                 vec![("codecs.isTypeSupported.h264", json!(false))],
@@ -1980,10 +1988,16 @@ mod tests {
                 "viewport_is_screen",
                 vec![("window.innerHeight", json!(1080))],
             ),
-            ("frame_vs_window", vec![("frame.hardwareConcurrency", json!(10))]),
+            (
+                "frame_vs_window",
+                vec![("frame.hardwareConcurrency", json!(10))],
+            ),
             ("frame_vs_window", vec![("frame.chrome", json!(false))]),
             ("engine_vs_user_agent", vec![("engine.etsl", json!(37))]),
-            ("vendor_vs_user_agent", vec![("navigator.vendor", json!(""))]),
+            (
+                "vendor_vs_user_agent",
+                vec![("navigator.vendor", json!(""))],
+            ),
             (
                 "product_sub_vs_user_agent",
                 vec![("navigator.productSub", json!("20100101"))],
@@ -2020,7 +2034,12 @@ mod tests {
                 vec![
                     ("mediaFeatures.forced-colors", json!("active")),
                     ("cssMedia.forced-colors", json!("active")),
-                    ("navigator.userAgent", json!("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36")),
+                    (
+                        "navigator.userAgent",
+                        json!(
+                            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36"
+                        ),
+                    ),
                     ("navigator.platform", json!("Linux x86_64")),
                     ("userAgentData.platform", json!("Linux")),
                 ],
@@ -2034,10 +2053,7 @@ mod tests {
                 vec![
                     ("webgl.unmaskedVendor", json!("Qualcomm")),
                     ("webgl.unmaskedRenderer", json!("Adreno (TM) 740")),
-                    (
-                        "webgl_extensions",
-                        json!(["WEBGL_compressed_texture_s3tc"]),
-                    ),
+                    ("webgl_extensions", json!(["WEBGL_compressed_texture_s3tc"])),
                 ],
             ),
             (
@@ -2072,7 +2088,9 @@ mod tests {
         set(
             raw,
             "navigator.userAgent",
-            json!("Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1"),
+            json!(
+                "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1"
+            ),
         );
         set(raw, "navigator.platform", json!("iPhone"));
         set(raw, "navigator.vendor", json!("Apple Computer, Inc."));
@@ -2167,7 +2185,9 @@ mod tests {
         set(
             &mut raw,
             "navigator.userAgent",
-            json!("Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1"),
+            json!(
+                "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1"
+            ),
         );
         set(&mut raw, "navigator.platform", json!("iPhone"));
         set(&mut raw, "navigator.vendor", json!("Apple Computer, Inc."));

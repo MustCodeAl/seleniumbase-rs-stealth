@@ -9,7 +9,7 @@ use seleniumbase_rs_stealth::network::capture::record::to_hex;
 use seleniumbase_rs_stealth::network::capture::stream::{h2c_reply, http1_response};
 use seleniumbase_rs_stealth::network::capture::{Capture, CaptureError, TlsMeasurement};
 use seleniumbase_rs_stealth::network::spec::client_hello::ClientHello;
-use seleniumbase_rs_stealth::network::spec::h2_frames::{encode_frame, frame_type, CLIENT_PREFACE};
+use seleniumbase_rs_stealth::network::spec::h2_frames::{CLIENT_PREFACE, encode_frame, frame_type};
 use seleniumbase_rs_stealth::network::spec::ja3::Ja3;
 use seleniumbase_rs_stealth::network::spec::ja4::Ja4;
 use seleniumbase_rs_stealth::network::spec::tls_spec::{KnownGap, TlsSpec};
@@ -404,9 +404,11 @@ fn the_provenance_names_the_browser_the_tools_and_the_day() {
             file["full_version"].as_str().unwrap_or_default()
         )
     );
-    assert!(file["full_version"]
-        .as_str()
-        .is_some_and(|v| v.starts_with("155.")));
+    assert!(
+        file["full_version"]
+            .as_str()
+            .is_some_and(|v| v.starts_with("155."))
+    );
     let tool = provenance["tool"].as_str().expect("a tool");
     assert!(
         tool.contains("capture_tls") && tool.contains("capture_hints"),
@@ -444,10 +446,12 @@ fn the_committed_hints_agree_with_the_request_headers_they_were_read_beside() {
         "{names:?}"
     );
     assert_eq!(names.len(), 3, "two real brands and one decoy: {names:?}");
-    assert!(hints
-        .full_version_list
-        .iter()
-        .any(|b| b.version == hints.ua_full_version));
+    assert!(
+        hints
+            .full_version_list
+            .iter()
+            .any(|b| b.version == hints.ua_full_version)
+    );
 }
 
 #[test]
@@ -464,9 +468,11 @@ fn the_first_visit_carries_only_the_low_entropy_hints() {
     for low in ["sec-ch-ua", "sec-ch-ua-mobile", "sec-ch-ua-platform"] {
         assert!(names.iter().any(|name| name == low), "{low}");
     }
-    assert!(!names
-        .iter()
-        .any(|name| name == "sec-ch-ua-platform-version"));
+    assert!(
+        !names
+            .iter()
+            .any(|name| name == "sec-ch-ua-platform-version")
+    );
     assert!(
         !names.iter().any(|name| name == "cookie"),
         "no cookie is ever recorded"

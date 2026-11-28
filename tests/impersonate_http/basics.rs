@@ -3,12 +3,12 @@
 
 use std::sync::Arc;
 
-use seleniumbase_rs_stealth::network::spec::header_spec::RequestShape;
 use seleniumbase_rs_stealth::network::WireProtocol;
+use seleniumbase_rs_stealth::network::spec::header_spec::RequestShape;
 use seleniumbase_rs_stealth::session::http::{HttpError, HttpSession, HttpSessionOptions, Method};
 use seleniumbase_rs_stealth::session::ledger::events::{CollectingEventSink, SessionEvent};
 
-use crate::site::{identity, Answer, Site};
+use crate::site::{Answer, Site, identity};
 
 const HOST: &str = "shop.test";
 
@@ -51,9 +51,10 @@ async fn the_request_carries_the_identity_of_the_profile_and_no_cookie() {
         seen.header("user-agent"),
         Some(profile.client_headers().user_agent.as_str())
     );
-    assert!(seen
-        .header("sec-ch-ua")
-        .is_some_and(|hints| hints.contains("Chrome")));
+    assert!(
+        seen.header("sec-ch-ua")
+            .is_some_and(|hints| hints.contains("Chrome"))
+    );
     assert_eq!(
         seen.header("accept-language"),
         profile.client_headers().accept_language.as_deref()

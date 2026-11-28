@@ -10,11 +10,11 @@
 
 use wreq::Method;
 
+use super::HttpSession;
 use super::error::HttpError;
 use super::redirect::site_name;
 use super::reply::HttpResponse;
 use super::request::parse_url;
-use super::HttpSession;
 use crate::session::challenge::detect::{ChallengeKind, Detection};
 use crate::session::challenge::mitigation::{
     AttemptContext, FetchKind, Mitigation, MitigationPolicy,

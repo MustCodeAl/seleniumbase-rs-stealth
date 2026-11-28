@@ -28,7 +28,7 @@ use seleniumbase_rs_stealth::network::mitm::MitmOptions;
 use seleniumbase_rs_stealth::network::spec::client_hello::{ClientHello, MAX_CLIENT_HELLO};
 use seleniumbase_rs_stealth::network::spec::ja4::Ja4;
 use seleniumbase_rs_stealth::network::tls_server::{
-    accept, acceptor, EphemeralCa, ALPN_HTTP1, DEFAULT_HANDSHAKE_TIMEOUT,
+    ALPN_HTTP1, DEFAULT_HANDSHAKE_TIMEOUT, EphemeralCa, accept, acceptor,
 };
 use seleniumbase_rs_stealth::session::http::HttpSessionOptions;
 use tokio::net::{TcpListener, TcpStream};
@@ -46,8 +46,7 @@ pub const REAL_MARKER: &str = "the real page";
 pub const REAL_HTML: &str = "<!doctype html><title>shop</title><p id=real>the real page</p>";
 /// The challenge page: Cloudflare's title and options object, and a script that earns the cookie
 /// and reloads, as the browser's own challenge does.
-pub const CHALLENGE_HTML: &str =
-    "<!doctype html><html><head><title>Just a moment...</title></head>\
+pub const CHALLENGE_HTML: &str = "<!doctype html><html><head><title>Just a moment...</title></head>\
     <body><script>window._cf_chl_opt = { cType: 'managed' };\
     fetch('/__solve').then(function () { location.reload(); });</script></body></html>";
 /// The block page.

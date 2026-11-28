@@ -6,12 +6,12 @@
 
 use serde_json::json;
 
-use super::probes::{page_script, DOCUMENT, PROBES};
-use super::site::{Observed, Protocol, Site};
 use super::CaptureH2Error;
-use crate::network::capture::chrome::{host_resolver_rule, ChromeOptions};
-use crate::network::capture::record::BrowserVersion;
+use super::probes::{DOCUMENT, PROBES, page_script};
+use super::site::{Observed, Protocol, Site};
 use crate::network::capture::CaptureError;
+use crate::network::capture::chrome::{ChromeOptions, host_resolver_rule};
+use crate::network::capture::record::BrowserVersion;
 use seleniumbase_rs::sb_cdp::{Browser, LaunchOptions, Page};
 
 /// Starts a browser that trusts the site's CA and sends every capture host to loopback, makes it

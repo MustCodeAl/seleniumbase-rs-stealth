@@ -1852,12 +1852,14 @@ mod tests {
         .unwrap();
         assert_eq!(params.extra_args(), ["--disable-quic", "--lang=fr-FR"]);
         let config = params.to_browser_config("http://localhost:4444");
-        assert!(!config
-            .browser
-            .chromium
-            .args
-            .iter()
-            .any(|a| a.contains("cmd-prefix")));
+        assert!(
+            !config
+                .browser
+                .chromium
+                .args
+                .iter()
+                .any(|a| a.contains("cmd-prefix"))
+        );
     }
 
     #[test]
@@ -2655,11 +2657,12 @@ mod tests {
             payload_with_values(flags).to_browser_config("http://localhost:4444")
         };
         let auto = launch(json!({}));
-        assert!(auto
-            .browser
-            .user_agent
-            .as_deref()
-            .is_some_and(|ua| ua.contains("Chrome/133")));
+        assert!(
+            auto.browser
+                .user_agent
+                .as_deref()
+                .is_some_and(|ua| ua.contains("Chrome/133"))
+        );
         assert_eq!(auto.browser.lang.as_deref(), Some("de-DE"));
         assert_eq!(
             auto.browser.proxy.server.as_deref(),

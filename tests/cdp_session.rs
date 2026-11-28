@@ -13,8 +13,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 
-use seleniumbase_rs::sb_cdp::{Browser, LaunchOptions, MockCtrl};
 use seleniumbase_rs::SeleniumBaseError;
+use seleniumbase_rs::sb_cdp::{Browser, LaunchOptions, MockCtrl};
 use seleniumbase_rs_stealth::network::proxy::geo::CountryCode;
 use seleniumbase_rs_stealth::session::cdp_session::{CdpSession, CdpSessionBuilder};
 use seleniumbase_rs_stealth::session::challenge::detect::ChallengeKind;
@@ -22,7 +22,7 @@ use seleniumbase_rs_stealth::session::challenge::mitigation::MitigationPolicy;
 use seleniumbase_rs_stealth::session::error::SessionError;
 use seleniumbase_rs_stealth::session::ledger::events::{CollectingEventSink, SessionEvent};
 use seleniumbase_rs_stealth::session::ledger::state::{InMemoryLedger, Ledger};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 /// How long a browser sits unused in the idle test: a week, far past any idle timeout a browser
 /// library has had.

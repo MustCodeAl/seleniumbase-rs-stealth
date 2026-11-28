@@ -2,9 +2,9 @@
 
 use super::{Alps, TlsSpec, TlsSpecError};
 use crate::network::spec::client_hello::fixtures::{
-    HelloBuilder, CHROME_CIPHERS, CHROME_SIGALGS, JA4_EXAMPLE_EXTENSIONS,
+    CHROME_CIPHERS, CHROME_SIGALGS, HelloBuilder, JA4_EXAMPLE_EXTENSIONS,
 };
-use crate::network::spec::client_hello::{ext_id, ClientHello};
+use crate::network::spec::client_hello::{ClientHello, ext_id};
 use crate::network::spec::ids::REFUSED_EXTENSIONS;
 use crate::network::spec::ja3::{Ja3, Peetprint};
 use crate::network::spec::ja4::{Ja4, Ja4Order};

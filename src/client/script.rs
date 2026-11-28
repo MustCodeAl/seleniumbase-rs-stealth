@@ -3233,19 +3233,23 @@ mod tests {
         assert!(js.contains("Keyboard.prototype.getLayoutMap"));
         assert!(js.contains("'clipboard' in navigator"));
 
-        assert!(FingerprintOptions::builder()
-            .battery(BatteryOverride {
-                charging: true,
-                level: 1.5,
-                charging_time: 0.0,
-                discharging_time: f64::INFINITY,
-            })
-            .build()
-            .is_err());
-        assert!(FingerprintOptions::builder()
-            .performance_jitter_ms(-0.1)
-            .build()
-            .is_err());
+        assert!(
+            FingerprintOptions::builder()
+                .battery(BatteryOverride {
+                    charging: true,
+                    level: 1.5,
+                    charging_time: 0.0,
+                    discharging_time: f64::INFINITY,
+                })
+                .build()
+                .is_err()
+        );
+        assert!(
+            FingerprintOptions::builder()
+                .performance_jitter_ms(-0.1)
+                .build()
+                .is_err()
+        );
     }
 
     const V8_STEALTH_HARNESS: &str = r"

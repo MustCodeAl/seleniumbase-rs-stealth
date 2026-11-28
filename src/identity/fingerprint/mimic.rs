@@ -9,7 +9,7 @@ use std::str::FromStr;
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-use super::randomize::{Brand, Locale, MachineRow, NamedMachine, BUILDS, MACHINES, PLACES};
+use super::randomize::{BUILDS, Brand, Locale, MACHINES, MachineRow, NamedMachine, PLACES};
 use super::settings::WebGl;
 use super::{BrowserType, OsType};
 

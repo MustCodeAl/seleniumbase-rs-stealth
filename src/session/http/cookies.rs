@@ -9,7 +9,7 @@ use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::sync::Mutex;
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use url::Url;
 use wreq::Method;
 

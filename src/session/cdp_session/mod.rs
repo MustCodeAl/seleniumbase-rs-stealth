@@ -74,10 +74,11 @@ use crate::network::proxy::switch::ProxySwitch;
 mod builder;
 mod fetch;
 mod launcher;
-mod pacing;
 mod rotate;
 #[cfg(test)]
 mod tests;
+
+use crate::session::pace::SiteLimits;
 
 pub use builder::{CdpSessionBuilder, Clock};
 pub use launcher::Launcher;
@@ -91,7 +92,7 @@ struct Wiring {
     sink: Arc<dyn EventSink>,
     geo: Arc<dyn GeoResolver>,
     policy: MitigationPolicy,
-    limits: Option<pacing::SiteLimits>,
+    limits: Option<SiteLimits>,
     sessions: SessionStore,
     clock: Clock,
 }

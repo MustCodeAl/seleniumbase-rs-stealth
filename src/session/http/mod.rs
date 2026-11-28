@@ -61,7 +61,6 @@ mod fetch;
 mod network;
 mod options;
 mod outcome;
-mod pace;
 mod page;
 mod redirect;
 mod reply;
@@ -78,8 +77,8 @@ pub use wreq::Method;
 
 pub use self::error::HttpError;
 pub use self::options::{
-    Clock, HttpSessionOptions, DEFAULT_CONNECT_TIMEOUT, DEFAULT_MAX_BODY_BYTES,
-    DEFAULT_MAX_REDIRECTS, DEFAULT_MAX_REQUEST_BYTES, DEFAULT_TIMEOUT, MAX_BODY_LIMIT,
+    Clock, DEFAULT_CONNECT_TIMEOUT, DEFAULT_MAX_BODY_BYTES, DEFAULT_MAX_REDIRECTS,
+    DEFAULT_MAX_REQUEST_BYTES, DEFAULT_TIMEOUT, HttpSessionOptions, MAX_BODY_LIMIT,
     MAX_REDIRECT_LIMIT, MAX_TIMEOUT,
 };
 pub use self::outcome::{HttpAttempt, HttpFetch, HttpRules, HttpVerdict};
@@ -87,11 +86,11 @@ pub use self::reply::{HttpResponse, ResponseHeaders};
 pub use self::request::HttpRequest;
 
 use self::cookies::SessionJar;
-use self::pace::SitePacer;
 use crate::network::proxy::route::{ProxyKey, ProxyRoute};
 use crate::network::wire::{WireFormat, WireProtocol};
 use crate::session::jar::store::CookieJar;
 use crate::session::ledger::events::{EventSink, SessionEvent};
+use crate::session::pace::SiteLimits;
 use crate::session::passport::identity::{Identity, IdentityError, WireMeasurementRef};
 
 /// The most origins whose protocol is remembered. Past it the table starts over.
@@ -114,7 +113,7 @@ struct Inner {
     jar: SessionJar,
     egress: Option<ProxyRoute>,
     limits: Limits,
-    pacer: Option<SitePacer>,
+    pacer: Option<SiteLimits>,
     sink: Arc<dyn EventSink>,
     clock: Clock,
     /// The protocol each origin settled on, so the next request carries the headers of that
@@ -239,7 +238,7 @@ impl HttpSession {
                 limits,
                 pacer: options
                     .rate_limit
-                    .map(|(calls, window)| SitePacer::new(calls, window)),
+                    .map(|(calls, window)| SiteLimits::new(calls, window)),
                 sink: options.sink,
                 clock: options.clock,
                 protocols: Mutex::new(HashMap::new()),

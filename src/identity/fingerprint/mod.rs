@@ -68,13 +68,13 @@ pub mod settings;
 pub mod spoof;
 
 pub use bayesian::{
-    audit_coherence, BayesianSampler, CoherenceAudit, DeviceCategory, FingerprintConverter,
-    HeaderGenerator, RequestContext, SampleConstraints,
+    BayesianSampler, CoherenceAudit, DeviceCategory, FingerprintConverter, HeaderGenerator,
+    RequestContext, SampleConstraints, audit_coherence,
 };
 pub use compare::{FingerprintComparison, SettingDiff};
+pub use consistency::{Contradiction, Severity};
 #[cfg(feature = "client")]
 pub(crate) use consistency::{api_expected, gpu_architecture, gpu_maker, is_mobile_gpu};
-pub use consistency::{Contradiction, Severity};
 pub use generator::{
     BatteryOverride, ConnectionOverride, FingerprintGenerator, FingerprintOptions,
     FingerprintOptionsBuilder, GeneratedFingerprint, ScreenConstraints,
@@ -512,7 +512,9 @@ pub enum FingerprintError {
     ///
     /// Only geolocation, WebRTC, media devices, battery, Bluetooth, speech
     /// voices, network information and Client Hints have an off state.
-    #[error("{setting} cannot be Off: only geolocation, webrtc, media_devices, battery, bluetooth, speech_voices, connection and client_hints have an off state")]
+    #[error(
+        "{setting} cannot be Off: only geolocation, webrtc, media_devices, battery, bluetooth, speech_voices, connection and client_hints have an off state"
+    )]
     OffNotAvailable {
         /// The name of the setting, as its builder method is named.
         setting: &'static str,
@@ -4071,8 +4073,7 @@ mod tests {
 
     #[test]
     fn a_safari_persona_must_not_claim_chrome() {
-        let chrome_ua =
-            "Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 \
+        let chrome_ua = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 \
              (KHTML, like Gecko) Chrome/155.0.0.0 Mobile/15E148 Safari/604.1";
         let fp = built(
             Fingerprint::builder()
@@ -4089,10 +4090,12 @@ mod tests {
         );
 
         // The real Safari persona, and a Firefox persona, are not flagged.
-        assert!(Fingerprint::ios_mobile_safari()
-            .validate()
-            .errors
-            .is_empty());
+        assert!(
+            Fingerprint::ios_mobile_safari()
+                .validate()
+                .errors
+                .is_empty()
+        );
         let firefox = built(
             Fingerprint::builder()
                 .browser_type(BrowserType::Firefox)

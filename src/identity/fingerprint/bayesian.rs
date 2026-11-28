@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 use super::randomize::PRESET_CHROMIUM_MAJOR;
 use super::{BrowserType, ColorScheme, FingerprintError, OsType};
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use super::generator::{
     FingerprintGenerator, FingerprintOptions, GeneratedFingerprint, ScreenConstraints,
@@ -736,12 +736,14 @@ mod tests {
             RequestContext::CrossOriginApi,
             Some("https://example.com/"),
         );
-        assert!(api
-            .iter()
-            .any(|(k, v)| k == "Sec-Fetch-Site" && v == "cross-site"));
-        assert!(api
-            .iter()
-            .any(|(k, v)| k == "Referer" && v == "https://example.com/"));
+        assert!(
+            api.iter()
+                .any(|(k, v)| k == "Sec-Fetch-Site" && v == "cross-site")
+        );
+        assert!(
+            api.iter()
+                .any(|(k, v)| k == "Referer" && v == "https://example.com/")
+        );
 
         // Navigation with Referer must not emit contradictory `Sec-Fetch-Site: none`.
         let referred_nav = HeaderGenerator::generate(
@@ -749,17 +751,21 @@ mod tests {
             RequestContext::Navigation,
             Some("https://example.com/"),
         );
-        assert!(referred_nav
-            .iter()
-            .any(|(k, v)| k == "Sec-Fetch-Site" && v == "cross-site"));
+        assert!(
+            referred_nav
+                .iter()
+                .any(|(k, v)| k == "Sec-Fetch-Site" && v == "cross-site")
+        );
 
         // Safari/iOS must not advertise `zstd` in Accept-Encoding.
         let ios = BayesianSampler::sample(&SampleConstraints::new().os([OsType::Ios]).seed(9))
             .expect("ios safari");
         let ios_headers = HeaderGenerator::generate(&ios, RequestContext::Navigation, None);
-        assert!(ios_headers
-            .iter()
-            .any(|(k, v)| k == "Accept-Encoding" && v == "gzip, deflate, br"));
+        assert!(
+            ios_headers
+                .iter()
+                .any(|(k, v)| k == "Accept-Encoding" && v == "gzip, deflate, br")
+        );
         let pw_ios = FingerprintConverter::to_playwright_context_options(&ios);
         assert_eq!(pw_ios["isMobile"], true);
         assert_eq!(pw_ios["hasTouch"], true);
@@ -770,12 +776,14 @@ mod tests {
         let mut fp = BayesianSampler::sample(&SampleConstraints::new().os([OsType::Macos]).seed(7))
             .expect("macos sample");
         let cdp = FingerprintConverter::to_cdp_commands(&fp);
-        assert!(cdp
-            .iter()
-            .any(|(m, _)| m == "Emulation.setUserAgentOverride"));
-        assert!(cdp
-            .iter()
-            .any(|(m, _)| m == "Emulation.setDeviceMetricsOverride"));
+        assert!(
+            cdp.iter()
+                .any(|(m, _)| m == "Emulation.setUserAgentOverride")
+        );
+        assert!(
+            cdp.iter()
+                .any(|(m, _)| m == "Emulation.setDeviceMetricsOverride")
+        );
         let args = FingerprintConverter::to_chromium_launch_args(&fp);
         assert!(args.iter().any(|a| a.starts_with("--window-size=")));
 
@@ -860,13 +868,17 @@ mod tests {
 
         // Fetch and Subresource contexts emit expected Sec-Fetch headers.
         let fetch_hdrs = HeaderGenerator::generate(&batch[0], RequestContext::Fetch, None);
-        assert!(fetch_hdrs
-            .iter()
-            .any(|(k, v)| k == "Sec-Fetch-Mode" && v == "cors"));
+        assert!(
+            fetch_hdrs
+                .iter()
+                .any(|(k, v)| k == "Sec-Fetch-Mode" && v == "cors")
+        );
         let sub_hdrs = HeaderGenerator::generate(&batch[0], RequestContext::Subresource, None);
-        assert!(sub_hdrs
-            .iter()
-            .any(|(k, v)| k == "Sec-Fetch-Dest" && v == "script"));
+        assert!(
+            sub_hdrs
+                .iter()
+                .any(|(k, v)| k == "Sec-Fetch-Dest" && v == "script")
+        );
 
         // Audit contradictions: Windows UA + MacIntel platform + Apple GPU + macOS Client Hints.
         let mut bad_win = BayesianSampler::sample(

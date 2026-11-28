@@ -20,18 +20,18 @@ use std::sync::Arc;
 
 use seleniumbase_rs::error::SeleniumBaseError;
 use seleniumbase_rs::plugin_api::{
-    async_trait, switch_policy, Capability, Category, HostScope, LaunchSettings, Metadata,
-    PageHandle, Plugin, PluginError, PluginSet, Requirements, Result as PluginResult,
-    WebRtcPolicy as ApiWebRtcPolicy,
+    Capability, Category, HostScope, LaunchSettings, Metadata, PageHandle, Plugin, PluginError,
+    PluginSet, Requirements, Result as PluginResult, WebRtcPolicy as ApiWebRtcPolicy, async_trait,
+    switch_policy,
 };
 use seleniumbase_rs::sb_cdp::{LaunchOptions, Page};
 use seleniumbase_rs::{BaseCase, BrowserConfig};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use crate::client::evasions::{launch_args, safe_cdp_overrides, session_script};
 use crate::client::script::{StealthScriptBundle, StealthScriptOptions};
 use crate::identity::capture::{
-    capture_async_script, capture_expression, timestamp, CapturedFingerprint,
+    CapturedFingerprint, capture_async_script, capture_expression, timestamp,
 };
 use crate::identity::fingerprint::{
     Fingerprint, FingerprintComparison, FingerprintGenerator, GeneratedFingerprint, OsType,
@@ -1003,8 +1003,8 @@ fn refused(method: &str, error: &SeleniumBaseError) -> SeleniumBaseError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::client::evasions::{raw_overrides, CREDENTIAL_HEADER_METHOD};
-    use crate::client::providers::{session_registry, EvasionContext};
+    use crate::client::evasions::{CREDENTIAL_HEADER_METHOD, raw_overrides};
+    use crate::client::providers::{EvasionContext, session_registry};
     use crate::identity::fingerprint::{ProxyConfig, Spoof};
 
     fn methods(identity: &StealthPlan) -> Vec<&str> {
@@ -1056,9 +1056,11 @@ mod tests {
             .proxy(Spoof::Value(proxy))
             .build()
             .expect("valid fingerprint");
-        assert!(raw_overrides(&fp)
-            .iter()
-            .any(|(m, _)| m == CREDENTIAL_HEADER_METHOD));
+        assert!(
+            raw_overrides(&fp)
+                .iter()
+                .any(|(m, _)| m == CREDENTIAL_HEADER_METHOD)
+        );
         let plan = StealthPlan::new(&fp);
         assert!(!methods(&plan).contains(&CREDENTIAL_HEADER_METHOD));
     }
@@ -1120,9 +1122,10 @@ mod tests {
         let meta = hook.metadata();
         assert!(meta.capabilities.covers(&Capability::LaunchArgs));
         assert!(meta.capabilities.covers(&Capability::LaunchNetwork));
-        assert!(meta
-            .capabilities
-            .covers(&Capability::PageScript(HostScope::Everywhere)));
+        assert!(
+            meta.capabilities
+                .covers(&Capability::PageScript(HostScope::Everywhere))
+        );
 
         let set = PluginSet::new().with(hook).expect("valid hook set");
         let mut settings = LaunchSettings::default();
@@ -1133,10 +1136,12 @@ mod tests {
         rt.block_on(set.before_launch(&mut settings))
             .expect("before_launch passes capability checks");
 
-        assert!(settings
-            .args
-            .iter()
-            .any(|a| a == "--disable-blink-features=AutomationControlled"));
+        assert!(
+            settings
+                .args
+                .iter()
+                .any(|a| a == "--disable-blink-features=AutomationControlled")
+        );
         assert!(settings.args.iter().any(|a| a.starts_with("--user-agent=")));
         let lang_arg = settings
             .args

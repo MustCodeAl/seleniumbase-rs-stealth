@@ -4,11 +4,11 @@
 use std::time::Duration;
 
 use http::{HeaderMap, HeaderName, HeaderValue, Method, StatusCode, Version};
-use tokio::io::{duplex, AsyncReadExt as _, AsyncWriteExt as _, DuplexStream};
+use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _, DuplexStream, duplex};
 use tokio::sync::watch;
 
 use super::{
-    ask, handshake_headers, pump, switched_to_websocket, switching_protocols, Ask, Bounds, Ended,
+    Ask, Bounds, Ended, ask, handshake_headers, pump, switched_to_websocket, switching_protocols,
 };
 use crate::network::mitm::MitmError;
 

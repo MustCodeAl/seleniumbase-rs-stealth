@@ -6,8 +6,7 @@ use std::hash::{BuildHasher, Hasher};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use super::launcher::{browser_major, host_os, persona_for, Launcher};
-use super::pacing::SiteLimits;
+use super::launcher::{Launcher, browser_major, host_os, persona_for};
 use super::{CdpSession, Current, Egress, Persona, Wiring};
 use crate::client::LaunchOptionsFingerprintExt;
 use crate::identity::fingerprint::Fingerprint;
@@ -21,6 +20,7 @@ use crate::session::error::SessionError;
 use crate::session::io::tracing_sink::TracingEventSink;
 use crate::session::ledger::events::EventSink;
 use crate::session::ledger::state::{InMemoryLedger, Ledger};
+use crate::session::pace::SiteLimits;
 use seleniumbase_rs::config::proxy_list::RotationStrategy;
 use seleniumbase_rs::error::SeleniumBaseError;
 use seleniumbase_rs::sb_cdp::{Browser, LaunchOptions, SessionStore};

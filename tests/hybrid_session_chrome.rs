@@ -38,7 +38,7 @@ use seleniumbase_rs_stealth::session::passport::policy::{
     DemoteReason, EscalateReason, Escalation, EscalationPolicy,
 };
 
-use site::{ChallengeSite, CLEARANCE, DEFAULT_TTL_SECS, REAL_MARKER};
+use site::{CLEARANCE, ChallengeSite, DEFAULT_TTL_SECS, REAL_MARKER};
 
 /// A builder wired to `site`, with Chrome headless.
 fn builder(site: &ChallengeSite, sink: &CollectingEventSink) -> HybridSessionBuilder {
@@ -175,11 +175,13 @@ async fn assert_clearance_moved(session: &HybridSession, site: &ChallengeSite) {
         (DEFAULT_TTL_SECS - 120..=DEFAULT_TTL_SECS + 120).contains(&left),
         "about {DEFAULT_TTL_SECS} s of clearance, not {left}"
     );
-    assert!(identity
-        .session
-        .cookies()
-        .iter()
-        .any(|c| c.value == site.token()));
+    assert!(
+        identity
+            .session
+            .cookies()
+            .iter()
+            .any(|c| c.value == site.token())
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

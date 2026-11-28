@@ -15,7 +15,7 @@ use tokio::task::JoinSet;
 use super::CaptureError;
 use crate::network::spec::client_hello::{ClientHello, MAX_CLIENT_HELLO};
 use crate::network::spec::h2_frames::{
-    encode_frame, frame_type, read_preface, H2Preface, MAX_PREFACE_BYTES,
+    H2Preface, MAX_PREFACE_BYTES, encode_frame, frame_type, read_preface,
 };
 
 /// Bytes asked of the socket per read.

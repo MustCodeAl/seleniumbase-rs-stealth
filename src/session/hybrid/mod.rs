@@ -77,20 +77,18 @@ mod browser;
 mod builder;
 mod error;
 mod fetch;
-mod pace;
 mod rotate;
 mod transition;
 
 use std::fmt;
 use std::sync::Arc;
 
-pub use self::builder::{HybridSessionBuilder, DEFAULT_ATTEMPTS, MITM_SHUTDOWN_GRACE};
+pub use self::builder::{DEFAULT_ATTEMPTS, HybridSessionBuilder, MITM_SHUTDOWN_GRACE};
 pub use self::error::HybridError;
 pub use self::fetch::HybridFetch;
 pub use super::http::Clock;
 
 use self::browser::BrowserLeg;
-use self::pace::SiteLimits;
 use super::http::{HttpRules, HttpSession, HttpSessionOptions};
 use crate::identity::fingerprint::OsType;
 use crate::network::mitm::{MitmOptions, MitmProxy};
@@ -101,6 +99,7 @@ use crate::session::cdp_session::Launcher;
 use crate::session::challenge::mitigation::FetchKind;
 use crate::session::ledger::events::{EventSink, SessionEvent};
 use crate::session::ledger::state::Ledger;
+use crate::session::pace::SiteLimits;
 use crate::session::passport::identity::Identity;
 use seleniumbase_rs::sb_cdp::{LaunchOptions, Page};
 

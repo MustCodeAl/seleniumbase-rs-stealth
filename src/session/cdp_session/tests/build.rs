@@ -1,11 +1,11 @@
 //! Tests of how a scraper is built and of the small readers it uses.
 
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use async_trait::async_trait;
 
-use super::rig::{country, policy_with, real_page, script_challenge, Rig, BRIEF_SOLVE, SEED};
+use super::rig::{BRIEF_SOLVE, Rig, SEED, country, policy_with, real_page, script_challenge};
 use crate::identity::fingerprint::{Fingerprint, OsType};
 use crate::network::proxy::geo::{GeoError, GeoInfo, GeoResolver};
 use crate::network::proxy::route::ProxyRoute;

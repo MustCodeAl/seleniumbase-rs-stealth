@@ -8,7 +8,7 @@ use seleniumbase_rs_stealth::session::http::HttpSession;
 use seleniumbase_rs_stealth::session::ledger::events::CollectingEventSink;
 use url::Url;
 
-use crate::site::{identity, now, H2Site};
+use crate::site::{H2Site, identity, now};
 
 const HOST: &str = "h2.test";
 const BODY: &str = "over http2";

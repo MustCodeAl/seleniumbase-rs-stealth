@@ -10,11 +10,11 @@ use std::time::{SystemTime, UNIX_EPOCH};
 pub mod shop;
 
 #[cfg(feature = "network")]
+use seleniumbase_rs_stealth::Browser;
+#[cfg(feature = "network")]
 use seleniumbase_rs_stealth::identity::fingerprint::OsType;
 #[cfg(feature = "network")]
 use seleniumbase_rs_stealth::network::spec::measurement;
-#[cfg(feature = "network")]
-use seleniumbase_rs_stealth::Browser;
 
 /// The operating system this machine runs, as the persona of a real browser on it.
 #[cfg(feature = "network")]

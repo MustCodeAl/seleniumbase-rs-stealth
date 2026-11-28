@@ -8,7 +8,7 @@ use seleniumbase_rs_stealth::network::spec::header_spec::RequestShape;
 use seleniumbase_rs_stealth::network::wire::{WireFormat, WireProtocol};
 use wreq::ClientBuilder;
 
-use crate::server::{Served, WireServer, HOST};
+use crate::server::{HOST, Served, WireServer};
 
 /// How long a probe waits for a hello before it gives up.
 const PROBE_WITHIN: Duration = Duration::from_secs(10);

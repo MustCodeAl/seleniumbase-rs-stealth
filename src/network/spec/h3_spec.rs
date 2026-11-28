@@ -311,9 +311,10 @@ mod tests {
             Some(262_144)
         );
         assert_eq!(spec.setting(setting_id::QPACK_BLOCKED_STREAMS), Some(100));
-        assert!(spec
-            .transport_parameter(transport_param_id::MAX_IDLE_TIMEOUT)
-            .is_some());
+        assert!(
+            spec.transport_parameter(transport_param_id::MAX_IDLE_TIMEOUT)
+                .is_some()
+        );
         assert_eq!(spec.initial_packet_size, Some(1250));
     }
 

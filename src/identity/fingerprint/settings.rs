@@ -20,8 +20,8 @@
 
 use serde::{Deserialize, Serialize};
 
-use super::spoof::Spoof;
 use super::MediaDeviceSpec;
+use super::spoof::Spoof;
 
 /// What a desktop's taskbar or menu bar takes from the height of the screen
 /// when a fingerprint gives no available screen, in CSS pixels.

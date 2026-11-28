@@ -8,13 +8,13 @@ use async_trait::async_trait;
 use tokio::time::Instant;
 
 use super::rig::{
-    block, country, policy_with, real_page, script_challenge, widget_challenge, Rig, NOW,
+    NOW, Rig, block, country, policy_with, real_page, script_challenge, widget_challenge,
 };
 use crate::network::proxy::pool::DEFAULT_QUARANTINE_AFTER;
 use crate::network::proxy::route::ProxyRoute;
-use crate::session::cdp::testkit::Served;
 use crate::session::cdp::PageSnapshot;
-use crate::session::cdp_session::fetch::{give_up, Step, Target};
+use crate::session::cdp::testkit::Served;
+use crate::session::cdp_session::fetch::{Step, Target, give_up};
 use crate::session::challenge::detect::{ChallengeEvidence, ChallengeKind, Detection};
 use crate::session::challenge::mitigation::{GiveUpReason, Mitigation};
 use crate::session::error::SessionError;

@@ -9,7 +9,7 @@ use seleniumbase_rs::browser::config::Browser;
 use seleniumbase_rs_stealth::identity::fingerprint::{BrandVersion, ClientHints};
 use seleniumbase_rs_stealth::network::convert::ConvertError;
 use seleniumbase_rs_stealth::network::spec::akamai::Akamai;
-use seleniumbase_rs_stealth::network::spec::client_hello::{ext_id, ClientHello};
+use seleniumbase_rs_stealth::network::spec::client_hello::{ClientHello, ext_id};
 use seleniumbase_rs_stealth::network::spec::h2_spec::H2SpecError;
 use seleniumbase_rs_stealth::network::spec::header_spec::{
     ClientHeaders, HeaderSource, RequestShape,
@@ -20,7 +20,7 @@ use seleniumbase_rs_stealth::network::spec::ja4::{Ja4, Ja4Order, Ja4Raw};
 use seleniumbase_rs_stealth::network::spec::tls_spec::TlsSpecError;
 use seleniumbase_rs_stealth::network::wire::{WireFormat, WireFormatError, WireProtocol};
 
-use crate::exchange::{exchange, Via};
+use crate::exchange::{Via, exchange};
 use crate::server::Served;
 
 fn base() -> WireFormat {

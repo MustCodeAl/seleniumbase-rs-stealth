@@ -12,18 +12,18 @@ pub mod profile_payloads;
 
 pub use capture::{CapturedFingerprint, ProbeInfo};
 pub use fingerprint::{
-    audit_coherence, AudioDynamicsCompressor, AudioMetadata, BatteryMetadata, BatteryOverride,
-    BatteryProfile, BayesianSampler, BrandVersion, BrowserType, ClientHints,
-    ClientHintsHighEntropy, CoherenceAudit, CoherenceReport, ColorGamut, ColorScheme,
-    ConnectionOverride, ConnectionProfile, Contradiction, DeviceCategory, Dimension,
-    DisplayMetadata, Fingerprint, FingerprintBuilder, FingerprintComparison, FingerprintConverter,
-    FingerprintError, FingerprintGenerator, FingerprintOptions, FingerprintOptionsBuilder,
-    GeneratedFingerprint, Geolocation, GpuMetadata, HdrMode, HeaderGenerator, HumanizeConfig,
-    MediaDeviceInfo, MediaDeviceMetadata, NetworkMetadata, OsType, ProfileFingerprint, ProxyConfig,
-    QuicMode, ReducedMotion, RequestContext, SampleConstraints, ScreenConstraints,
-    ScreenOrientation, ScreenOrientationType, ScreenSize, SettingDiff, Severity, Specimen,
-    SpeechVoice, Spoof, StealthPolicy, WebGl, WebGlParameters, WebGpuLimits, WebGpuMetadata,
-    WebRtcAddresses, WebRtcPolicy,
+    AudioDynamicsCompressor, AudioMetadata, BatteryMetadata, BatteryOverride, BatteryProfile,
+    BayesianSampler, BrandVersion, BrowserType, ClientHints, ClientHintsHighEntropy,
+    CoherenceAudit, CoherenceReport, ColorGamut, ColorScheme, ConnectionOverride,
+    ConnectionProfile, Contradiction, DeviceCategory, Dimension, DisplayMetadata, Fingerprint,
+    FingerprintBuilder, FingerprintComparison, FingerprintConverter, FingerprintError,
+    FingerprintGenerator, FingerprintOptions, FingerprintOptionsBuilder, GeneratedFingerprint,
+    Geolocation, GpuMetadata, HdrMode, HeaderGenerator, HumanizeConfig, MediaDeviceInfo,
+    MediaDeviceMetadata, NetworkMetadata, OsType, ProfileFingerprint, ProxyConfig, QuicMode,
+    ReducedMotion, RequestContext, SampleConstraints, ScreenConstraints, ScreenOrientation,
+    ScreenOrientationType, ScreenSize, SettingDiff, Severity, Specimen, SpeechVoice, Spoof,
+    StealthPolicy, WebGl, WebGlParameters, WebGpuLimits, WebGpuMetadata, WebRtcAddresses,
+    WebRtcPolicy, audit_coherence,
 };
 pub use profile_payloads::ProfileParams;
 

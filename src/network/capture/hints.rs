@@ -19,11 +19,11 @@ use std::time::Duration;
 use serde::{Deserialize, Serialize};
 use tokio::io::AsyncWriteExt;
 use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::{Mutex, mpsc};
 use tokio::task::{JoinHandle, JoinSet};
 
-use super::stream::{http1_response, read_http1_request, Http1Request};
 use super::CaptureError;
+use super::stream::{Http1Request, http1_response, read_http1_request};
 use crate::identity::fingerprint::{BrandVersion, ClientHints};
 use crate::sync::locked;
 

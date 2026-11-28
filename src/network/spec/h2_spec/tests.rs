@@ -499,9 +499,11 @@ fn json_round_trip_and_defaults() {
         ),
         (0, None, None)
     );
-    assert!(!serde_json::to_string(&parsed)
-        .expect("serialises")
-        .contains("headers_priority"));
+    assert!(
+        !serde_json::to_string(&parsed)
+            .expect("serialises")
+            .contains("headers_priority")
+    );
     let typo = r#"{"settings":[],"window_update":0,"pseudo_order":["method","authority","scheme","path"],"windows_update":1}"#;
     assert!(
         serde_json::from_str::<H2Spec>(typo).is_err(),

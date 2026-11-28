@@ -2,12 +2,12 @@
 
 use super::overlay::versions_with_max;
 use super::tests::{
-    chrome, duplicate, hello, ja3, refused, sigalg, CHROME_JA3, CHROME_JA3_HASH, CIPHERS,
+    CHROME_JA3, CHROME_JA3_HASH, CIPHERS, chrome, duplicate, hello, ja3, refused, sigalg,
 };
 use super::{KnownGap, TlsSpec, TlsSpecError};
 use crate::network::spec::client_hello::ext_id;
 use crate::network::spec::client_hello::fixtures::{
-    HelloBuilder, CHROME_CIPHERS, JA4_EXAMPLE_EXTENSIONS,
+    CHROME_CIPHERS, HelloBuilder, JA4_EXAMPLE_EXTENSIONS,
 };
 use crate::network::spec::ja3::peetprint::{PeetprintField, PeetprintSlot};
 use crate::network::spec::ja3::{Ja3, Peetprint};

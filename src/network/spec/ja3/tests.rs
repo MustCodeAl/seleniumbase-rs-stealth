@@ -1,9 +1,9 @@
 //! Tests of the JA3 and peetprint parsers, the pure MD5 and the published example vectors.
 
-use super::peetprint::{PeetprintField, PeetprintSlot, MAX_PEETPRINT_LEN};
-use super::{md5_hex, Ja3, Ja3Error, Ja3Field, Peetprint, PeetprintError, MAX_JA3_LEN};
-use crate::network::spec::client_hello::fixtures::HelloBuilder;
+use super::peetprint::{MAX_PEETPRINT_LEN, PeetprintField, PeetprintSlot};
+use super::{Ja3, Ja3Error, Ja3Field, MAX_JA3_LEN, Peetprint, PeetprintError, md5_hex};
 use crate::network::spec::client_hello::ClientHello;
+use crate::network::spec::client_hello::fixtures::HelloBuilder;
 
 /// The JA3 of the widely published Chrome 85 style hello and its MD5.
 const CHROME_JA3: &str = "771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,0-23-65281-10-11-35-16-5-13-18-51-45-43-27-21,29-23-24,0";

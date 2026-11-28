@@ -16,12 +16,12 @@ use btls::x509::extension::{
     AuthorityKeyIdentifier, BasicConstraints, ExtendedKeyUsage, KeyUsage, SubjectAlternativeName,
     SubjectKeyIdentifier,
 };
-use btls::x509::{X509Builder, X509Extension, X509Name, X509NameRef, X509Ref, X509};
+use btls::x509::{X509, X509Builder, X509Extension, X509Name, X509NameRef, X509Ref};
 use url::Host;
 
 use super::cache::LeafCache;
 use super::host::LeafName;
-use super::{CaOptions, TlsServerError, CLOCK_SKEW_ALLOWANCE};
+use super::{CLOCK_SKEW_ALLOWANCE, CaOptions, TlsServerError};
 use crate::sync::locked;
 
 /// The organization in every subject this module writes.

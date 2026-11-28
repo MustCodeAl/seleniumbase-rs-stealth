@@ -82,7 +82,7 @@ use btls::ssl::{
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_btls::SslStream;
 
-pub use ca::{spki_pin_of, EphemeralCa, LeafCert};
+pub use ca::{EphemeralCa, LeafCert, spki_pin_of};
 
 /// The ALPN id of HTTP/1.1, the only protocol the browser-to-proxy leg negotiates.
 pub const ALPN_HTTP1: &[u8] = b"http/1.1";

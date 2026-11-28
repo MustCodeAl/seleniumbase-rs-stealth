@@ -2,8 +2,8 @@
 
 use std::sync::Arc;
 
-use base64::engine::general_purpose::STANDARD;
 use base64::Engine as _;
+use base64::engine::general_purpose::STANDARD;
 use futures_util::StreamExt as _;
 use seleniumbase_rs_stealth::network::mitm::{MitmOptions, MitmProxy};
 use seleniumbase_rs_stealth::network::spec::header_spec::RequestShape;
@@ -13,9 +13,9 @@ use seleniumbase_rs_stealth::session::ledger::events::{CollectingEventSink, Sess
 use tokio::net::TcpStream;
 
 use crate::support::{
-    browser_client, der, exchange, measured_user_agent, navigation, new_ca, profile, proxy_auth,
-    start_mitm, tunnel, Recorded, RecordingOrigin, StreamOrigin, ALPN_H2, CHUNK, PAGE, QUIET,
-    WITHIN,
+    ALPN_H2, CHUNK, PAGE, QUIET, Recorded, RecordingOrigin, StreamOrigin, WITHIN, browser_client,
+    der, exchange, measured_user_agent, navigation, new_ca, profile, proxy_auth, start_mitm,
+    tunnel,
 };
 
 /// The host every test site is reached by.
@@ -144,10 +144,12 @@ async fn hop_by_hop_and_proxy_headers_never_reach_the_origin_and_the_order_is_ke
         .priority_for("document")
         .expect("a measured document priority");
     assert_eq!(preface.header("priority"), Some(priority));
-    assert!(preface
-        .headers
-        .iter()
-        .all(|field| !field.value.contains(&leaked)));
+    assert!(
+        preface
+            .headers
+            .iter()
+            .all(|field| !field.value.contains(&leaked))
+    );
 }
 
 /// The measured spelling of a lower-case header name, or the name itself.
@@ -221,10 +223,11 @@ async fn an_origin_with_an_untrusted_certificate_gets_an_empty_502() {
         "the origin served a request"
     );
     assert_eq!(mitm.stats().upstream_errors, 1);
-    assert!(sink
-        .events()
-        .iter()
-        .any(|event| matches!(event, SessionEvent::Request { status: 502, .. })));
+    assert!(
+        sink.events()
+            .iter()
+            .any(|event| matches!(event, SessionEvent::Request { status: 502, .. }))
+    );
 }
 
 /// Sends `request` through a fresh tunnel and returns the status; the origin must see nothing.

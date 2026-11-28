@@ -15,7 +15,7 @@ use std::process::ExitCode;
 use seleniumbase_rs::browser::config::Browser;
 use seleniumbase_rs_stealth::network::capture::args::{ToolArgs, USAGE};
 use seleniumbase_rs_stealth::network::capture::record::write_fixtures;
-use seleniumbase_rs_stealth::network::capture::{measure_tls, CaptureError, EntryId, MeasuredFile};
+use seleniumbase_rs_stealth::network::capture::{CaptureError, EntryId, MeasuredFile, measure_tls};
 
 /// The name and version this tool writes into the provenance of the file.
 const TOOL: &str = concat!("capture_tls ", env!("CARGO_PKG_VERSION"));

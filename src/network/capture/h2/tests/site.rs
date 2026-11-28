@@ -9,15 +9,15 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio_btls::SslStream;
 
 use super::{h2_headers, h2_start};
+use crate::network::capture::CaptureError;
+use crate::network::capture::h2::CaptureH2Error;
 use crate::network::capture::h2::probes::{DOCUMENT, DOCUMENT_BODY, FETCH};
 use crate::network::capture::h2::site::{
-    h2_reply, peek_server_name, Protocol, Seen, Site, ALPN_H2,
+    ALPN_H2, Protocol, Seen, Site, h2_reply, peek_server_name,
 };
-use crate::network::capture::h2::CaptureH2Error;
-use crate::network::capture::CaptureError;
 use crate::network::spec::h2_frames::hpack::HpackDecoder;
-use crate::network::spec::h2_frames::{read_frame, Frame, DEFAULT_MAX_FRAME_PAYLOAD};
-use crate::network::tls_server::{spki_pin_of, ALPN_HTTP1};
+use crate::network::spec::h2_frames::{DEFAULT_MAX_FRAME_PAYLOAD, Frame, read_frame};
+use crate::network::tls_server::{ALPN_HTTP1, spki_pin_of};
 
 /// A first ordinary hello captured from a real Chrome; its server name is `h0.capture.test`. The
 /// measured fixtures live in the codec crate.

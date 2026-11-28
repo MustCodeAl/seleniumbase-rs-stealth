@@ -1,8 +1,8 @@
 //! A reply judged for the session policy: a challenge page, a clear page, a rate limit, and a
 //! clearance about to end.
 
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use seleniumbase_rs_stealth::session::challenge::detect::{ChallengeKind, ProtectionVendor};
 use seleniumbase_rs_stealth::session::challenge::mitigation::{FetchKind, Mitigation};
@@ -12,7 +12,7 @@ use seleniumbase_rs_stealth::session::ledger::state::SiteRecord;
 use seleniumbase_rs_stealth::session::passport::policy::{EscalateReason, Escalation};
 use url::Url;
 
-use crate::site::{identity, now, Answer, Site};
+use crate::site::{Answer, Site, identity, now};
 
 const HOST: &str = "shop.test";
 const CHALLENGE: &str = "<html><head><title>Just a moment...</title></head><body><div id=\"challenge-form\"></div></body></html>";

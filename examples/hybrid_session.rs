@@ -33,7 +33,7 @@ use std::sync::Arc;
 use seleniumbase_rs::sb_cdp::LaunchOptions;
 use seleniumbase_rs_stealth::session::HybridSession;
 use seleniumbase_rs_stealth::session::{CollectingEventSink, SessionEvent};
-use stealth_support::shop::{Shop, REAL_MARKER};
+use stealth_support::shop::{REAL_MARKER, Shop};
 
 #[tokio::main]
 async fn main() -> ExitCode {

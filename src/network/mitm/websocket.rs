@@ -16,9 +16,9 @@
 
 use std::io;
 use std::pin::Pin;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
-use std::task::{ready, Context, Poll};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::task::{Context, Poll, ready};
 use std::time::Duration;
 
 use http::header::{CONNECTION, CONTENT_LENGTH, TRANSFER_ENCODING, UPGRADE};
@@ -32,7 +32,7 @@ use tokio::time::Instant;
 
 use super::connect::{refuse, stopped};
 use super::forward::{
-    answered, dropped_fields, empty, forwarded_response_headers, keeps_request_header, ProxyBody,
+    ProxyBody, answered, dropped_fields, empty, forwarded_response_headers, keeps_request_header,
 };
 use super::upstream::Handshake;
 use super::{Counters, MitmError, MitmOptions, Shared};

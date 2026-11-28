@@ -20,7 +20,7 @@ use seleniumbase_rs::browser::config::Browser;
 use seleniumbase_rs_stealth::identity::fingerprint::OsType;
 use seleniumbase_rs_stealth::network::capture::args::ToolArgs;
 use seleniumbase_rs_stealth::network::capture::h2::{
-    derive, measure_and_write, MeasuredDoc, Passes, PROBES,
+    MeasuredDoc, PROBES, Passes, derive, measure_and_write,
 };
 use seleniumbase_rs_stealth::network::spec::akamai::{Akamai, PseudoHeader};
 use seleniumbase_rs_stealth::network::spec::measurement::{self, WireMeasurement};

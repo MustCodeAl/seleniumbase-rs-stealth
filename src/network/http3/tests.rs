@@ -4,8 +4,8 @@ use std::os::unix::fs::PermissionsExt as _;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use base64::engine::general_purpose::STANDARD;
 use base64::Engine as _;
+use base64::engine::general_purpose::STANDARD;
 
 use crate::identity::fingerprint::{BrowserType, OsType};
 
@@ -150,27 +150,35 @@ fn the_options_become_the_helpers_command_line() {
 #[test]
 fn options_build_browser_selectors_and_proxy_shortcuts() {
     let chrome = Http3Options::new().for_browser(BrowserType::Chromium, 157, OsType::Windows);
-    assert!(chrome
-        .arguments()
-        .contains(&"chrome-157-windows".to_owned()));
+    assert!(
+        chrome
+            .arguments()
+            .contains(&"chrome-157-windows".to_owned())
+    );
 
     let firefox = Http3Options::new().for_browser(BrowserType::Firefox, 157, OsType::Windows);
-    assert!(firefox
-        .arguments()
-        .contains(&"firefox-157-windows".to_owned()));
+    assert!(
+        firefox
+            .arguments()
+            .contains(&"firefox-157-windows".to_owned())
+    );
 
     let safari = Http3Options::new().for_browser(BrowserType::MobileSafari, 26, OsType::Ios);
     assert!(safari.arguments().contains(&"safari-26-ios".to_owned()));
 
     let socks = Http3Options::new().socks5("127.0.0.1:1080");
-    assert!(socks
-        .arguments()
-        .contains(&"socks5h://127.0.0.1:1080".to_owned()));
+    assert!(
+        socks
+            .arguments()
+            .contains(&"socks5h://127.0.0.1:1080".to_owned())
+    );
 
     let masque = Http3Options::new().connect_udp("masque.example:443");
-    assert!(masque
-        .arguments()
-        .contains(&"connect-udp://masque.example:443".to_owned()));
+    assert!(
+        masque
+            .arguments()
+            .contains(&"connect-udp://masque.example:443".to_owned())
+    );
 }
 
 #[tokio::test]
@@ -208,21 +216,26 @@ fn request_builder_helpers_set_headers_query_form_and_text_body() {
     assert_eq!(req.url, "https://example.com/search?q=hello+world&page=2");
     assert!(req.headers.contains(&("x-one".to_owned(), "1".to_owned())));
     assert!(req.headers.contains(&("x-two".to_owned(), "2".to_owned())));
-    assert!(req
-        .headers
-        .contains(&("authorization".to_owned(), "Bearer tok-123".to_owned())));
-    assert!(req
-        .headers
-        .contains(&("referer".to_owned(), "https://example.com/".to_owned())));
-    assert!(req
-        .headers
-        .contains(&("origin".to_owned(), "https://example.com".to_owned())));
-    assert!(req
-        .headers
-        .contains(&("accept-language".to_owned(), "en-US,en;q=0.9".to_owned())));
-    assert!(req
-        .headers
-        .contains(&("cookie".to_owned(), "sid=abc".to_owned())));
+    assert!(
+        req.headers
+            .contains(&("authorization".to_owned(), "Bearer tok-123".to_owned()))
+    );
+    assert!(
+        req.headers
+            .contains(&("referer".to_owned(), "https://example.com/".to_owned()))
+    );
+    assert!(
+        req.headers
+            .contains(&("origin".to_owned(), "https://example.com".to_owned()))
+    );
+    assert!(
+        req.headers
+            .contains(&("accept-language".to_owned(), "en-US,en;q=0.9".to_owned()))
+    );
+    assert!(
+        req.headers
+            .contains(&("cookie".to_owned(), "sid=abc".to_owned()))
+    );
 
     let basic = Http3Request::post("https://example.com/login")
         .basic_auth("alice", "secret")

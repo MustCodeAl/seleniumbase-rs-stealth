@@ -11,8 +11,8 @@ use std::pin::pin;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
 
-use base64::engine::general_purpose::STANDARD;
 use base64::Engine as _;
+use base64::engine::general_purpose::STANDARD;
 use http::header::{CONNECTION, PROXY_AUTHENTICATE, PROXY_AUTHORIZATION};
 use http::{HeaderMap, HeaderValue, Method, Request, Response, StatusCode};
 use hyper::body::Incoming;
@@ -20,12 +20,12 @@ use hyper::server::conn::http1;
 use hyper::service::service_fn;
 use hyper::upgrade::OnUpgrade;
 use hyper_util::rt::{TokioIo, TokioTimer};
-use ring::digest::{digest, SHA256};
+use ring::digest::{SHA256, digest};
 use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::{watch, OwnedSemaphorePermit, Semaphore};
+use tokio::sync::{OwnedSemaphorePermit, Semaphore, watch};
 use tokio::task::JoinSet;
 
-use super::forward::{self, empty, Origin, ProxyBody};
+use super::forward::{self, Origin, ProxyBody, empty};
 use super::sniff::{self, Carried};
 use super::websocket::{self, RelaySlot};
 use super::{Counters, MitmError, MitmOptions, Shared};

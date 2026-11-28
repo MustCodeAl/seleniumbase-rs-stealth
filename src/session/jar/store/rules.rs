@@ -3,9 +3,9 @@
 
 use url::{Host, Url};
 
-use super::super::set_cookie::{has_forbidden_control, CookiePrefix, MAX_NAME_VALUE_BYTES};
+use super::super::set_cookie::{CookiePrefix, MAX_NAME_VALUE_BYTES, has_forbidden_control};
 use super::{
-    prefix_reason, IgnoreReason, StoredCookie, MAX_DOMAIN_BYTES, MAX_PATH_BYTES, ROOT_PATH,
+    IgnoreReason, MAX_DOMAIN_BYTES, MAX_PATH_BYTES, ROOT_PATH, StoredCookie, prefix_reason,
 };
 use seleniumbase_rs::sb_cdp::SameSite;
 

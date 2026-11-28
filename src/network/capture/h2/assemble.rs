@@ -20,13 +20,13 @@
 
 use serde::{Deserialize, Serialize};
 
-use super::probes::{Probe, DOCUMENT, FETCH, PROBES};
-use super::site::{Observed, Seen};
 use super::CaptureH2Error;
+use super::probes::{DOCUMENT, FETCH, PROBES, Probe};
+use super::site::{Observed, Seen};
 use crate::network::capture::record::{from_hex, to_hex};
-use crate::network::spec::h2_frames::{read_preface, H2Preface, HeadersPriority};
+use crate::network::spec::h2_frames::{H2Preface, HeadersPriority, read_preface};
 use crate::network::spec::h2_spec::H2Spec;
-use crate::network::spec::header_spec::{HeaderSpec, CREDENTIAL_HEADERS, TRANSPORT_HEADERS};
+use crate::network::spec::header_spec::{CREDENTIAL_HEADERS, HeaderSpec, TRANSPORT_HEADERS};
 
 /// Headers whose values name the probe's own host, so they are not part of a profile.
 const REQUEST_SPECIFIC: [&str; 2] = ["origin", "referer"];

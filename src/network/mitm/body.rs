@@ -7,13 +7,13 @@
 //! ever cuts a body of unknown length or one that lied about its length.
 
 use std::pin::Pin;
-use std::task::{ready, Context, Poll};
+use std::task::{Context, Poll, ready};
 
 use bytes::Buf;
 use hyper::body::{Body, Frame, SizeHint};
 
-use super::forward::BoxError;
 use super::MitmError;
+use super::forward::BoxError;
 
 /// A body that fails once more than `limit` bytes of data have passed.
 #[derive(Debug)]

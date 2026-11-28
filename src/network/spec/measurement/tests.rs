@@ -1,8 +1,8 @@
 //! Parsing, lookup and the refusal of unmeasured browser and system pairs.
 
 use super::{
-    for_kind, get, measured_systems, newest, newest_on, parse_all, source_names, try_all, version,
-    KnownGap, WireMeasurement, WireMeasurementError, MAX_MEASURED_JSON_BYTES, SOURCES,
+    KnownGap, MAX_MEASURED_JSON_BYTES, SOURCES, WireMeasurement, WireMeasurementError, for_kind,
+    get, measured_systems, newest, newest_on, parse_all, source_names, try_all, version,
 };
 use crate::identity::fingerprint::OsType;
 use crate::network::spec::tls_spec::KnownGap as TlsKnownGap;
@@ -51,12 +51,16 @@ fn chrome_on_macos_is_measured() {
 
     assert_eq!(chrome.kind, Browser::Chrome);
     assert_eq!(chrome.os, OsType::Macos);
-    assert!(chrome
-        .user_agent
-        .contains(&format!("Chrome/{}", chrome.major)));
-    assert!(chrome
-        .full_version
-        .starts_with(&format!("{}.", chrome.major)));
+    assert!(
+        chrome
+            .user_agent
+            .contains(&format!("Chrome/{}", chrome.major))
+    );
+    assert!(
+        chrome
+            .full_version
+            .starts_with(&format!("{}.", chrome.major))
+    );
     chrome
         .tls
         .without_known_gaps(&chrome.provenance.known_gaps)
