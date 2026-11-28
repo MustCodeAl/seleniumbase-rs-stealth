@@ -3,7 +3,7 @@
 //!
 //! A [`Fingerprint`](crate::identity::fingerprint::Fingerprint) holds two kinds
 //! of things. The settings (a time zone, a screen, a position) are what the
-//! browser should *claim*, one [`Spoof`](crate::identity::spoof::Spoof) each. The
+//! browser should *claim*, one [`Spoof`](crate::identity::fingerprint::spoof::Spoof) each. The
 //! [`StealthPolicy`] is *how* the claims are delivered and which protections run
 //! beside them: whether `Function.prototype.toString` is masked, whether canvas
 //! reads are noised, whether permissions are granted up front, which ports are
@@ -22,7 +22,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use super::fingerprint::{QuicMode, WebRtcPolicy};
+use super::{QuicMode, WebRtcPolicy};
 
 /// How canvas reads (`toDataURL`, `toBlob`, `getImageData`) are noised.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]

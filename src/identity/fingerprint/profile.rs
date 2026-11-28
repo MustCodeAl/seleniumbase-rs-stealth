@@ -9,16 +9,16 @@ use std::fmt;
 
 use serde::{Deserialize, Deserializer, Serialize};
 
+use super::randomize::{
+    chromium_hints, edge_hints, known_full_version, Locale, PRESET_CHROMIUM_MAJOR,
+};
+use super::settings::DynamicRange;
 use super::{
     AudioNoise, BatteryProfile, BrandVersion, BrowserType, CanvasNoise,
     ClientHints as CoreClientHints, ColorGamut, ColorScheme, ConnectionProfile, Fingerprint,
     FingerprintBuilder, FingerprintError, MediaFeatures, OsType, SpeechVoice, Spoof, WebGl,
     WebRtcPolicy,
 };
-use crate::identity::randomize::{
-    chromium_hints, edge_hints, known_full_version, Locale, PRESET_CHROMIUM_MAJOR,
-};
-use crate::identity::settings::DynamicRange;
 
 /// High Dynamic Range (HDR) screen capability mode (alias of [`DynamicRange`]).
 pub type HdrMode = DynamicRange;

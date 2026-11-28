@@ -8,8 +8,8 @@ use std::fmt::Write as _;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use crate::identity::fingerprint::randomize::PRESET_CHROMIUM_MAJOR;
 use crate::identity::fingerprint::{AudioNoise, BrowserType, CanvasNoise, Fingerprint, OsType};
-use crate::identity::randomize::PRESET_CHROMIUM_MAJOR;
 
 use crate::identity::fingerprint::{
     AudioMetadata, BatteryMetadata, ClientHintsHighEntropy, ColorScheme, DisplayMetadata,
@@ -3162,11 +3162,11 @@ mod tests {
 
     #[test]
     fn expanded_fingerprint_options_and_script_surfaces_render_coherently() {
+        use crate::identity::fingerprint::settings::ColorGamut;
         use crate::identity::fingerprint::{
             AudioDynamicsCompressor, BatteryOverride, ColorScheme, FingerprintOptions, HdrMode,
             ReducedMotion, SpeechVoice,
         };
-        use crate::identity::settings::ColorGamut;
 
         let opts = FingerprintOptions::builder()
             .os(OsType::Macos)

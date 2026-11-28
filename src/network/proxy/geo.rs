@@ -6,8 +6,8 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
 use super::route::{ProxyKey, ProxyRoute};
+pub use crate::identity::fingerprint::randomize::{Locale, LOCALES};
 use crate::identity::fingerprint::{Fingerprint, FingerprintError, Geolocation};
-pub use crate::identity::randomize::{Locale, LOCALES};
 use seleniumbase_rs::sb_cdp::human::humanize::Rng;
 
 /// An ISO 3166-1 alpha-2 country code, upper case. Only a valid one can be built.

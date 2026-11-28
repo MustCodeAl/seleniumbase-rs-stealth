@@ -37,8 +37,8 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::identity::fingerprint::randomize::chromium_hints;
 use crate::identity::fingerprint::{BrandVersion, ClientHints, Fingerprint, OsType};
-use crate::identity::randomize::chromium_hints;
 
 /// The token that carries the Chrome major version in a user agent.
 const CHROME_TOKEN: &str = "Chrome/";

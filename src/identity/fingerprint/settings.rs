@@ -1,4 +1,4 @@
-//! The values the settings of a [`Fingerprint`](super::fingerprint::Fingerprint)
+//! The values the settings of a [`Fingerprint`](super::Fingerprint)
 //! can hold.
 //!
 //! Most settings are a plain `String`, `u32` or `f64`. A few belong together
@@ -20,8 +20,8 @@
 
 use serde::{Deserialize, Serialize};
 
-use super::fingerprint::MediaDeviceSpec;
 use super::spoof::Spoof;
+use super::MediaDeviceSpec;
 
 /// What a desktop's taskbar or menu bar takes from the height of the screen
 /// when a fingerprint gives no available screen, in CSS pixels.

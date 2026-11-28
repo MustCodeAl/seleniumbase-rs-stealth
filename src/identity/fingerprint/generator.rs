@@ -11,15 +11,15 @@ use super::profile::{
     ProfileFingerprint, ReducedMotion, ScreenOrientation, ScreenOrientationType, WebGlParameters,
     WebGpuMetadata,
 };
+#[cfg(test)]
+use super::randomize::{edge_hints, known_full_version};
+use super::randomize::{Locale, PRESET_CHROMIUM_MAJOR};
+use super::settings::DynamicRange;
 use super::{
     AudioNoise, BrandVersion, BrowserType, CanvasNoise, ColorGamut, ColorScheme, ConnectionProfile,
     Fingerprint, FingerprintError, Geolocation, MediaFeatures, OsType, SpeechVoice, WebGl,
     WebRtcPolicy,
 };
-#[cfg(test)]
-use crate::identity::randomize::{edge_hints, known_full_version};
-use crate::identity::randomize::{Locale, PRESET_CHROMIUM_MAJOR};
-use crate::identity::settings::DynamicRange;
 
 // ---------------------------------------------------------------------------
 // Standard WebGL extension sets

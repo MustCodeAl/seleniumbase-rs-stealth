@@ -14,11 +14,11 @@
 //! tables and the assembly. Everything here is pure and uses the crate's
 //! seedable [`Rng`], so a seed always gives the same identity.
 
-use super::fingerprint::{
-    BatteryProfile, BrandVersion, BrowserType, ClientHints, ConnectionProfile, OsType, SpeechVoice,
-};
 use super::settings::{
     ColorGamut, ColorScheme, MediaDevices, MediaFeatures, WebGl, WebRtcAddresses,
+};
+use super::{
+    BatteryProfile, BrandVersion, BrowserType, ClientHints, ConnectionProfile, OsType, SpeechVoice,
 };
 use seleniumbase_rs::sb_cdp::human::humanize::Rng;
 
@@ -811,7 +811,7 @@ impl Locale {
     /// # Examples
     ///
     /// ```
-    /// use seleniumbase_rs_stealth::identity::randomize::Locale;
+    /// use seleniumbase_rs_stealth::identity::fingerprint::randomize::Locale;
     ///
     /// assert_eq!(
     ///     Locale::accept_language_list(&["de-DE", " de ", "de", "en-US"]).as_deref(),
@@ -2418,7 +2418,7 @@ mod tests {
 
     #[test]
     fn a_drawn_display_follows_the_system() {
-        use super::super::fingerprint::Fingerprint;
+        use super::super::Fingerprint;
 
         for os in [
             OsType::Windows,
@@ -2452,7 +2452,7 @@ mod tests {
 
     #[test]
     fn a_drawn_quota_is_sixty_percent_of_a_disk_of_the_machine_s_kind() {
-        use super::super::fingerprint::Fingerprint;
+        use super::super::Fingerprint;
 
         let gib = 1024_u64 * 1024 * 1024;
         for os in [

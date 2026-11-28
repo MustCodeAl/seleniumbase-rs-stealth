@@ -50,7 +50,7 @@ seleniumbase-rs-stealth = { git = "https://github.com/MustCodeAl/seleniumbase-rs
 ### Layer 2 (`client`): 2-line browser masking with good defaults
 ```rust,no_run
 use seleniumbase_rs_stealth::sb_cdp::{Browser, LaunchOptions};
-use seleniumbase_rs_stealth::{LaunchOptionsFingerprintExt, StealthLayer};
+use seleniumbase_rs_stealth::client::{LaunchOptionsFingerprintExt, StealthLayer};
 
 # async fn demo() -> seleniumbase_rs_stealth::Result<()> {
 let layer = StealthLayer::default();

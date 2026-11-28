@@ -2,16 +2,16 @@
 //!
 //! A [`Specimen`] names a real browser release, device model, locale or recorded
 //! output bundle. Settings in a [`Fingerprint`](crate::identity::Fingerprint) can mimic a specimen
-//! using [`Spoof::Mimic`](crate::identity::spoof::Spoof::Mimic).
+//! using [`Spoof::Mimic`](crate::identity::fingerprint::spoof::Spoof::Mimic).
 
 use std::fmt;
 use std::str::FromStr;
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-use super::fingerprint::{BrowserType, OsType};
 use super::randomize::{Brand, Locale, MachineRow, NamedMachine, BUILDS, MACHINES, PLACES};
 use super::settings::WebGl;
+use super::{BrowserType, OsType};
 
 /// What a `Spoof::Mimic` names: one real browser build, machine, place or rendering.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -777,7 +777,7 @@ mod tests {
     fn every_place_is_a_row_of_the_locale_table() {
         assert_eq!(
             Place::all().count(),
-            crate::identity::randomize::LOCALES.len()
+            crate::identity::fingerprint::randomize::LOCALES.len()
         );
         assert!(Place::named("en-us-new-york").is_ok());
         assert!(Place::named("de-de-berlin").is_ok());

@@ -86,7 +86,7 @@ fn the_measured_client_hints_agree_with_the_browser_they_describe() {
     );
     assert_eq!(
         names(&hints.brands),
-        names(&crate::identity::randomize::chromium_hints(chrome.major).brands),
+        names(&crate::identity::fingerprint::randomize::chromium_hints(chrome.major).brands),
         "the measured brand order is the order the library generates for this major version"
     );
     let (decoys, real): (Vec<_>, Vec<_>) = hints

@@ -7,8 +7,8 @@
 
 use std::collections::BTreeMap;
 
+use super::randomize::PRESET_CHROMIUM_MAJOR;
 use super::{BrowserType, ColorScheme, FingerprintError, OsType};
-use crate::identity::randomize::PRESET_CHROMIUM_MAJOR;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 

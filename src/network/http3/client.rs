@@ -144,7 +144,7 @@ impl Http3Options {
     pub fn for_fingerprint(mut self, fingerprint: &crate::identity::Fingerprint) -> Self {
         let major = fingerprint
             .core_version()
-            .unwrap_or(crate::identity::randomize::CURRENT_STABLE_MAJOR);
+            .unwrap_or(crate::identity::fingerprint::randomize::CURRENT_STABLE_MAJOR);
         let os = fingerprint.os_type();
         let ua = fingerprint.user_agent().value().map_or("", String::as_str);
         if ua.contains("Edg/") {

@@ -9,12 +9,12 @@
 //! layers, each shipping with sensible defaults and deep controls underneath:
 //!
 //! 1. [`identity`] *(always enabled, `--no-default-features`, zero BoringSSL)*:
-//!    pure persona and fingerprint modeling: unified `fingerprint` module
-//!    (`Fingerprint`, `ProfileFingerprint`, `FingerprintGenerator`,
-//!    `FingerprintOptions`, `BayesianSampler`, `HeaderGenerator`,
-//!    `FingerprintConverter`, `audit_coherence`, `compare`, `consistency`,
-//!    `schema`), `Spoof<T>`, `StealthPolicy`, `mimic` specimens,
-//!    `profile_payloads`, and probe `capture`.
+//!    pure persona and fingerprint modeling: unified [`identity::fingerprint`]
+//!    module ([`identity::Fingerprint`], `ProfileFingerprint`,
+//!    `FingerprintGenerator`, `FingerprintOptions`, `BayesianSampler`,
+//!    `HeaderGenerator`, `FingerprintConverter`, `audit_coherence`, `compare`,
+//!    `consistency`, `schema`, plus submodules `spoof`, `policy`, `settings`,
+//!    `mimic`, and `randomize`), `profile_payloads`, and probe `capture`.
 //! 2. [`client`] *(feature `client`, pure Rust, zero BoringSSL)*: client-side
 //!    browser masking (`StealthLayer` with `Default`, `balanced`, `strict`,
 //!    `minimal`), 42-surface `StealthScriptBundle` / `StealthScriptOptions`,
@@ -70,14 +70,3 @@ pub mod network;
     clippy::too_long_first_doc_paragraph
 )]
 pub mod session;
-
-// Minimal Layer 1–2 entry points at crate root for ergonomic 2-line setup without mixing layers.
-#[doc(inline)]
-pub use identity::{Fingerprint, OsType};
-
-#[cfg(feature = "client")]
-#[doc(inline)]
-pub use client::{
-    BaseCaseFingerprintExt, BrowserConfigFingerprintExt, LaunchOptionsFingerprintExt,
-    PageFingerprintExt, StealthLayer, StealthPlan,
-};

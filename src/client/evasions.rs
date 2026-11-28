@@ -19,10 +19,10 @@ use std::collections::HashMap;
 use base64::Engine;
 
 use crate::client::providers::{default_registry, session_registry, EvasionContext};
+use crate::identity::fingerprint::randomize::{chromium_hints, edge_hints, PRESET_CHROMIUM_MAJOR};
 use crate::identity::fingerprint::{
     BrandVersion, Dimension, Fingerprint, OsType, QuicMode, WebRtcPolicy, TASKBAR_HEIGHT,
 };
-use crate::identity::randomize::{chromium_hints, edge_hints, PRESET_CHROMIUM_MAJOR};
 
 /// Generates a single combined bootstrap script for the given fingerprint.
 ///

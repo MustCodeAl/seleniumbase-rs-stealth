@@ -8,7 +8,7 @@
 //! # Examples
 //!
 //! ```
-//! use seleniumbase_rs_stealth::identity::spoof::Spoof;
+//! use seleniumbase_rs_stealth::identity::fingerprint::spoof::Spoof;
 //!
 //! // A plain value is `Value`, so passing one is all the intent there is.
 //! let zone: Spoof<String> = "Europe/Berlin".into();

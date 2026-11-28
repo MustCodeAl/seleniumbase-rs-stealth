@@ -9,9 +9,9 @@
 //! and hand the answer to [`CapturedFingerprint::from_probe`], which maps it in
 //! one place, so both engines give the same fingerprint for the same browser.
 //!
-//! A setting the page answered is a [`Value`](crate::identity::spoof::Spoof::Value),
-//! or [`Off`](crate::identity::spoof::Spoof::Off) for an API that is not there. A
-//! setting it could not answer stays [`Natural`](crate::identity::spoof::Spoof::Natural),
+//! A setting the page answered is a [`Value`](crate::identity::fingerprint::spoof::Spoof::Value),
+//! or [`Off`](crate::identity::fingerprint::spoof::Spoof::Off) for an API that is not there. A
+//! setting it could not answer stays [`Natural`](crate::identity::fingerprint::spoof::Spoof::Natural),
 //! and says why in [`CapturedFingerprint::unmapped`] under `unanswered`. The
 //! result is the ordinary v2 [`Fingerprint`], so
 //! [`save`](Fingerprint::save) writes the one file format every tool reads.
@@ -49,15 +49,15 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::{json, Map, Value};
 
+use super::fingerprint::settings::{DynamicRange, HoverType, PointerType};
+use super::fingerprint::spoof::Spoof;
 use super::fingerprint::{
     BatteryProfile, BrandVersion, BrowserType, ClientHints, ConnectionProfile, Fingerprint,
     FingerprintBuilder, MediaDevices, ScreenSize, SpeechVoice, StealthPolicy, WebGl,
 };
 use super::fingerprint::{ColorGamut, ColorScheme, Contrast, KeyboardLayout, MediaFeatures};
-use super::settings::{DynamicRange, HoverType, PointerType};
 
 use super::js::capture_js::CAPTURE_JS;
-use super::spoof::Spoof;
 use seleniumbase_rs::error::SeleniumBaseError;
 
 /// The version of the readings the capture script returns. A reading of another

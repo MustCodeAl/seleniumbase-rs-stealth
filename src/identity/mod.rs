@@ -8,12 +8,7 @@
 pub mod capture;
 pub mod fingerprint;
 pub mod js;
-pub mod mimic;
-pub mod policy;
 pub mod profile_payloads;
-pub mod randomize;
-pub mod settings;
-pub mod spoof;
 
 pub use capture::{CapturedFingerprint, ProbeInfo};
 pub use fingerprint::{
@@ -26,13 +21,11 @@ pub use fingerprint::{
     GeneratedFingerprint, Geolocation, GpuMetadata, HdrMode, HeaderGenerator, HumanizeConfig,
     MediaDeviceInfo, MediaDeviceMetadata, NetworkMetadata, OsType, ProfileFingerprint, ProxyConfig,
     QuicMode, ReducedMotion, RequestContext, SampleConstraints, ScreenConstraints,
-    ScreenOrientation, ScreenOrientationType, ScreenSize, SettingDiff, Severity, SpeechVoice,
-    StealthPolicy, WebGl, WebGlParameters, WebGpuLimits, WebGpuMetadata, WebRtcAddresses,
-    WebRtcPolicy,
+    ScreenOrientation, ScreenOrientationType, ScreenSize, SettingDiff, Severity, Specimen,
+    SpeechVoice, Spoof, StealthPolicy, WebGl, WebGlParameters, WebGpuLimits, WebGpuMetadata,
+    WebRtcAddresses, WebRtcPolicy,
 };
-pub use mimic::Specimen;
 pub use profile_payloads::ProfileParams;
-pub use spoof::Spoof;
 
 /// Shorthand for a built-in [`Fingerprint`] preset (`windows`, `macos`, `linux`,
 /// `android`, `ios`, `safari`, `edge`).

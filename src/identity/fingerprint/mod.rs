@@ -58,9 +58,14 @@ mod compare;
 mod consistency;
 mod file;
 pub mod generator;
+pub mod mimic;
+pub mod policy;
 pub mod profile;
+pub mod randomize;
 #[cfg(test)]
 mod schema;
+pub mod settings;
+pub mod spoof;
 
 pub use bayesian::{
     audit_coherence, BayesianSampler, CoherenceAudit, DeviceCategory, FingerprintConverter,
@@ -74,23 +79,21 @@ pub use generator::{
     BatteryOverride, ConnectionOverride, FingerprintGenerator, FingerprintOptions,
     FingerprintOptionsBuilder, GeneratedFingerprint, ScreenConstraints,
 };
+pub use mimic::Specimen;
+pub use policy::{AudioNoise, CanvasNoise, StealthPolicy};
 pub use profile::{
     AudioDynamicsCompressor, AudioMetadata, BatteryMetadata, ClientHintsHighEntropy,
     DisplayMetadata, GpuMetadata, HdrMode, MediaDeviceInfo, MediaDeviceMetadata, NetworkMetadata,
     ProfileFingerprint, ReducedMotion, ScreenOrientation, ScreenOrientationType, WebGlParameters,
     WebGpuLimits, WebGpuMetadata,
 };
-
-pub use super::mimic::Specimen;
-pub use super::policy::{AudioNoise, CanvasNoise, StealthPolicy};
-use super::randomize;
-pub(crate) use super::settings::TASKBAR_HEIGHT;
-pub use super::settings::{
+use seleniumbase_rs::sb_cdp::human::humanize::Rng;
+pub(crate) use settings::TASKBAR_HEIGHT;
+pub use settings::{
     ColorGamut, ColorScheme, Contrast, Geolocation, KeyboardLayout, MediaDevices, MediaFeatures,
     ScreenSize, WebGl, WebRtcAddresses,
 };
-pub use super::spoof::Spoof;
-use seleniumbase_rs::sb_cdp::human::humanize::Rng;
+pub use spoof::Spoof;
 
 /// Browser persona requested by a profile.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -1634,7 +1637,7 @@ impl Fingerprint {
     /// Quick preset for a Windows desktop Chrome profile.
     ///
     /// The Chrome presets claim
-    /// [`PRESET_CHROMIUM_MAJOR`](super::randomize::PRESET_CHROMIUM_MAJOR), the
+    /// [`PRESET_CHROMIUM_MAJOR`](randomize::PRESET_CHROMIUM_MAJOR), the
     /// newest major a randomized identity may claim, in Chrome's frozen user-agent
     /// format. They set no Client Hints; the evasions derive those from the user
     /// agent. Every preset is built with [`StealthPolicy::balanced`] and passes
@@ -1756,7 +1759,7 @@ impl Fingerprint {
     /// Quick preset for an iPhone / Mobile Safari profile.
     ///
     /// Safari 26.0 on iOS 26, whose user agent names the frozen `iPhone OS 18_6`
-    /// (WebKit bug 298717); see the Safari table in [`super::randomize`]. Safari
+    /// (WebKit bug 298717); see the Safari table in [`randomize`]. Safari
     /// has no battery, network information, Web Bluetooth, Client Hints or
     /// `navigator.deviceMemory`, so the first four are `Off` and the last is
     /// left out.
@@ -1792,7 +1795,7 @@ impl Fingerprint {
 }
 
 /// The user agent of a Chrome preset: Chrome's frozen format on `platform`,
-/// claiming [`PRESET_CHROMIUM_MAJOR`](super::randomize::PRESET_CHROMIUM_MAJOR).
+/// claiming [`PRESET_CHROMIUM_MAJOR`](randomize::PRESET_CHROMIUM_MAJOR).
 fn preset_user_agent(platform: &str, mobile: bool) -> String {
     randomize::chromium_user_agent(platform, randomize::PRESET_CHROMIUM_MAJOR, mobile)
 }
@@ -2696,7 +2699,7 @@ fn draw_random(f: &mut Fields, browser_type_set: bool) -> Result<(), Fingerprint
 }
 
 /// The `navigator.languages` list for `locale`, as a comma-separated string:
-/// the table's list when the locale is in [`LOCALES`](super::randomize::LOCALES),
+/// the table's list when the locale is in [`LOCALES`](randomize::LOCALES),
 /// otherwise the locale and its bare language.
 pub(crate) fn languages_for_locale(locale: &str) -> String {
     if let Some(known) = randomize::LOCALES
